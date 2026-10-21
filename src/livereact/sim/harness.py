@@ -145,6 +145,7 @@ def run_sim(
     manual: ManualParams | None = None,
     audio: "np.ndarray | None" = None,
     seed_range: "tuple[float, float] | None" = None,
+    params: "dict | None" = None,
 ) -> RunResult:
     """Simulate one track end to end and return the full frame log.
 
@@ -153,8 +154,20 @@ def run_sim(
     energy normalizer the way the live app does from config.json's last
     session; None cold-starts it (the live ``--no-norm-seed`` behaviour --
     energy_norm reads 0.0 for the first ~40 s, found on the first scored run).
+    ``params`` = knob overrides (livereact.params / params.json), applied before
+    the engines are built and restored afterwards so runs stay independent.
     """
     import numpy as np
+    from .. import params as knobs
+    previous = knobs.apply(params) if params else {}
+    try:
+        return _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np)
+    finally:
+        if previous:
+            knobs.restore(previous)
+
+
+def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np):
 
     if audio is None:
         audio = decode_audio(track, duration)
@@ -241,6 +254,7 @@ def run_sim(
 
     summary = _summarize(rows, frames, times, rig, slots, applied_gain, timeline)
     summary["seed_range"] = list(seed_range) if seed_range else None
+    summary["params"] = dict(params) if params else {}
     return RunResult(track=str(track), rig=str(rig_path), timeline=timeline,
                      gestures=str(gestures) if gestures else None,
                      frames=frames, t=times, signals=rows, summary=summary)

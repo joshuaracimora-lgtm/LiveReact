@@ -1,0 +1,660 @@
+{
+  "_doc": "Engine knobs for the improvement loop. tag: tunable (search may vary within [lo,hi]) | ear-tuned (Josh set on the real rig; read-only) | safety-frozen (strobe/laser; never searched). default is read from the module at generation time.",
+  "knobs": {
+    "ENERGY_SMOOTHING": {
+      "module": "livereact.core.metronome",
+      "default": 0.05,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.01,
+        0.2
+      ],
+      "note": "EMA on raw energy"
+    },
+    "ENERGY_NORM_SMOOTH_TAU_S": {
+      "module": "livereact.core.metronome",
+      "default": 3.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.5,
+        6.0
+      ],
+      "note": "smoothing of energy_norm (slow)"
+    },
+    "ENERGY_NORM_ATTACK_TAU_S": {
+      "module": "livereact.core.metronome",
+      "default": 0.4,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.1,
+        1.5
+      ],
+      "note": "energy_norm attack (fast rise)"
+    },
+    "INST_PEAK_HOLD_S": {
+      "module": "livereact.core.metronome",
+      "default": 0.6,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.2,
+        1.5
+      ],
+      "note": "instantaneous peak hold"
+    },
+    "DROP_LEAD_CEILING_FRACTION": {
+      "module": "livereact.core.metronome",
+      "default": 0.9,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.7,
+        1.0
+      ],
+      "note": "fraction of ceiling that counts as a lead-in"
+    },
+    "ENERGY_NORM_MIN_SPAN": {
+      "module": "livereact.core.metronome",
+      "default": 0.2,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.1,
+        0.4
+      ],
+      "note": "min floor->ceiling span before normalizing"
+    },
+    "FAST_ENTRY_DWELL_S": {
+      "module": "livereact.core.metronome",
+      "default": 0.9375,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.5,
+        4.0
+      ],
+      "note": "beats of confirmation to enter a higher bucket (TIME-12)"
+    },
+    "EXIT_CONFIRM_DWELL_S": {
+      "module": "livereact.core.metronome",
+      "default": 1.875,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        8.0
+      ],
+      "note": "seconds sustained to exit to a lower bucket (TIME-12)"
+    },
+    "DROP_HIT_LOW_RATIO": {
+      "module": "livereact.core.metronome",
+      "default": 3.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.5,
+        5.0
+      ],
+      "note": "kick-band ratio that counts as a hit"
+    },
+    "DROP_HIT_CONFIRM_S": {
+      "module": "livereact.core.metronome",
+      "default": 0.46875,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.2,
+        2.0
+      ],
+      "note": "hit confirmation window"
+    },
+    "ROLL_ARM_HOLD_BARS": {
+      "module": "livereact.core.metronome",
+      "default": 4.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        8.0
+      ],
+      "note": "bars a roll arms the drop detector"
+    },
+    "ROLL_ARM_MIN_S": {
+      "module": "livereact.core.metronome",
+      "default": 1.5,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.5,
+        4.0
+      ],
+      "note": "min roll length to arm"
+    },
+    "ARMED_HIT_MIN_INST": {
+      "module": "livereact.core.metronome",
+      "default": 0.65,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.4,
+        0.9
+      ],
+      "note": "min instantaneous energy for an armed hit"
+    },
+    "ARMED_KICK_VS_LAST_DROP": {
+      "module": "livereact.core.metronome",
+      "default": 0.6,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.3,
+        0.9
+      ],
+      "note": "kick vs last-drop reference ratio"
+    },
+    "RISE_ARM_HOLD_BARS": {
+      "module": "livereact.core.metronome",
+      "default": 8.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        2.0,
+        16.0
+      ],
+      "note": "bars a rise arms the detector"
+    },
+    "AUTO_DROP_CONFIRM_S": {
+      "module": "livereact.core.metronome",
+      "default": 3.75,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        8.0
+      ],
+      "note": "auto-drop confirmation"
+    },
+    "DROP_HIT_MIN_KICKS": {
+      "module": "livereact.core.metronome",
+      "default": 2,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        1,
+        4
+      ],
+      "note": "kicks needed for a hit"
+    },
+    "CUT_EXIT_CONFIRM_S": {
+      "module": "livereact.core.metronome",
+      "default": 3.75,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        8.0
+      ],
+      "note": "confirmation to leave a cut"
+    },
+    "PEAK_EXIT_MARGIN": {
+      "module": "livereact.core.metronome",
+      "default": 0.1,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.03,
+        0.3
+      ],
+      "note": "hysteresis to leave PEAK"
+    },
+    "DIP_THRESHOLD": {
+      "module": "livereact.core.metronome",
+      "default": 0.08,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.02,
+        0.25
+      ],
+      "note": "energy_norm counted as near-silence (drop marker)"
+    },
+    "MIN_DIP_S": {
+      "module": "livereact.core.metronome",
+      "default": 1.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.25,
+        3.0
+      ],
+      "note": "min dip length"
+    },
+    "REBOUND_THRESHOLD": {
+      "module": "livereact.core.metronome",
+      "default": 0.7,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.4,
+        0.9
+      ],
+      "note": "rebound that confirms a drop marker"
+    },
+    "MAX_REBOUND_WINDOW_S": {
+      "module": "livereact.core.metronome",
+      "default": 8.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        2.0,
+        16.0
+      ],
+      "note": "max dip->rebound window"
+    },
+    "SHARP_RISE_DELTA": {
+      "module": "livereact.core.metronome",
+      "default": 0.5,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.2,
+        0.8
+      ],
+      "note": "sharp-rise drop marker delta"
+    },
+    "SHARP_RISE_WINDOW_S": {
+      "module": "livereact.core.metronome",
+      "default": 3.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        6.0
+      ],
+      "note": "sharp-rise window"
+    },
+    "MARKER_COOLDOWN_S": {
+      "module": "livereact.core.metronome",
+      "default": 4.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        16.0
+      ],
+      "note": "cooldown between drop markers"
+    },
+    "BUILD_CUE_HOLD_BARS": {
+      "module": "livereact.core.metronome",
+      "default": 32.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        8.0,
+        64.0
+      ],
+      "note": "how long a build cue stays armed"
+    },
+    "BREAK_MAX": {
+      "module": "livereact.scenes.catalog",
+      "default": 0.3,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.15,
+        0.45
+      ],
+      "note": "energy_norm ceiling of BREAK"
+    },
+    "BUILD_MAX": {
+      "module": "livereact.scenes.catalog",
+      "default": 0.8,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.6,
+        0.92
+      ],
+      "note": "energy_norm ceiling of BUILD"
+    },
+    "HYSTERESIS_MARGIN_UP": {
+      "module": "livereact.scenes.catalog",
+      "default": 0.05,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.0,
+        0.15
+      ],
+      "note": "margin to enter a higher bucket"
+    },
+    "HYSTERESIS_MARGIN_DOWN": {
+      "module": "livereact.scenes.catalog",
+      "default": 0.15,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.05,
+        0.3
+      ],
+      "note": "margin to exit to a lower bucket"
+    },
+    "ROTATION_BARS": {
+      "module": "livereact.engines.phrase",
+      "default": 16,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        8,
+        32
+      ],
+      "note": "bars before rotating looks"
+    },
+    "HOLD_BARS": {
+      "module": "livereact.engines.phrase",
+      "default": 4,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        2,
+        16
+      ],
+      "note": "min bars a look is held"
+    },
+    "CROSSFADE_BARS": {
+      "module": "livereact.engines.phrase",
+      "default": 2,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        1,
+        4
+      ],
+      "note": "look crossfade length"
+    },
+    "BUILD_RAMP_BARS": {
+      "module": "livereact.engines.reactive",
+      "default": 8.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        4.0,
+        16.0
+      ],
+      "note": "bars over which a build ramps"
+    },
+    "BUILD_LOW": {
+      "module": "livereact.engines.reactive",
+      "default": 0.2,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.1,
+        0.4
+      ],
+      "note": "build ramp start"
+    },
+    "BUILD_HIGH": {
+      "module": "livereact.engines.reactive",
+      "default": 0.95,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.7,
+        1.0
+      ],
+      "note": "build ramp end"
+    },
+    "BREAK_LOW": {
+      "module": "livereact.engines.reactive",
+      "default": 0.15,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.05,
+        0.3
+      ],
+      "note": "break breathing floor"
+    },
+    "BREAK_HIGH": {
+      "module": "livereact.engines.reactive",
+      "default": 0.35,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.2,
+        0.5
+      ],
+      "note": "break breathing ceiling"
+    },
+    "BREAK_BREATH_TAU_S": {
+      "module": "livereact.engines.reactive",
+      "default": 3.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        8.0
+      ],
+      "note": "break breathing period"
+    },
+    "DROP_HELD_LOW": {
+      "module": "livereact.engines.reactive",
+      "default": 0.66,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.4,
+        0.8
+      ],
+      "note": "drop held-level floor"
+    },
+    "DROP_HELD_HIGH": {
+      "module": "livereact.engines.reactive",
+      "default": 0.76,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.6,
+        1.0
+      ],
+      "note": "drop held-level ceiling"
+    },
+    "WASH_CROSSFADE_TAU_S": {
+      "module": "livereact.engines.reactive",
+      "default": 0.6,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.2,
+        2.0
+      ],
+      "note": "wash crossfade time constant"
+    },
+    "ATTACK_S": {
+      "module": "livereact.inputs.audio",
+      "default": 0.015,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.005,
+        0.05
+      ],
+      "note": "envelope attack"
+    },
+    "RELEASE_S": {
+      "module": "livereact.inputs.audio",
+      "default": 0.25,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.1,
+        0.6
+      ],
+      "note": "envelope release"
+    },
+    "ONSET_RATIO": {
+      "module": "livereact.inputs.audio",
+      "default": 2.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.3,
+        4.0
+      ],
+      "note": "onset detection ratio"
+    },
+    "ONSET_MEAN_TAU_S": {
+      "module": "livereact.inputs.audio",
+      "default": 0.5,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.2,
+        1.5
+      ],
+      "note": "onset running-mean tau"
+    },
+    "SYNTH_GAIN": {
+      "module": "livereact.engines.reactive",
+      "default": 0.236,
+      "type": "float",
+      "tag": "ear-tuned",
+      "note": "wash synth-follow gain"
+    },
+    "PEAK_BOOST": {
+      "module": "livereact.engines.reactive",
+      "default": 0.03,
+      "type": "float",
+      "tag": "ear-tuned"
+    },
+    "BEAT4_FLASH_PEAK": {
+      "module": "livereact.engines.reactive",
+      "default": 1.0,
+      "type": "float",
+      "tag": "ear-tuned"
+    },
+    "BEAT4_FLASH_DECAY_PHASE": {
+      "module": "livereact.engines.reactive",
+      "default": 0.6,
+      "type": "float",
+      "tag": "ear-tuned"
+    },
+    "LIFT": {
+      "module": "livereact.engines.transition",
+      "default": 0.22,
+      "type": "float",
+      "tag": "ear-tuned",
+      "note": "transition lift"
+    },
+    "ENERGY_GAIN": {
+      "module": "livereact.inputs.audio",
+      "default": 5.0,
+      "type": "float",
+      "tag": "ear-tuned",
+      "note": "5.0 -- part of the config.json normalizer fingerprint"
+    },
+    "SAFETY_STROBE_SUSTAINED_MAX_HZ": {
+      "module": "livereact.engines.reactive",
+      "default": 4.0,
+      "type": "float",
+      "tag": "safety-frozen"
+    },
+    "SAFETY_STROBE_ABSOLUTE_MAX_HZ": {
+      "module": "livereact.engines.reactive",
+      "default": 8.0,
+      "type": "float",
+      "tag": "safety-frozen"
+    },
+    "SAFETY_STROBE_STRICT_MODE_MAX_HZ": {
+      "module": "livereact.engines.reactive",
+      "default": 2.0,
+      "type": "float",
+      "tag": "safety-frozen"
+    },
+    "SAFETY_STROBE_RED_MAX_HZ": {
+      "module": "livereact.engines.reactive",
+      "default": 3.0,
+      "type": "float",
+      "tag": "safety-frozen"
+    },
+    "STROBE_MAX": {
+      "module": "livereact.engines.reactive",
+      "default": 0.75,
+      "type": "float",
+      "tag": "safety-frozen",
+      "note": "0.75 ceiling, Josh's explicit call 2026-09-14"
+    },
+    "STROBE_FLASH_START_DMX": {
+      "module": "livereact.engines.reactive",
+      "default": 160,
+      "type": "int",
+      "tag": "safety-frozen"
+    },
+    "STROBE_MAX_BURST_S": {
+      "module": "livereact.engines.reactive",
+      "default": 1.5,
+      "type": "float",
+      "tag": "safety-frozen",
+      "note": "SAFE-04"
+    },
+    "STROBE_MIN_SPACING_S": {
+      "module": "livereact.engines.reactive",
+      "default": 8.0,
+      "type": "float",
+      "tag": "safety-frozen",
+      "note": "SAFE-04 (engine uses 8.0; bible min 5.0)"
+    },
+    "STROBE_PHRASE_BARS": {
+      "module": "livereact.engines.reactive",
+      "default": 8,
+      "type": "int",
+      "tag": "safety-frozen"
+    },
+    "STROBE_PHRASE_TAIL_BEATS": {
+      "module": "livereact.engines.reactive",
+      "default": 2,
+      "type": "int",
+      "tag": "safety-frozen"
+    },
+    "BUILD_STROBE_START": {
+      "module": "livereact.engines.reactive",
+      "default": 0.5,
+      "type": "float",
+      "tag": "safety-frozen"
+    },
+    "STROBE_ROLL_FLASH_DMX": {
+      "module": "livereact.engines.reactive",
+      "default": 255,
+      "type": "int",
+      "tag": "safety-frozen"
+    },
+    "LASER_MIN_HIT_INTENSITY": {
+      "module": "livereact.engines.laser",
+      "default": 0.95,
+      "type": "float",
+      "tag": "safety-frozen"
+    },
+    "LASER_BLOCK_BARS": {
+      "module": "livereact.engines.laser",
+      "default": 8,
+      "type": "int",
+      "tag": "safety-frozen"
+    },
+    "LASER_SWEEP_BARS": {
+      "module": "livereact.engines.laser",
+      "default": 1.0,
+      "type": "float",
+      "tag": "safety-frozen"
+    },
+    "LASER_SWEEP_BASE": {
+      "module": "livereact.engines.laser",
+      "default": 0.5,
+      "type": "float",
+      "tag": "safety-frozen"
+    }
+  }
+}
