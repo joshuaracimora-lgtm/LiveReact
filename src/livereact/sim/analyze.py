@@ -31,6 +31,14 @@ def _low_onset_curve(audio, np):
 
 
 def estimate_bpm(audio, np, lo: float = 118.0, hi: float = 136.0) -> float:
+    """Comb-filter tempo estimate on the kick-band onset curve, 0.1 BPM steps.
+
+    For each candidate BPM the onset envelope is sampled (linearly interpolated,
+    so block resolution doesn't quantize the lag) on a beat grid at 24 phases;
+    the best phase's sum is the candidate's score. librosa, if importable, is
+    tried first and accepted when it lands in [lo, hi]. The Rekordbox value
+    always beats either.
+    """
     try:
         import librosa  # optional
         tempo = librosa.beat.tempo(y=audio, sr=SR, start_bpm=128.0)
@@ -41,13 +49,17 @@ def estimate_bpm(audio, np, lo: float = 118.0, hi: float = 136.0) -> float:
         pass
     onset, _ = _low_onset_curve(audio, np)
     dt = BLOCK / SR
+    t_blocks = np.arange(len(onset)) * dt
+    t_end = t_blocks[-1]
     best, best_score = 128.0, -1.0
     for bpm10 in range(int(lo * 10), int(hi * 10) + 1):
         bpm = bpm10 / 10.0
-        lag = (60.0 / bpm) / dt
-        k = int(round(lag))
-        # autocorrelation at lag k and 2k (bar-ish), fractional via neighbour blend
-        score = float(np.dot(onset[:-k], onset[k:])) + 0.5 * float(np.dot(onset[:-2 * k], onset[2 * k:]))
+        beat = 60.0 / bpm
+        n_beats = int(t_end / beat) - 1
+        k = np.arange(n_beats)[None, :] * beat
+        phases = np.linspace(0.0, beat, 24, endpoint=False)[:, None]
+        grid = phases + k                                   # (24, n_beats)
+        score = np.interp(grid, t_blocks, onset).sum(axis=1).max() / n_beats
         if score > best_score:
             best, best_score = bpm, score
     return best

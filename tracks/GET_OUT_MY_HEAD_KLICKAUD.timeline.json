@@ -1,0 +1,32 @@
+{
+  "bpm": 126.5,
+  "first_downbeat_s": 0.323,
+  "beats_per_bar": 4,
+  "markers": [
+    {
+      "t": 42.062,
+      "kind": "drop",
+      "note": "est: kick 0.13->0.77",
+      "end": null
+    },
+    {
+      "t": 100.876,
+      "kind": "breakdown",
+      "note": "est: kick fell to 0.06",
+      "end": null
+    },
+    {
+      "t": 136.924,
+      "kind": "drop",
+      "note": "est: kick 0.30->0.80",
+      "end": null
+    },
+    {
+      "t": 163.485,
+      "kind": "drop",
+      "note": "est: kick 0.03->0.96",
+      "end": null
+    }
+  ],
+  "source": "analyze_track (bpm estimated; verify in Rekordbox)"
+}
