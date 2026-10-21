@@ -2,6 +2,12 @@
   "bpm": 130.0,
   "first_downbeat_s": 0.55,
   "beats_per_bar": 4,
-  "markers": [],
+  "markers": [
+    {
+      "t": 15.319,
+      "kind": "drop",
+      "note": "est: kick 0.21->0.99"
+    }
+  ],
   "source": "analyze_track"
 }
