@@ -4,59 +4,47 @@
   "beats_per_bar": 4,
   "markers": [
     {
-      "t": 29.115,
+      "t": 0.024,
+      "kind": "build",
+      "note": "whole intro is a build-up into drop 1",
+      "end": null
+    },
+    {
+      "t": 72.75,
       "kind": "drop",
-      "note": "est: kick 0.12->0.98",
+      "note": "no snare roll (synths + claps, no kick): don't strobe hard \u2014 a soft, slower strobe at most, better to hit the lights on the claps/crashes",
+      "end": 83.66
+    },
+    {
+      "t": 83.66,
+      "kind": "whiteout",
+      "note": "drums removed; a few bars of just synths bridging the drop and the main groove",
       "end": null
     },
     {
-      "t": 47.297,
-      "kind": "breakdown",
-      "note": "est: kick fell to 0.30",
+      "t": 87.3,
+      "kind": "groove",
+      "note": "main groove",
+      "end": 130.93
+    },
+    {
+      "t": 130.93,
+      "kind": "build",
+      "note": "goes quieter, then builds intensity into drop 2",
       "end": null
     },
     {
-      "t": 87.297,
+      "t": 196.39,
       "kind": "drop",
-      "note": "est: kick 0.07->0.97",
-      "end": null
+      "note": "react to the crashes/claps, not a strobe roll; kick drops out 3:23.66-3:30.93 while claps carry it",
+      "end": 210.93
     },
     {
-      "t": 130.933,
-      "kind": "breakdown",
-      "note": "est: kick fell to 0.03",
-      "end": null
-    },
-    {
-      "t": 145.479,
-      "kind": "drop",
-      "note": "est: kick 0.01->0.79",
-      "end": null
-    },
-    {
-      "t": 160.024,
-      "kind": "breakdown",
-      "note": "est: kick fell to 0.03",
-      "end": null
-    },
-    {
-      "t": 174.569,
-      "kind": "drop",
-      "note": "est: kick 0.04->0.97",
-      "end": null
-    },
-    {
-      "t": 203.66,
-      "kind": "breakdown",
-      "note": "est: kick fell to 0.02",
-      "end": null
-    },
-    {
-      "t": 210.933,
-      "kind": "drop",
-      "note": "est: kick 0.02->0.98",
+      "t": 210.93,
+      "kind": "groove",
+      "note": "main groove to the end",
       "end": null
     }
   ],
-  "source": "analyze_track (bpm estimated; verify in Rekordbox)"
+  "source": "analyze_track; bpm 132 confirmed by ear-notes pass"
 }
