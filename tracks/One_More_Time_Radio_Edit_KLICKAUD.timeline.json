@@ -1,6 +1,6 @@
 {
-  "bpm": 120.2,
-  "first_downbeat_s": 1.331,
+  "bpm": 123.0,
+  "first_downbeat_s": 0.359,
   "beats_per_bar": 4,
   "markers": [],
   "source": "analyze_track"
