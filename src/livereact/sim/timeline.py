@@ -17,9 +17,17 @@ from pathlib import Path
 
 @dataclass
 class Marker:
+    """A structural moment, by ear. ``kind``:
+    drop       -- the real thing: full-energy section; ``end`` is where it cuts
+    fill       -- an energy entry that is NOT a drop (Namerakana-style tool tracks,
+                  One More Time's first sections); no strobe/drop looks warranted
+    breakdown  -- energy strips out; runs until the next marker
+    build      -- riser / snare-roll section leading into a drop
+    ``note`` starting with "est:" means unverified machine guess."""
     t: float
-    kind: str          # "drop" | "breakdown" | "build" | free text
+    kind: str
     note: str = ""
+    end: float | None = None
 
 
 @dataclass

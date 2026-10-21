@@ -4,24 +4,28 @@
   "beats_per_bar": 4,
   "markers": [
     {
-      "t": 48.402,
+      "t": 48.4,
       "kind": "breakdown",
-      "note": "est: kick fell to 0.20"
+      "note": "",
+      "end": null
     },
     {
-      "t": 81.845,
+      "t": 64.14,
       "kind": "drop",
-      "note": "est: kick 0.41->0.83"
+      "note": "",
+      "end": 80.86
     },
     {
-      "t": 142.828,
+      "t": 142.83,
       "kind": "breakdown",
-      "note": "est: kick fell to 0.16"
+      "note": "",
+      "end": null
     },
     {
-      "t": 158.566,
+      "t": 182.17,
       "kind": "drop",
-      "note": "est: kick 0.31->0.96"
+      "note": "",
+      "end": 190.53
     }
   ],
   "source": "analyze_track"

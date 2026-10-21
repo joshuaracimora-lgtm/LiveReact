@@ -4,9 +4,10 @@
   "beats_per_bar": 4,
   "markers": [
     {
-      "t": 15.319,
-      "kind": "drop",
-      "note": "est: kick 0.21->0.99"
+      "t": 15.32,
+      "kind": "fill",
+      "note": "tool track, no real drop: no strobe/drop looks",
+      "end": null
     }
   ],
   "source": "analyze_track"

@@ -4,29 +4,28 @@
   "beats_per_bar": 4,
   "markers": [
     {
-      "t": 62.798,
-      "kind": "drop",
-      "note": "est: kick 0.09->0.97"
+      "t": 62.8,
+      "kind": "fill",
+      "note": "energy entry, not a drop: no strobe/drop looks",
+      "end": null
     },
     {
-      "t": 94.018,
-      "kind": "drop",
-      "note": "est: kick 0.04->0.90"
+      "t": 94.02,
+      "kind": "fill",
+      "note": "energy entry, not a drop: no strobe/drop looks",
+      "end": null
     },
     {
-      "t": 140.847,
+      "t": 140.85,
       "kind": "breakdown",
-      "note": "est: kick fell to 0.08"
+      "note": "",
+      "end": null
     },
     {
-      "t": 257.92,
+      "t": 234.51,
       "kind": "drop",
-      "note": "est: kick 0.13->0.86"
-    },
-    {
-      "t": 289.139,
-      "kind": "drop",
-      "note": "est: kick 0.04->0.87"
+      "note": "",
+      "end": 256.46
     }
   ],
   "source": "analyze_track"

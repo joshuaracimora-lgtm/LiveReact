@@ -4,24 +4,28 @@
   "beats_per_bar": 4,
   "markers": [
     {
-      "t": 58.455,
+      "t": 42.78,
       "kind": "drop",
-      "note": "est: kick 0.25->0.83"
+      "note": "starts on the clap",
+      "end": 55.77
     },
     {
-      "t": 85.321,
+      "t": 85.32,
       "kind": "breakdown",
-      "note": "est: kick fell to 0.34"
+      "note": "",
+      "end": null
     },
     {
-      "t": 144.426,
+      "t": 128.31,
       "kind": "drop",
-      "note": "est: kick 0.25->0.83"
+      "note": "starts quiet and escalates (long drop): strobe should start small and build like a snare roll",
+      "end": 141.74
     },
     {
-      "t": 199.948,
+      "t": 199.95,
       "kind": "breakdown",
-      "note": "est: kick fell to 0.30"
+      "note": "",
+      "end": null
     }
   ],
   "source": "analyze_track"
