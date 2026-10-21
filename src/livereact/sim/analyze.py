@@ -173,3 +173,53 @@ def estimate_markers(audio, timeline: Timeline, np,
 def fmt_mmss(t: float) -> str:
     m, s = divmod(t, 60)
     return f"{int(m)}:{s:05.2f}"
+
+
+# ----------------------------------------------------------------- snapping by ear-notes
+
+def _band_curves(audio, np):
+    """Per-block normalized curves: kick (30-150 Hz), snare/clap (150-400 Hz + 2-6 kHz), full RMS."""
+    n = len(audio) // BLOCK
+    x = audio[: n * BLOCK].reshape(n, BLOCK)
+    spec = np.abs(np.fft.rfft(x * np.hanning(BLOCK), axis=1))
+    f = np.fft.rfftfreq(BLOCK, d=1 / SR)
+    kick = spec[:, (f >= 30) & (f <= 150)].sum(axis=1)
+    snare = spec[:, ((f >= 150) & (f <= 400)) | ((f >= 2000) & (f <= 6000))].sum(axis=1)
+    rms = np.sqrt((x ** 2).mean(axis=1))
+    norm = lambda v: v / (np.percentile(v, 95) or 1.0)
+    return {"kick": norm(kick), "snare": norm(snare), "rms": norm(rms)}
+
+
+def snap(audio, timeline: Timeline, ref_s: float, direction: str, np, band: str = "kick",
+         win_s: float = 3.0, grid: str = "bar", before_s: float = 0.6, after_s: float = 0.6):
+    """Snap an ear-noted time to the grid line with the biggest energy step.
+
+    ``direction``: "rise" (drums/roll come in) or "cut" (drums drop out).
+    ``band``: "kick", "snare" or "rms". ``grid``: "bar" or "beat".
+    Returns (snapped_t, step_size, candidates[:4]) so a weak step can be
+    overridden by the nearest grid line to the ear note instead.
+    """
+    curves = _band_curves(audio, np)
+    c = curves[band]
+    dt = BLOCK / SR
+    def mean_at(t0, t1):
+        a, b = max(0, int(t0 / dt)), min(len(c), int(t1 / dt) + 1)
+        return float(c[a:b].mean()) if b > a else 0.0
+    step = timeline.bar_dur if grid == "bar" else timeline.beat_dur
+    phase = timeline.first_downbeat_s % step
+    lines = np.arange(phase, len(c) * dt, step)
+    cand = lines[(lines >= ref_s - win_s) & (lines <= ref_s + win_s)]
+    scored = []
+    for t in cand:
+        before, after = mean_at(t - before_s, t), mean_at(t, t + after_s)
+        s = (after - before) if direction == "rise" else (before - after)
+        scored.append((round(s, 3), float(t)))
+    scored.sort(reverse=True)
+    best_s, best_t = scored[0]
+    return round(best_t, 3), best_s, [(fmt_mmss(t), s) for s, t in scored[:4]]
+
+
+def nearest_line(timeline: Timeline, ref_s: float, grid: str = "bar") -> float:
+    step = timeline.bar_dur if grid == "bar" else timeline.beat_dur
+    phase = timeline.first_downbeat_s % step
+    return round(phase + step * round((ref_s - phase) / step), 3)

@@ -23,6 +23,8 @@ class Marker:
                   One More Time's first sections); no strobe/drop looks warranted
     breakdown  -- energy strips out; runs until the next marker
     build      -- riser / snare-roll section leading into a drop
+    whiteout   -- drums cut while the track stays intense (stabs/synths carry it):
+                  the rig goes white, moving heads to the DJ (STRUCT-04)
     ``note`` starting with "est:" means unverified machine guess."""
     t: float
     kind: str

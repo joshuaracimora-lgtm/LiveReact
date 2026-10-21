@@ -1,0 +1,32 @@
+{
+  "bpm": 126.0,
+  "first_downbeat_s": 0.536,
+  "beats_per_bar": 4,
+  "markers": [
+    {
+      "t": 27.2,
+      "kind": "whiteout",
+      "note": "drums cut, big Thriller synth stabs hit: white out for drama",
+      "end": null
+    },
+    {
+      "t": 74.82,
+      "kind": "whiteout",
+      "note": "drums cut right before the drop: straight to white out",
+      "end": null
+    },
+    {
+      "t": 76.73,
+      "kind": "drop",
+      "note": "in-the-roll kick: strobe starts low-brightness and escalates to the end; drums cut at the end",
+      "end": 90.06
+    },
+    {
+      "t": 145.3,
+      "kind": "drop",
+      "note": "drop 2, less of a drop: weaker snare roll, strobe at reduced intensity (not drop-1 intensity)",
+      "end": 211.96
+    }
+  ],
+  "source": "analyze_track (bpm estimated; verify in Rekordbox)"
+}
