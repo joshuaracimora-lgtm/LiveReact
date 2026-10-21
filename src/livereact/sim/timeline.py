@@ -23,6 +23,9 @@ class Marker:
                   One More Time's first sections); no strobe/drop looks warranted
     breakdown  -- energy strips out; runs until the next marker
     build      -- riser / snare-roll section leading into a drop
+    groove     -- the main full-energy section after a drop's roll resolves: synth-synced
+                  wash bar, heads at full speed, laser bursts 2-4 beats every other bar
+                  (STRUCT-07); ``end`` is where it cuts
     whiteout   -- drums cut while the track stays intense (stabs/synths carry it):
                   the rig goes white, moving heads to the DJ (STRUCT-04)
     ``note`` starting with "est:" means unverified machine guess."""

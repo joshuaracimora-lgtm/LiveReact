@@ -19,3 +19,19 @@ Open questions to settle before STRUCT-04/05 are scored:
 - "Face the DJ": which pan/tilt is that per fixture? Likely derived from rig geometry (`x`/`y` + a DJ booth position) — add `dj_position` to the venue block.
 - "Kicks and claps are gone": define as low-band transient rate < X/bar AND snare-band onset rate < Y/bar for ≥ 2 bars while energy_norm stays > 0.7.
 - Shutter fade shape: how many steps, over how many bars? First pass: 3–6 steps over 1–2 bars.
+
+## Vocabulary from the labeling sessions (Thriller BVRNOUT, Beautiful Now, Oct 21 2026)
+
+Josh's model of a tech-house drop, in lighting terms, has three parts the
+engine currently collapses into one "DROP":
+
+| Phase | Marker kind | What the lights do |
+|---|---|---|
+| **roll** — the snare roll / in-the-roll kick leading into the slam | `drop` (with `end`) | strobe starts low-brightness and escalates to the end of the roll (STRUCT-02); a weaker roll gets a proportionally weaker strobe |
+| **cut** — drums drop out for 1–2 bars while the track stays intense | `whiteout` | strobe → white out, moving heads to the DJ (STRUCT-04). Also fires on stab/synth-carried sections with no drums (Thriller 0:27) |
+| **groove** — the main full-energy section that lands after the cut | `groove` (with `end`) | wash bar synth-synced (vibrating with the synths), moving heads at full speed, lasers fire a 2–4 beat burst every other bar |
+
+| Proposed ID | Rule | Severity | Scorer measures |
+|---|---|---|---|
+| STRUCT-07 | In a `groove` section the wash bar's intensity tracks the synth band (not the kick), moving heads run at their max slew, and the laser fires a 2–4 beat burst on alternating bars. | major | correlation of bar DIMMER with the mid/high band > correlation with kick; MOVEMENT per-frame delta near the fixture's clamp; LASER-channel bursts of 2–4 beats with a 1-bar gap |
+| STRUCT-08 | Strobe intensity in a roll scales with the roll's intensity: a weaker snare roll (Thriller 2:25) gets a visibly lower strobe ceiling than a strong one (Thriller 1:17). | minor | peak strobe byte over each drop window ordered the same way as the roll's snare-band energy |
