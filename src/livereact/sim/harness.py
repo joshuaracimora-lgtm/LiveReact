@@ -60,6 +60,16 @@ TARGET_RAW_RMS = 0.08
 # Rules the simulation can never verify: strobe Hz lives in fixture firmware
 # (one written byte -> a rate the engine never sees). The scorer must report
 # these as unverifiable, never as PASS. (Confirmed Case B, Oct 2026.)
+def default_seed_range(config_path: str | Path = "config.json") -> "tuple[float, float] | None":
+    """The live app's saved normalizer range, if config.json has one (fingerprint ignored:
+    the sim's gain calibration targets the same measured raw range as the live mic path)."""
+    try:
+        seed = json.loads(Path(config_path).read_text(encoding="utf-8")).get("energy_norm") or {}
+        return float(seed["floor"]), float(seed["ceiling"])
+    except Exception:
+        return None
+
+
 UNVERIFIABLE_IN_SIM = ["SAFE-01", "SAFE-02", "SAFE-03", "SAFE-04", "SAFE-05", "SAFE-06"]
 
 
@@ -134,11 +144,15 @@ def run_sim(
     gain: float | None = None,
     manual: ManualParams | None = None,
     audio: "np.ndarray | None" = None,
+    seed_range: "tuple[float, float] | None" = None,
 ) -> RunResult:
     """Simulate one track end to end and return the full frame log.
 
     ``audio`` lets tests pass pre-generated samples instead of a file; then
-    ``track`` is just a label.
+    ``track`` is just a label. ``seed_range`` = (floor, ceiling) seeds the
+    energy normalizer the way the live app does from config.json's last
+    session; None cold-starts it (the live ``--no-norm-seed`` behaviour --
+    energy_norm reads 0.0 for the first ~40 s, found on the first scored run).
     """
     import numpy as np
 
@@ -156,7 +170,7 @@ def run_sim(
     shared_queue: queue.Queue = queue.Queue()
     stop_event = threading.Event()
     show_state = ShowState()
-    metronome = Metronome(shared_queue, show_state, clock, stop_event)
+    metronome = Metronome(shared_queue, show_state, clock, stop_event, seed_range=seed_range)
 
     # Analysis-only AudioAnalyzer: never .start() (that opens a real stream).
     analyzer = AudioAnalyzer(shared_queue, clock, stop_event)
@@ -226,6 +240,7 @@ def run_sim(
         rows.append(row)
 
     summary = _summarize(rows, frames, times, rig, slots, applied_gain, timeline)
+    summary["seed_range"] = list(seed_range) if seed_range else None
     return RunResult(track=str(track), rig=str(rig_path), timeline=timeline,
                      gestures=str(gestures) if gestures else None,
                      frames=frames, t=times, signals=rows, summary=summary)

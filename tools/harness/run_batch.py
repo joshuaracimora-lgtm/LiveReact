@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from livereact.sim.harness import run_sim
+from livereact.sim.harness import default_seed_range, run_sim
 from livereact.sim.timeline import Timeline, timeline_path_for
 
 AUDIO_EXT = {".mp3", ".wav", ".flac", ".m4a", ".aiff", ".aif", ".ogg"}
@@ -34,6 +34,7 @@ def main() -> int:
     p.add_argument("--gestures", default=None)
     p.add_argument("--duration", type=float, default=None)
     p.add_argument("--out", default=None)
+    p.add_argument("--cold-start", action="store_true", help="Cold-start the energy normalizer (live --no-norm-seed); default seeds from config.json")
     p.add_argument("--no-frames", action="store_true", help="Skip frames.npz/signals.csv; summary only")
     a = p.parse_args()
 
@@ -50,7 +51,8 @@ def main() -> int:
             continue
         t0 = time.time()
         try:
-            r = run_sim(track, Timeline.load(tpath), a.rig, gestures=a.gestures, duration=a.duration)
+            r = run_sim(track, Timeline.load(tpath), a.rig, gestures=a.gestures, duration=a.duration,
+                        seed_range=None if a.cold_start else default_seed_range())
         except Exception as exc:  # keep going; the agent needs the whole picture
             batch["failed"].append({"track": track.name, "error": repr(exc),
                                     "traceback": traceback.format_exc()[-2000:]})

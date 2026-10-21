@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from livereact.sim.harness import run_sim
+from livereact.sim.harness import default_seed_range, run_sim
 from livereact.sim.timeline import Timeline, timeline_path_for
 
 
@@ -29,10 +29,12 @@ def main() -> int:
     p.add_argument("--duration", type=float, default=None)
     p.add_argument("--gain", type=float, default=None)
     p.add_argument("--out", default=None)
+    p.add_argument("--cold-start", action="store_true", help="Cold-start the energy normalizer (live --no-norm-seed); default seeds from config.json")
     a = p.parse_args()
 
     tl = Timeline(bpm=a.bpm) if a.bpm else Timeline.load(timeline_path_for(a.track))
-    r = run_sim(a.track, tl, a.rig, gestures=a.gestures, duration=a.duration, gain=a.gain)
+    r = run_sim(a.track, tl, a.rig, gestures=a.gestures, duration=a.duration, gain=a.gain,
+                seed_range=None if a.cold_start else default_seed_range())
     out = a.out or f"results/{datetime.now():%Y%m%d-%H%M%S}/{Path(a.track).stem}"
     r.summary["track"] = a.track
     r.summary["frames_digest"] = r.frames_digest()
