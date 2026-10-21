@@ -1,0 +1,319 @@
+{
+  "params": {},
+  "summary": {
+    "tuning": {
+      "n": 5,
+      "compliance": 0.3736,
+      "critical_fails": 18,
+      "blocked": 5,
+      "quality": {
+        "distinct_looks": 4.8,
+        "brightness_dynamic_range": 0.796,
+        "fixture_utilization": 1.0,
+        "drop_response_mean": 0.011
+      }
+    },
+    "holdout": {
+      "n": 2,
+      "compliance": 0.4235,
+      "critical_fails": 6,
+      "blocked": 2,
+      "quality": {
+        "distinct_looks": 4.0,
+        "brightness_dynamic_range": 0.801,
+        "fixture_utilization": 1.0,
+        "drop_response_mean": 0.439
+      }
+    }
+  },
+  "tracks": [
+    {
+      "track": "Michael_Jackson_-_Thriller_BVRNOUT_Haunted_R.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.4,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "PASS",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "FAIL",
+        "TIME-06": "NOT_SCORED",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "FAIL",
+        "STRUCT-03": "PASS"
+      },
+      "quality": {
+        "distinct_looks": 4,
+        "look_changes": 10,
+        "brightness_dynamic_range": 0.81,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": -0.092
+      },
+      "frames_digest": "4efa8ab2c64d393fc1e8186c77cdafc1c363c3efcff129908247cd9b06058026"
+    },
+    {
+      "track": "Namerakana_2_0_KLICKAUD.mp3",
+      "holdout": true,
+      "status": "BLOCKED",
+      "compliance": 0.647,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "PASS",
+        "TIME-04": "NOT_SCORED",
+        "TIME-05": "NOT_SCORED",
+        "LOOK-05": "NOT_SCORED",
+        "TIME-06": "NOT_SCORED",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "PASS",
+        "STRUCT-02": "NOT_SCORED",
+        "STRUCT-03": "NOT_SCORED"
+      },
+      "quality": {
+        "distinct_looks": 4,
+        "look_changes": 8,
+        "brightness_dynamic_range": 0.742,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "PEAK"
+        ],
+        "drop_response_mean": null
+      },
+      "frames_digest": "ea45f33abb82542897532db7a7857e052cd18190b7d3e06e0000fe42719d2efc"
+    },
+    {
+      "track": "One_More_Time_Radio_Edit_KLICKAUD.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.429,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "PASS",
+        "TIME-04": "FAIL",
+        "TIME-05": "PASS",
+        "LOOK-05": "PASS",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "FAIL",
+        "STRUCT-02": "NOT_SCORED",
+        "STRUCT-03": "FAIL"
+      },
+      "quality": {
+        "distinct_looks": 5,
+        "look_changes": 8,
+        "brightness_dynamic_range": 0.861,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "BUILD",
+          "DROP",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.086
+      },
+      "frames_digest": "53a3676b5ec166c0aca308ba9dbeeee598c9a72210bf99e2da3d3f0114d136eb"
+    },
+    {
+      "track": "SWEETER_KLICKAUD.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.304,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "PASS",
+        "TIME-06": "NOT_SCORED",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "NOT_SCORED",
+        "STRUCT-03": "FAIL"
+      },
+      "quality": {
+        "distinct_looks": 5,
+        "look_changes": 11,
+        "brightness_dynamic_range": 0.694,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.035
+      },
+      "frames_digest": "4c677e94f007033dfbb5414c77fb0043b088a34dc8d1f2bcd7e902cdeb061865"
+    },
+    {
+      "track": "Sam Smith, Disclosure - Latch (Original Mix).mp3",
+      "holdout": true,
+      "status": "BLOCKED",
+      "compliance": 0.2,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "FAIL",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "NOT_SCORED",
+        "STRUCT-03": "FAIL"
+      },
+      "quality": {
+        "distinct_looks": 4,
+        "look_changes": 6,
+        "brightness_dynamic_range": 0.861,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.439
+      },
+      "frames_digest": "5b542226b1c729a24632b1727251e13c4e70aab77c44a238e9d6da613cf913f6"
+    },
+    {
+      "track": "Zedd, Jon Bellion - Beautiful Now (Extended .mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.179,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "FAIL",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "FAIL",
+        "STRUCT-02": "NOT_SCORED",
+        "STRUCT-03": "FAIL"
+      },
+      "quality": {
+        "distinct_looks": 5,
+        "look_changes": 17,
+        "brightness_dynamic_range": 0.753,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "BUILD",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.007
+      },
+      "frames_digest": "1b50b5c62970265d3fead28559bfb410c5bcc369893a0f2f92b98dbbf59e9966"
+    },
+    {
+      "track": "messy _laszewo edit_ - A\u030a\u0081aszewo - SoundLoadM.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.556,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "PASS",
+        "TIME-13": "PASS",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "PASS",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "PASS",
+        "STRUCT-03": "FAIL"
+      },
+      "quality": {
+        "distinct_looks": 5,
+        "look_changes": 8,
+        "brightness_dynamic_range": 0.861,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "BUILD",
+          "DROP",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.017
+      },
+      "frames_digest": "19c82bda706a200382aa24754ba0b3a4928e23819b38d0e4fab574b3191ba516"
+    }
+  ],
+  "generated": "2026-10-21T18:42:29"
+}
