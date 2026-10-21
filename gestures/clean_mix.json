@@ -1,0 +1,9 @@
+[
+  {"t": 0.0,  "control": "fader_a", "value": 1.0},
+  {"t": 0.0,  "control": "fader_b", "value": 1.0},
+  {"t": 0.0,  "control": "crossfader", "value": 0.0},
+  {"t": 64.0, "control": "crossfader", "from": 0.0, "to": 1.0, "dur": 8.0},
+  {"t": 64.0, "control": "eq_low_a",   "from": 0.5, "to": 0.0, "dur": 4.0},
+  {"t": 160.0, "control": "crossfader", "from": 1.0, "to": 0.0, "dur": 16.0},
+  {"t": 168.0, "control": "eq_low_b",   "from": 0.5, "to": 0.0, "dur": 2.0}
+]

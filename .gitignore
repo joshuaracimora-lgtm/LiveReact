@@ -30,3 +30,8 @@ Thumbs.db
 .vscode/
 .idea/
 logs/
+# Owned audio for offline simulation -- never committed
+tracks/*
+!tracks/.gitkeep
+!tracks/*.timeline.json
+results/
