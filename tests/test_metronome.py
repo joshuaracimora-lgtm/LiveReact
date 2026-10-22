@@ -1474,3 +1474,83 @@ def test_unmapped_operator_controls_reach_the_control_callback_not_the_mixer_int
     m.tick()
     assert seen == [("laser_cue", 1.0), ("laser_cue", 1.0)]
     assert m._midi["fader_a"] == 1.0
+
+
+# ---------------------------------------------------------------- roll START (core/roll_period.py, 2026-10-22)
+
+def _snare_blocks(m, clock, seconds, level_fn, rms=0.05):
+    """Feed audio one BLOCK at a time (the roll detector's lags are in blocks),
+    quiet in loudness -- the labeled rolls sit at energy_norm ~0.1 -- with the
+    150-500 Hz band following `level_fn(block_index)`. Ticks the metronome per
+    block and returns the first tick DROP was committed on, or None."""
+    from livereact.inputs.audio import BLOCK
+    dt = BLOCK / 44100.0
+    first = None
+    for i in range(int(seconds / dt)):
+        clock.advance(dt)
+        now = clock.monotonic()
+        m.queue.put(AudioLevelMessage(now, rms=rms, band_low=0.5, band_mid=0.3, band_high=0.2,
+                                      band_low_abs=3.0, band_mid_abs=2.0, band_high_abs=0.3,
+                                      band_snare_abs=level_fn(i)))
+        snap = m.tick()
+        if first is None and snap.classifier_bucket == "drop":
+            first = now
+    return first
+
+
+def test_a_snare_roll_start_commits_the_drop_unarmed_and_quiet():
+    """Josh's drop begins at the roll (spec/PENDING_RULES.md); STRUCT-03 wants
+    DROP within two beats of it. The real rolls are quiet, so no loudness
+    path can see them -- the 150-500 Hz band's 16th-note periodicity does."""
+    import random
+    rng = random.Random(11)
+    clock = FakeClock()
+    m = _metronome(clock)
+    m.queue.put(BeatMessage(clock.monotonic(), 1, 130.0, True, 1))
+    beat = 60.0 / 130.0
+    every = round(beat / 4 / (1024 / 44100.0))      # blocks per 16th
+    assert _snare_blocks(m, clock, 12 * 4 * beat, lambda i: 1.0 + rng.uniform(-0.3, 0.3)) is None
+    t0 = clock.monotonic()
+    first = _snare_blocks(m, clock, 4 * 4 * beat, lambda i: (3.0 if i % every == 0 else 1.0) + rng.uniform(-0.2, 0.2))
+    assert first is not None, "the roll never committed a DROP"
+    assert (first - t0) / beat <= 2.5
+    assert m.tick().drop_start_bar is not None
+    assert not m.drop_armed  # the commit consumed any arming, like every other commit
+
+
+def test_a_periodic_texture_from_the_start_never_commits_a_drop():
+    """An 8th-note bassline in the same band (Sweet Nothing's intro) is a
+    texture, not a roll: no step up over the reference, so no DROP."""
+    import random
+    rng = random.Random(12)
+    clock = FakeClock()
+    m = _metronome(clock)
+    beat = 60.0 / 124.0
+    every = round(beat / 2 / (1024 / 44100.0))
+    first = _snare_blocks(m, clock, 24 * 4 * beat, lambda i: (3.0 if i % every == 0 else 1.0) + rng.uniform(-0.2, 0.2))
+    assert first is None
+    assert m.tick().roll_period_score >= 0.5   # it is periodic -- the detector saw it and declined
+
+
+def test_the_roll_start_commit_can_be_switched_off(monkeypatch):
+    import random
+    from livereact.core import metronome as met
+    monkeypatch.setattr(met, "ROLL_START_COMMITS", False)
+    rng = random.Random(13)
+    clock = FakeClock()
+    m = _metronome(clock)
+    beat = 60.0 / 124.0
+    every = round(beat / 4 / (1024 / 44100.0))
+    _snare_blocks(m, clock, 12 * 4 * beat, lambda i: 1.0 + rng.uniform(-0.3, 0.3))
+    first = _snare_blocks(m, clock, 4 * 4 * beat, lambda i: (3.0 if i % every == 0 else 1.0) + rng.uniform(-0.2, 0.2))
+    assert first is None
+
+
+def test_snare_band_and_roll_score_reach_the_snapshot():
+    clock = FakeClock()
+    m = _metronome(clock)
+    m.queue.put(AudioLevelMessage(clock.monotonic(), rms=0.3, band_low=0.5, band_mid=0.3, band_high=0.2,
+                                  band_low_abs=10.0, band_mid_abs=6.0, band_high_abs=4.0, band_snare_abs=2.5))
+    snap = m.tick()
+    assert snap.audio_band_snare_abs == 2.5
+    assert snap.roll_period_score == 0.0  # one block is not a window

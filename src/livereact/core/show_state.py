@@ -71,6 +71,13 @@ class ShowSnapshot:
     # a rate, not a level -- core/snare_trigger.py reads this.
     audio_high_onset_rate: float = 0.0
     audio_high_flux: float = 0.0
+    # 150-500 Hz magnitude (inputs/audio.py SNARE_HZ, 2026-10-22) and the
+    # roll-start detector's periodicity score on it (core/roll_period.py):
+    # a snare roll is 8th/16th-note structure in the snare's body band. The
+    # metronome commits DROP on a confirmed roll start (Josh's drop begins at
+    # the roll, spec/PENDING_RULES.md); exposed for the recorder/harness.
+    audio_band_snare_abs: float = 0.0
+    roll_period_score: float = 0.0
 
     # --- derived ---
     energy: float = 0.0                  # inferred 0.0-1.0

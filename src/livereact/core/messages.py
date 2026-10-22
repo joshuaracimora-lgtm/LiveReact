@@ -86,6 +86,9 @@ class AudioLevelMessage:
     band_high_abs: float
     high_flux: float = 0.0
     high_onset_rate: float = 0.0
+    band_snare_abs: float = 0.0  # 150-500 Hz absolute magnitude (SNARE_HZ, 2026-10-22): the snare's body,
+                                 # for core/roll_period.py's roll-start detector. Default 0.0 like the onset
+                                 # fields so other producers (demo, replay, tests) needn't set it.
 
 
 @dataclass(frozen=True)

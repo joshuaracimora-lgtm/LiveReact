@@ -228,3 +228,22 @@ def test_white_noise_and_a_noise_riser_produce_no_onsets():
     n = BLOCK * 170
     riser = (rng.standard_normal(n) * np.linspace(0.001, 0.2, n)).astype(np.float32)
     assert max(m.high_onset_rate for m in _feed(_analyzer(), riser)[-60:]) == 0.0
+
+
+def test_band_snare_abs_reads_the_snare_body_band_not_the_hats():
+    """SNARE_HZ (150-500 Hz, 2026-10-22) feeds core/roll_period.py; it overlaps
+    LOW/MID by design and is absolute like the other *_abs fields."""
+    import numpy as np
+    from livereact.inputs.audio import BLOCK
+    a = _analyzer()
+    a._setup_bands(np)
+    t = np.arange(BLOCK) / a._sr
+    a._analyze_block((0.3 * np.sin(2 * np.pi * 300 * t)).astype(np.float32), attack=1.0, release=1.0, np=np)
+    snare_msg = a.queue.get_nowait()
+    a._analyze_block((0.3 * np.sin(2 * np.pi * 6000 * t)).astype(np.float32), attack=1.0, release=1.0, np=np)
+    hat_msg = a.queue.get_nowait()
+    assert snare_msg.band_snare_abs > hat_msg.band_snare_abs * 20
+    assert hat_msg.band_high_abs > snare_msg.band_high_abs * 20
+    # other producers can leave it out
+    from livereact.core.messages import AudioLevelMessage
+    assert AudioLevelMessage(0.0, 0.1, 0.3, 0.3, 0.4, 1.0, 1.0, 1.0).band_snare_abs == 0.0

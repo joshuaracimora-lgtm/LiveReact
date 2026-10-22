@@ -63,6 +63,10 @@ CHANNELS = (5, 6)          # 1-based device channels carrying the live master/bo
 LOW_HZ = (20, 250)
 MID_HZ = (250, 2000)
 HIGH_HZ = (2000, 16000)
+SNARE_HZ = (150, 500)      # the snare's body (2026-10-22): `band_snare_abs` feeds core/roll_period.py,
+                           # which reads a snare roll as 8th/16th-note periodicity of this band's envelope.
+                           # Overlaps LOW/MID on purpose -- it is a feature band, not part of the
+                           # normalized low/mid/high split (those still sum to ~1.0).
 ATTACK_S = 0.015           # VU-meter-style smoothing: fast attack
 RELEASE_S = 0.250          #                            slower release
 ENERGY_GAIN = 5.0          # RECALIBRATED ON HARDWARE (2026-09-01): the 2026-08-31 calibration
@@ -247,6 +251,7 @@ class AudioAnalyzer(InputSource):
         self._low_mask = (freqs >= LOW_HZ[0]) & (freqs < LOW_HZ[1])
         self._mid_mask = (freqs >= MID_HZ[0]) & (freqs < MID_HZ[1])
         self._high_mask = (freqs >= HIGH_HZ[0]) & (freqs < HIGH_HZ[1])
+        self._snare_mask = (freqs >= SNARE_HZ[0]) & (freqs < SNARE_HZ[1])
         self._window = np.hanning(BLOCK)
 
     # ------------------------------------------------------------------ analysis thread
@@ -303,6 +308,7 @@ class AudioAnalyzer(InputSource):
         m_low = float(spec[self._low_mask].mean())
         m_mid = float(spec[self._mid_mask].mean())
         m_high = float(spec[self._high_mask].mean())
+        m_snare = float(spec[self._snare_mask].mean())
         total = m_low + m_mid + m_high + 1e-9
         flux, rate = self._onset_density(spec[self._high_mask], np)
 
@@ -317,6 +323,7 @@ class AudioAnalyzer(InputSource):
             band_high_abs=m_high,
             high_flux=flux,
             high_onset_rate=rate,
+            band_snare_abs=m_snare,
         ))
 
     def _onset_density(self, high_bins, np) -> tuple[float, float]:

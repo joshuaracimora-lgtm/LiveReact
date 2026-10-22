@@ -4,14 +4,14 @@
   "summary": {
     "tuning": {
       "n": 7,
-      "compliance": 0.2539,
-      "critical_fails": 28,
+      "compliance": 0.3083,
+      "critical_fails": 27,
       "blocked": 7,
       "quality": {
-        "distinct_looks": 4.571,
-        "brightness_dynamic_range": 0.775,
+        "distinct_looks": 4.286,
+        "brightness_dynamic_range": 0.796,
         "fixture_utilization": 1.0,
-        "drop_response_mean": 0.008
+        "drop_response_mean": 0.007
       }
     },
     "holdout": {
@@ -266,14 +266,14 @@
       "track": "Somebody_To_Love_CHALANT_Close_Friends_Onl-1.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.143,
+      "compliance": 0.343,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
-        "TIME-13": "FAIL",
+        "TIME-13": "PASS",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
-        "LOOK-05": "FAIL",
+        "LOOK-05": "PASS",
         "TIME-06": "FAIL",
         "TIME-21": "PASS",
         "LOOK-03": "NOT_SCORED",
@@ -285,7 +285,7 @@
         "SAFE-05": "UNVERIFIABLE_IN_SIM",
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "NOT_SCORED",
-        "STRUCT-02": "FAIL",
+        "STRUCT-02": "PASS",
         "STRUCT-03": "FAIL",
         "STRUCT-04": "FAIL",
         "STRUCT-07": "FAIL",
@@ -296,25 +296,24 @@
       },
       "quality": {
         "distinct_looks": 5,
-        "look_changes": 17,
-        "brightness_dynamic_range": 0.77,
+        "look_changes": 16,
+        "brightness_dynamic_range": 0.804,
         "fixture_utilization": 1.0,
         "bucket_coverage": [
           "BREAK",
           "BUILD",
           "DROP",
-          "OUTRO",
           "PEAK"
         ],
-        "drop_response_mean": 0.001
+        "drop_response_mean": 0.028
       },
-      "frames_digest": "558364531d3b7661f01ea3becb315d759d735ce449ffa3d3a3370fafc6f00bb4"
+      "frames_digest": "2528d374b30a1c69a0df08baf135f131dea4b906c27d759c67835aa1c2651f37"
     },
     {
       "track": "Sweet_Nothing_2025_Edit_KLICKAUD.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.194,
+      "compliance": 0.25,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
@@ -333,7 +332,7 @@
         "SAFE-05": "UNVERIFIABLE_IN_SIM",
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "NOT_SCORED",
-        "STRUCT-02": "FAIL",
+        "STRUCT-02": "PASS",
         "STRUCT-03": "FAIL",
         "STRUCT-04": "FAIL",
         "STRUCT-07": "FAIL",
@@ -343,20 +342,19 @@
         "STRUCT-06": "NOT_SCORED"
       },
       "quality": {
-        "distinct_looks": 5,
-        "look_changes": 11,
-        "brightness_dynamic_range": 0.665,
+        "distinct_looks": 4,
+        "look_changes": 10,
+        "brightness_dynamic_range": 0.681,
         "fixture_utilization": 1.0,
         "bucket_coverage": [
           "BREAK",
-          "BUILD",
           "DROP",
           "OUTRO",
           "PEAK"
         ],
-        "drop_response_mean": 0.014
+        "drop_response_mean": -0.023
       },
-      "frames_digest": "dbfce62d290ac6443f6644bdbcc3f90ebf9138ce647d651041ab32c74eb4a997"
+      "frames_digest": "417c1a8d06efe9aed57e76877d94bfd3f56645b5388dbd8a6e2c263ed773826b"
     },
     {
       "track": "Talk_To_You_ft_54_Ultra_KLICKAUD.mp3",
@@ -409,14 +407,14 @@
       "track": "Zedd, Jon Bellion - Beautiful Now (Extended .mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.156,
+      "compliance": 0.281,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
         "TIME-13": "FAIL",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
-        "LOOK-05": "FAIL",
+        "LOOK-05": "PASS",
         "TIME-06": "FAIL",
         "TIME-21": "PASS",
         "LOOK-03": "NOT_SCORED",
@@ -429,7 +427,7 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "FAIL",
         "STRUCT-02": "NOT_SCORED",
-        "STRUCT-03": "FAIL",
+        "STRUCT-03": "PASS",
         "STRUCT-04": "NOT_SCORED",
         "STRUCT-07": "NOT_SCORED",
         "STRUCT-08": "NOT_SCORED",
@@ -438,9 +436,9 @@
         "STRUCT-06": "FAIL"
       },
       "quality": {
-        "distinct_looks": 5,
-        "look_changes": 16,
-        "brightness_dynamic_range": 0.758,
+        "distinct_looks": 4,
+        "look_changes": 13,
+        "brightness_dynamic_range": 0.858,
         "fixture_utilization": 1.0,
         "bucket_coverage": [
           "BREAK",
@@ -451,7 +449,7 @@
         ],
         "drop_response_mean": 0.007
       },
-      "frames_digest": "8ba9abfcfe09f7ca2e1dbe973f37e0b25444152d602181a4d9b8ae877915cf3b"
+      "frames_digest": "84012ccbec433e448928583d047ba645d65ce8643f8a2d043721abacdd017dc2"
     },
     {
       "track": "messy _laszewo edit_ - A\u030a\u0081aszewo - SoundLoadM.mp3",
@@ -501,5 +499,5 @@
       "frames_digest": "29d87cd018747093c31545b472c04ca682a431fb29e6b957983f7da1b7ec44a2"
     }
   ],
-  "generated": "2026-10-22T13:37:31"
+  "generated": "2026-10-22T13:53:09"
 }

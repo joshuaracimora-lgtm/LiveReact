@@ -166,6 +166,72 @@
       ],
       "note": "bars a rise arms the detector"
     },
+    "ROLL_PERIOD_ON": {
+      "module": "livereact.core.roll_period",
+      "default": 0.5,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.3,
+        0.8
+      ],
+      "note": "roll-start periodicity score (max of 8th/16th-lag autocorr of the 150-500 Hz envelope)"
+    },
+    "ROLL_PERIOD_HOLD_BEATS": {
+      "module": "livereact.core.roll_period",
+      "default": 1.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.5,
+        2.0
+      ],
+      "note": "beats the score must hold before a start is confirmed"
+    },
+    "ROLL_PERIOD_WINDOW_BEATS": {
+      "module": "livereact.core.roll_period",
+      "default": 2.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.5,
+        4.0
+      ],
+      "note": "autocorrelation window"
+    },
+    "ROLL_PERIOD_BASE_MAX": {
+      "module": "livereact.core.roll_period",
+      "default": 0.3,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.1,
+        0.5
+      ],
+      "note": "reference median score must be under this (a step, not a texture)"
+    },
+    "ROLL_PERIOD_LEVEL_REL": {
+      "module": "livereact.core.roll_period",
+      "default": 0.5,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.2,
+        0.9
+      ],
+      "note": "band level vs its reference-span median (near-silence is scale-free noise)"
+    },
+    "ROLL_PERIOD_BASE_BARS": {
+      "module": "livereact.core.roll_period",
+      "default": 8,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        4,
+        16
+      ],
+      "note": "reference span, bars (ending one bar ago)"
+    },
     "AUTO_DROP_CONFIRM_S": {
       "module": "livereact.core.metronome",
       "default": 3.75,

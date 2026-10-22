@@ -170,6 +170,8 @@ class SessionRecorder(threading.Thread):
             "band_mid": round(snap.audio_band_mid_abs, 4),   # detector inputs, so a
             "band_high": round(snap.audio_band_high_abs, 4), # session can be replayed offline
             "onset_rate": round(snap.audio_high_onset_rate, 1),  # high-band onsets/s (roll accent)
+            "band_snare": round(snap.audio_band_snare_abs, 4),  # SNARE_HZ, roll-start input (2026-10-22)
+            "roll_period": round(snap.roll_period_score, 3),   # core/roll_period.py score
             "high_flux": round(snap.audio_high_flux, 4),
             "palette": snap.palette,            # phrase-frozen palette entries (engines/palette.py)
             "palette_spot": snap.palette_spot,

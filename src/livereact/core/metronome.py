@@ -31,6 +31,7 @@ from ..engines import palette as palette_mod
 from ..scenes.base import EnergyBucket
 from .build_rule import AUTO_HOLD_BARS, KickLevelBuildRule
 from .rise import RiseDetector
+from .roll_period import RollPeriodDetector
 from ..scenes.catalog import _BUCKET_ORDER, BUILD_MAX, LEGAL_TRANSITIONS, bucket_for_energy_with_hysteresis
 from .messages import AudioLevelMessage, BeatMessage, MidiControlMessage, StatusMessage, TransitionMessage
 from .show_state import ShowSnapshot, ShowState
@@ -391,6 +392,14 @@ DROP_HIT_PATTERN_S = 0.6               # ... and it must be a PATTERN: two disti
 # immediate. A third press cancels (arm and cut both). The exit is the
 # ordinary DROP -> BREAK confirmation.
 HARD_CUT_LATE_PHASE = 0.75
+# ROLL START (2026-10-22, engine family 1 / STRUCT-03, see core/roll_period.py):
+# Josh's drop begins at the snare roll, and the labeled rolls are quiet --
+# nothing level-based in this file sees them. A confirmed roll start (8th/
+# 16th-note periodicity stepping up in the 150-500 Hz band) commits DROP on
+# its own, unarmed: the roll IS the cue. Guards live in the detector
+# (reference span, step, level floor, hold, cooldown); the thresholds are
+# params.json knobs. Disable by setting ROLL_START_COMMITS = False.
+ROLL_START_COMMITS = True
 RISE_AUTO_ARM = True                   # core/rise.py: a strong rise (RISE_ARM held
                                        # RISE_ARM_BARS) arms the drop by itself for
                                        # RISE_ARM_HOLD_BARS -- the autonomous path.
@@ -601,6 +610,8 @@ class Metronome(threading.Thread):
         self._drop_arm_source = ""                    # "dj" / "roll" while armed
         self._drop_cut_pending = False                # see HARD_CUT_LATE_PHASE: D again = cut on the downbeat
         self._roll_active = False                     # written by the reactive engine via note_roll
+        self._roll_period = RollPeriodDetector()      # roll START from sub-beat periodicity (core/roll_period.py)
+        self._roll_start_pending = False              # set by _on_audio on the block a start confirms, consumed in _derive_bucket
         self._roll_since: float | None = None         # when the current roll began (ROLL_ARM_MIN_S)
         self._kick_edges: deque[float] = deque()      # times of raw low-band rising edges (DROP_HIT_PATTERN_S)
         self._drop_kick_ref: float | None = None      # last drop's kick peak (ARMED_KICK_VS_LAST_DROP)
@@ -650,6 +661,7 @@ class Metronome(threading.Thread):
         self._audio_band_high_abs = 0.0   # same
         self._audio_high_onset_rate = 0.0  # inputs/audio.py ONSET_*: onsets/s in the high band (roll accent)
         self._audio_high_flux = 0.0
+        self._audio_band_snare_abs = 0.0  # 150-500 Hz (SNARE_HZ), the roll-start detector's input
         self._audio_rms = 0.0
 
         # freshness tracking
@@ -759,6 +771,11 @@ class Metronome(threading.Thread):
         self._audio_high_onset_rate = msg.high_onset_rate
         self._audio_high_flux = msg.high_flux
         self._audio_rms = msg.rms
+        self._audio_band_snare_abs = msg.band_snare_abs
+        # One sample per audio BLOCK (the lags are in blocks) -- not per tick.
+        beat_dur = 60.0 / self._bpm if self._bpm > 0 else 60.0 / NOMINAL_BPM
+        if self._roll_period.on_block(msg.timestamp, msg.band_snare_abs, beat_dur):
+            self._roll_start_pending = True
 
     def _note_crossfader(self, t: float, value: float) -> None:
         """Detect a transition from crossfader motion over a rolling window."""
@@ -1089,6 +1106,24 @@ class Metronome(threading.Thread):
             self._apply_manual_override(self._manual_bucket_override, now)
             self._manual_bucket_override = None
             return
+
+        # ROLL START (see ROLL_START_COMMITS / core/roll_period.py): the snare
+        # roll is where Josh's drop begins, so a confirmed start commits DROP
+        # now, whatever the loudness reads (the labeled rolls sit at
+        # energy_norm ~0.1). The detector is one-shot per roll; a roll that
+        # starts while already in DROP changes nothing.
+        if self._roll_start_pending:
+            self._roll_start_pending = False
+            if ROLL_START_COMMITS and self._base_committed != EnergyBucket.DROP and self._is_audio_fresh(now):
+                self._bucket_candidate = None
+                self._bucket_candidate_since = None
+                self._bucket_candidate_bar = self._bar  # the roll's first bar is the phrase origin
+                log.info("Drop committed on a snare-roll start (periodicity %.2f, energy_norm %.2f)",
+                         self._roll_period.score, self._energy_norm)
+                self._commit_drop(now, level=max(self._energy_norm, self._inst_peak() or 0.0),
+                                  raw_energy=max(self._energy_smooth, self._energy))
+                self._apply_bucket_overlay(now)
+                return
 
         raw = bucket_for_energy_with_hysteresis(self._energy_norm, self._base_committed)
 
@@ -1593,6 +1628,8 @@ class Metronome(threading.Thread):
             audio_band_high_abs=self._audio_band_high_abs,
             audio_high_onset_rate=self._audio_high_onset_rate,
             audio_high_flux=self._audio_high_flux,
+            audio_band_snare_abs=self._audio_band_snare_abs,
+            roll_period_score=self._roll_period.score,
             energy=self._energy,
             energy_norm=self._energy_norm,
             bucket=self.look_bucket.value,
