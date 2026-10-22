@@ -191,7 +191,10 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
     analyzer._setup_bands(np)
 
     rig = load_rig(str(rig_path))
-    reactive = ReactiveLayerEngine(clock)
+    # roll_sink: app.py parity -- the reactive engine's roll detector arms the
+    # metronome's drop (Metronome.note_roll). Missing until 2026-10-22, so the
+    # sim never had a roll-armed drop and STRUCT-03 under-read the live engine.
+    reactive = ReactiveLayerEngine(clock, roll_sink=metronome.note_roll)
     phrase = PhraseEngine()
     laser_engine = LaserEngine(clock)
     transition = TransitionEngine()
