@@ -359,7 +359,7 @@
       "type": "int",
       "tag": "tunable",
       "range": [
-        2,
+        4,
         16
       ],
       "note": "min bars a look is held"
@@ -656,5 +656,6 @@
       "type": "float",
       "tag": "safety-frozen"
     }
-  }
+  },
+  "_approved": "Tags and ranges approved by Josh 2026-10-22. HOLD_BARS floor raised 2->4 (bible: looks hold 8, 16 in BREAK)."
 }
