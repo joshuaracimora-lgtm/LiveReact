@@ -4,23 +4,36 @@
   "beats_per_bar": 4,
   "markers": [
     {
-      "t": 14.667,
-      "kind": "drop",
-      "note": "est: kick 0.13->1.04",
+      "t": 0.12,
+      "kind": "build",
+      "note": "intro",
       "end": null
     },
     {
-      "t": 72.849,
+      "t": 14.67,
+      "kind": "groove",
+      "note": "main groove",
+      "end": 72.85
+    },
+    {
+      "t": 72.85,
       "kind": "breakdown",
-      "note": "est: kick fell to 0.10",
+      "note": "big break, the main transition before the drop: lights calmer, let the music do its thing",
       "end": null
     },
     {
-      "t": 131.031,
+      "t": 116.49,
       "kind": "drop",
-      "note": "est: kick 0.25->1.00",
+      "note": "atmospheric drop: a bit of a snare roll but NO strobe \u2014 lights get brighter and pulsate",
+      "end": 131.03
+    },
+    {
+      "t": 131.03,
+      "kind": "groove",
+      "note": "main groove to the end",
       "end": null
     }
   ],
-  "source": "analyze_track (bpm estimated; verify in Rekordbox)"
+  "source": "analyze_track; grid confirmed by ear-notes pass (bpm 132 est, not Rekordbox)",
+  "notes": "Techy-ish house, summer vibes, large bright synths: color scheme should be a lot more COLORFUL."
 }
