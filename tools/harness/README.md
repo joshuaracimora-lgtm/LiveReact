@@ -40,6 +40,29 @@ Rule parameters that are still first guesses (tune by arguing with real verdicts
 `BUILD_BARS=16`, `FILL_BARS=8`, `DROP_LATENCY_MAX_BEATS=2`, the TIME-06 hue/motion
 tolerances, and the TIME-04 snap window (<15% -> >=60% within 3 ticks).
 
+Scorer v2 (2026-10-21, STRUCT-04..09 for the roll / cut / groove vocabulary in
+`spec/PENDING_RULES.md`) adds a block of tunables at the top of `sim/score.py`,
+every one a first guess:
+- STRUCT-04 whiteout: `WHITEOUT_MAX_BARS=2`, `WHITEOUT_SETTLE_BEATS=1`, white =
+  `WHITE_LEVEL=0.6` / `WHITE_CHROMA=0.15` with `WHITE_DIMMER=0.6` for
+  `WHITE_FRACTION=0.75` of the window; heads within `DJ_POSE_TOL=0.03` of the DJ
+  pose or closing `DJ_APPROACH_FRACTION=0.5`. The DJ pose is the rig slot's
+  optional `dj_pan_tilt` (or a calibrated `dj_booth` aim); none -> that
+  sub-check is NOT_SCORED.
+- STRUCT-07 groove: `GROOVE_CORR_MIN=0.15` + `GROOVE_CORR_MARGIN=0.05` (bar
+  follows synth, not kick); heads at `GROOVE_HEAD_SPEED_FRACTION=0.5` of the
+  slew clamp for `GROOVE_HEAD_MOVING_FRACTION=0.5` of frames; laser bursts
+  `GROOVE_BURST_BEATS=(1.5, 4.5)` every `GROOVE_PERIOD_BEATS=(5, 10)` beats.
+- STRUCT-08 weak roll: `ROLL_ENERGY_RATIO=1.15`, `ROLL_STROBE_VISIBLE_STEP=20` bytes.
+- STRUCT-09 clap-driven drop: `CLAP_WORDS`, `CLAP_STROBE_CEILING=96` bytes,
+  `CLAP_ONSET_CORR_MIN=0.15` within `CLAP_ONSET_MAX_LAG_TICKS=3`.
+- STRUCT-05 power-off: `POWEROFF_PRIOR_LEVEL=0.15`, `POWEROFF_START_BARS=2`,
+  `POWEROFF_MAX_BARS=2`, `POWEROFF_STEPS=(3, 6)`, `POWEROFF_STEP_MIN=0.05`,
+  `POWEROFF_HOLD_TICKS=3`, `POWEROFF_DARK=0.05`.
+- STRUCT-06 fading build: `FADE_WORDS`, `FADE_DIM_DROP=0.10`, `FADE_MAX_STEP=0.05`,
+  `FADE_MAX_RISE_FRACTION=0.10`, `FADE_CHROMA_WHITE=0.15`, `FADE_CHROMA_DROP=0.10`,
+  `FADE_MAX_MOTION=0.01`.
+
 Normalizer seeding: runs seed the energy normalizer from `config.json` like the
 live app; `--cold-start` reproduces a set's first minutes (energy_norm reads 0.0
 for ~40 s cold, found on the first scored run).

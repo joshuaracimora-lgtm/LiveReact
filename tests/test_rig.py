@@ -250,3 +250,34 @@ def test_bar_rig_file_loads_as_the_feature_profile_with_two_lasers():
     # Josh, 2026-10-01: a fresh rig, channels laid out in order
     assert [fx.address for fx in rig.fixtures] == [1, 7, 19]
     assert [fx.offset + fx.channel_count for fx in rig.fixtures] == [6, 18, 30]  # 1-6, 7-18, 19-30
+
+
+def test_dj_pan_tilt_is_optional_round_trips_and_is_never_guessed():
+    """Scorer v2 (STRUCT-04 "heads to the DJ"): a slot may declare the raw
+    pan/tilt that faces the DJ. Absent -> Rig.dj_pose() is None (the scorer
+    marks that sub-check NOT_SCORED) unless a dj_booth target AND a captured
+    aim calibration let geometry.aim() derive it. Never invented."""
+    from livereact.fixtures.rig import rig_to_dict
+    rig = load_rig("rigs/josh_rig.json")
+    mh = rig.fixture("mh")
+    assert rig.dj_pose(mh) is None                      # no field, no venue
+    assert "dj_pan_tilt" not in rig_to_dict(rig)["slots"][2]
+    data = rig_to_dict(rig)
+    data["slots"][2]["dj_pan_tilt"] = {"pan": 0.3, "tilt": 0.7}
+    rig2 = _rig_from_dict(data)
+    assert rig2.dj_pose(rig2.fixture("mh")) == (0.3, 0.7)
+    assert rig_to_dict(rig2)["slots"][2]["dj_pan_tilt"] == {"pan": 0.3, "tilt": 0.7}
+    data["slots"][2]["dj_pan_tilt"] = [0.25, 0.5]        # list form
+    assert _rig_from_dict(data).dj_pose(_rig_from_dict(data).fixture("mh")) == (0.25, 0.5)
+    data["slots"][2]["dj_pan_tilt"] = {"pan": 1.5, "tilt": 0.5}
+    with pytest.raises(RigError):
+        _rig_from_dict(data)
+    # a dj_booth target alone (uncalibrated head) is not enough to derive a pose
+    data["slots"][2].pop("dj_pan_tilt")
+    data["venue"] = {"width_m": 8.0, "length_m": 12.0, "height_m": 3.0,
+                     "targets": {"dj_booth": {"x_m": 4.0, "y_m": 1.0, "z_m": 1.2}}}
+    data["slots"][2]["position"] = {"x_m": 2.0, "y_m": 0.5, "z_m": 3.0}
+    assert _rig_from_dict(data).dj_pose(_rig_from_dict(data).fixture("mh")) is None
+    data["slots"][2]["calibration"] = {"target": "dj_booth", "pan01": 0.5, "tilt01": 0.5}
+    pose = _rig_from_dict(data).dj_pose(_rig_from_dict(data).fixture("mh"))
+    assert pose is not None and all(0.0 <= v <= 1.0 for v in pose)

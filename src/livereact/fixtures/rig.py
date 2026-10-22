@@ -30,9 +30,17 @@ pre-2026-09-18 rig file loads unchanged):
          "calibration": {"target": "dj_booth", "pan01": .., "tilt01": ..,
                          "pan_offset_deg": .., "tilt_offset_deg": ..,
                          "invert_pan": false, "invert_tilt": false},
+         "dj_pan_tilt": {"pan": 0.55, "tilt": 0.40},   # optional (2026-10-21): the raw 0..1
+                                                       # pan/tilt that faces the DJ (STRUCT-04)
          "beam": {"tilt_deg": 10.0, "fan_half_angle_deg": 30.0, "h_offset01": 0.5}}
       ]
     }
+
+``dj_pan_tilt`` is read by the scorer only (sim/score.py STRUCT-04 "heads to
+the DJ"); no engine path looks at it. ``Rig.dj_pose(fx)`` resolves the pose:
+the explicit field first, else derived from a ``dj_booth`` venue target when
+the head is placed AND aim-calibrated. Nothing configured -> None, and the
+scorer marks that sub-check NOT_SCORED rather than inventing a position.
 
 See fixtures/geometry.py for the coordinate convention (meters; origin at the
 booth wall's stage-left corner; x to stage-right; y into the crowd; z up).
@@ -65,6 +73,7 @@ _KNOWN_SLOT_KEYS = frozenset({
     "slot_id", "label", "fixture_type", "dmx_address", "role", "side",
     "x", "y", "home_pan", "home_tilt",
     "position", "facing_deg", "calibration", "beam", "bounds",
+    "dj_pan_tilt",
 })
 
 
@@ -187,6 +196,36 @@ class Rig:
     def channel_count(self) -> int:
         return sum(f.channel_count for f in self.fixtures)
 
+    def dj_pose(self, fx: Fixture) -> tuple[float, float] | None:
+        """The raw (pan01, tilt01) at which moving head ``fx`` faces the DJ, or
+        None when the rig doesn't say (scorer STRUCT-04; never an engine
+        input). Resolution order:
+
+        1. the slot's explicit ``dj_pan_tilt`` (set by the loader);
+        2. derived with fixtures/geometry.py ``aim()`` from a ``dj_booth``
+           venue target -- only when the head has a real ``position`` AND a
+           captured aim calibration, because an uncalibrated trig aim is a
+           guess, and a guessed "DJ pose" would grade the engine against a
+           position nobody verified. Clamped to the motion box when one is
+           set, like a scene's computed aim would be.
+        """
+        explicit = getattr(fx, "dj_pan_tilt", None)
+        if explicit is not None:
+            return (float(explicit[0]), float(explicit[1]))
+        if not isinstance(fx, MovingHead) or self.venue is None:
+            return None
+        target = self.venue.targets.get("dj_booth")
+        if target is None or fx.position is None or not fx.calibration.captured:
+            return None
+        from .geometry import aim
+        pan01, tilt01, reachable = aim(fx.position, fx.facing_deg, target, fx.calibration,
+                                       fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
+        if not reachable:
+            return None
+        if fx.bounds is not None:
+            pan01, tilt01 = fx.bounds.clamp(pan01, tilt01)
+        return (pan01, tilt01)
+
     # --- boot ---
     def boot_universe(self) -> bytearray:
         """A 512-byte universe with every fixture in its safe power-on state."""
@@ -218,6 +257,21 @@ def load_rig(path: str | None = None) -> Rig:
 
 def _point(d: dict) -> Point3:
     return Point3(float(d.get("x_m", 0.0)), float(d.get("y_m", 0.0)), float(d.get("z_m", 0.0)))
+
+
+def _dj_pan_tilt(raw, label: str) -> tuple[float, float]:
+    """Parse a slot's ``dj_pan_tilt``: ``{"pan": p, "tilt": t}`` or ``[p, t]``,
+    both normalized 0..1 raw DMX positions."""
+    try:
+        if isinstance(raw, dict):
+            pan, tilt = float(raw["pan"]), float(raw["tilt"])
+        else:
+            pan, tilt = float(raw[0]), float(raw[1])
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise RigError(f"{label}: dj_pan_tilt must be {{'pan': 0..1, 'tilt': 0..1}} or [pan, tilt]") from exc
+    if not (0.0 <= pan <= 1.0 and 0.0 <= tilt <= 1.0):
+        raise RigError(f"{label}: dj_pan_tilt values must be normalized 0..1 (got {pan}, {tilt})")
+    return pan, tilt
 
 
 def _venue_from_dict(d: dict | None) -> Venue | None:
@@ -268,6 +322,11 @@ def _rig_from_dict(data: dict) -> Rig:
             b = slot["bounds"]   # raw motion box, 2026-10-10
             fx.bounds = MotionBounds(float(b["pan_min"]), float(b["pan_max"]),
                                      float(b["tilt_min"]), float(b["tilt_max"]))
+        # Optional DJ-facing pose (2026-10-21, scorer STRUCT-04). Stashed on the
+        # fixture like slot_id; absent -> Rig.dj_pose() may still derive one.
+        fx.dj_pan_tilt = None  # type: ignore[attr-defined]
+        if isinstance(fx, MovingHead) and slot.get("dj_pan_tilt") is not None:
+            fx.dj_pan_tilt = _dj_pan_tilt(slot["dj_pan_tilt"], fx.label)  # type: ignore[attr-defined]
         if isinstance(fx, MovingHead) and isinstance(slot.get("calibration"), dict):
             c = slot["calibration"]
             fx.calibration = HeadCalibration(
@@ -333,6 +392,9 @@ def slot_to_dict(fx: Fixture) -> dict:
         b = fx.bounds
         slot["bounds"] = {"pan_min": round(b.pan_min, 4), "pan_max": round(b.pan_max, 4),
                           "tilt_min": round(b.tilt_min, 4), "tilt_max": round(b.tilt_max, 4)}
+    if isinstance(fx, MovingHead) and getattr(fx, "dj_pan_tilt", None) is not None:
+        pan, tilt = fx.dj_pan_tilt  # type: ignore[attr-defined]
+        slot["dj_pan_tilt"] = {"pan": round(pan, 4), "tilt": round(tilt, 4)}
     if isinstance(fx, MovingHead) and fx.calibration.captured:
         c = fx.calibration
         slot["calibration"] = {
