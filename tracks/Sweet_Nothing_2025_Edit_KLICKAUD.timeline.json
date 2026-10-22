@@ -4,29 +4,60 @@
   "beats_per_bar": 4,
   "markers": [
     {
-      "t": 36.982,
+      "t": 22.21,
       "kind": "drop",
-      "note": "est: kick 0.38->1.01",
-      "end": null
+      "note": "starts on the crash; no roll: lights follow the crashes",
+      "end": 36.98
+    },
+    {
+      "t": 36.98,
+      "kind": "groove",
+      "note": "main piano-synth groove",
+      "end": 81.29
     },
     {
       "t": 81.29,
       "kind": "breakdown",
-      "note": "est: kick fell to 0.29",
+      "note": "drums cut: a still, dramatic look; crashes every 8 beats here, hit on them",
       "end": null
     },
     {
-      "t": 140.367,
+      "t": 101.6,
       "kind": "drop",
-      "note": "est: kick 0.24->0.95",
+      "note": "snare roll, super quiet: low strobe ceiling, escalate gently",
+      "end": 110.83
+    },
+    {
+      "t": 110.83,
+      "kind": "build",
+      "note": "main build-up: lights start low and get super bright",
       "end": null
     },
     {
-      "t": 184.674,
-      "kind": "breakdown",
-      "note": "est: kick fell to 0.12",
+      "t": 132.98,
+      "kind": "drop",
+      "note": "strobe section at the top of the build",
+      "end": 138.52
+    },
+    {
+      "t": 138.52,
+      "kind": "whiteout",
+      "note": "one-bar cut before the piano synth returns",
+      "end": null
+    },
+    {
+      "t": 140.37,
+      "kind": "groove",
+      "note": "back to the main piano synth",
+      "end": 184.67
+    },
+    {
+      "t": 184.67,
+      "kind": "outro",
+      "note": "",
       "end": null
     }
   ],
-  "source": "analyze_track (bpm estimated; verify in Rekordbox)"
+  "source": "analyze_track; grid confirmed by ear-notes pass (bpm 130 est, not Rekordbox)",
+  "notes": "Piano house: large piano synths, lots of high crashes and hi-hats. Use BRIGHTER colors throughout because of it."
 }

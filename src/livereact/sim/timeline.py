@@ -42,6 +42,7 @@ class Timeline:
     beats_per_bar: int = 4
     markers: list[Marker] = field(default_factory=list)
     source: str = "manual"   # "manual" | "analyze_track" | ...
+    notes: str = ""          # track-level design notes from Josh (palette, feel, what the lights should follow)
 
     @property
     def beat_dur(self) -> float:
