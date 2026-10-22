@@ -46,7 +46,12 @@ def run_search(out_dir: str | Path, baseline_path: str | Path, hours: float = 6.
     baseline = Evaluation.from_json(json.loads(Path(baseline_path).read_text(encoding="utf-8")))
     base_names = {t.track for t in baseline.tracks}
     cur_names = {p.name for p in tracks}
-    if cur_names != base_names:
+    from .evaluate import rules_fingerprint
+    if baseline.rules != rules_fingerprint():
+        log(f"scorer rule set changed since the baseline ({baseline.rules} -> {rules_fingerprint()}); re-evaluating baseline")
+        baseline = evaluate(None, tracks, rig=rig, gestures=gestures)
+        (out / "baseline.json").write_text(json.dumps(baseline.to_json(), indent=2), encoding="utf-8")
+    elif cur_names != base_names:
         log(f"labeled set changed since the baseline (+{sorted(cur_names - base_names)} -{sorted(base_names - cur_names)}); re-evaluating baseline")
         baseline = evaluate(None, tracks, rig=rig, gestures=gestures)
         (out / "baseline.json").write_text(json.dumps(baseline.to_json(), indent=2), encoding="utf-8")

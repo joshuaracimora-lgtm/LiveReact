@@ -1,28 +1,29 @@
 {
   "params": {},
+  "rules": "72b91cba1220",
   "summary": {
     "tuning": {
-      "n": 5,
-      "compliance": 0.3736,
-      "critical_fails": 18,
-      "blocked": 5,
+      "n": 7,
+      "compliance": 0.2834,
+      "critical_fails": 26,
+      "blocked": 7,
       "quality": {
-        "distinct_looks": 4.8,
-        "brightness_dynamic_range": 0.796,
+        "distinct_looks": 4.857,
+        "brightness_dynamic_range": 0.762,
         "fixture_utilization": 1.0,
-        "drop_response_mean": 0.011
+        "drop_response_mean": 0.009
       }
     },
     "holdout": {
-      "n": 2,
-      "compliance": 0.4235,
-      "critical_fails": 6,
-      "blocked": 2,
+      "n": 3,
+      "compliance": 0.3903,
+      "critical_fails": 9,
+      "blocked": 3,
       "quality": {
         "distinct_looks": 4.0,
-        "brightness_dynamic_range": 0.801,
+        "brightness_dynamic_range": 0.756,
         "fixture_utilization": 1.0,
-        "drop_response_mean": 0.439
+        "drop_response_mean": 0.376
       }
     }
   },
@@ -31,7 +32,7 @@
       "track": "Michael_Jackson_-_Thriller_BVRNOUT_Haunted_R.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.4,
+      "compliance": 0.333,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
@@ -51,7 +52,13 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "NOT_SCORED",
         "STRUCT-02": "FAIL",
-        "STRUCT-03": "PASS"
+        "STRUCT-03": "PASS",
+        "STRUCT-04": "FAIL",
+        "STRUCT-07": "FAIL",
+        "STRUCT-08": "FAIL",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "NOT_SCORED",
+        "STRUCT-06": "NOT_SCORED"
       },
       "quality": {
         "distinct_looks": 4,
@@ -92,7 +99,13 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "PASS",
         "STRUCT-02": "NOT_SCORED",
-        "STRUCT-03": "NOT_SCORED"
+        "STRUCT-03": "NOT_SCORED",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "NOT_SCORED",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "NOT_SCORED",
+        "STRUCT-06": "NOT_SCORED"
       },
       "quality": {
         "distinct_looks": 4,
@@ -112,7 +125,7 @@
       "track": "One_More_Time_Radio_Edit_KLICKAUD.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.429,
+      "compliance": 0.4,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
@@ -132,7 +145,13 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "FAIL",
         "STRUCT-02": "NOT_SCORED",
-        "STRUCT-03": "FAIL"
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "NOT_SCORED",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
       },
       "quality": {
         "distinct_looks": 5,
@@ -153,7 +172,7 @@
       "track": "SWEETER_KLICKAUD.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.304,
+      "compliance": 0.241,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
@@ -173,7 +192,13 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "NOT_SCORED",
         "STRUCT-02": "NOT_SCORED",
-        "STRUCT-03": "FAIL"
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "FAIL",
+        "STRUCT-07": "FAIL",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "FAIL",
+        "STRUCT-05": "NOT_SCORED",
+        "STRUCT-06": "NOT_SCORED"
       },
       "quality": {
         "distinct_looks": 5,
@@ -194,7 +219,7 @@
       "track": "Sam Smith, Disclosure - Latch (Original Mix).mp3",
       "holdout": true,
       "status": "BLOCKED",
-      "compliance": 0.2,
+      "compliance": 0.179,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
@@ -214,7 +239,13 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "NOT_SCORED",
         "STRUCT-02": "NOT_SCORED",
-        "STRUCT-03": "FAIL"
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "NOT_SCORED",
+        "STRUCT-08": "FAIL",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
       },
       "quality": {
         "distinct_looks": 4,
@@ -232,10 +263,152 @@
       "frames_digest": "5b542226b1c729a24632b1727251e13c4e70aab77c44a238e9d6da613cf913f6"
     },
     {
+      "track": "Somebody_To_Love_CHALANT_Close_Friends_Onl-1.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.143,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "FAIL",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "FAIL",
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "FAIL",
+        "STRUCT-07": "FAIL",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "FAIL"
+      },
+      "quality": {
+        "distinct_looks": 5,
+        "look_changes": 14,
+        "brightness_dynamic_range": 0.691,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "BUILD",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.002
+      },
+      "frames_digest": "948d244b943268e9a7c809259b8d01efc097876ae5e82dd663a2850b50618cf3"
+    },
+    {
+      "track": "Sweet_Nothing_2025_Edit_KLICKAUD.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.194,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "FAIL",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "FAIL",
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "FAIL",
+        "STRUCT-07": "FAIL",
+        "STRUCT-08": "FAIL",
+        "STRUCT-09": "PASS",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
+      },
+      "quality": {
+        "distinct_looks": 5,
+        "look_changes": 10,
+        "brightness_dynamic_range": 0.665,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "BUILD",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.01
+      },
+      "frames_digest": "cf8d94acbccf11e149f3954e1c57691d5bed892edb5266e843b981dd49323a50"
+    },
+    {
+      "track": "Talk_To_You_ft_54_Ultra_KLICKAUD.mp3",
+      "holdout": true,
+      "status": "BLOCKED",
+      "compliance": 0.345,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "PASS",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "PASS",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "NOT_SCORED",
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "FAIL",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
+      },
+      "quality": {
+        "distinct_looks": 4,
+        "look_changes": 6,
+        "brightness_dynamic_range": 0.666,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.312
+      },
+      "frames_digest": "9402db9876b7a3e114227d184c44ca519d4f4368321948f86e6f8f4c295ab76a"
+    },
+    {
       "track": "Zedd, Jon Bellion - Beautiful Now (Extended .mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.179,
+      "compliance": 0.156,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
@@ -255,7 +428,13 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "FAIL",
         "STRUCT-02": "NOT_SCORED",
-        "STRUCT-03": "FAIL"
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "NOT_SCORED",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "FAIL"
       },
       "quality": {
         "distinct_looks": 5,
@@ -277,7 +456,7 @@
       "track": "messy _laszewo edit_ - A\u030a\u0081aszewo - SoundLoadM.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.556,
+      "compliance": 0.517,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "PASS",
@@ -297,7 +476,13 @@
         "SAFE-06": "UNVERIFIABLE_IN_SIM",
         "STRUCT-01": "NOT_SCORED",
         "STRUCT-02": "PASS",
-        "STRUCT-03": "FAIL"
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "NOT_SCORED",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
       },
       "quality": {
         "distinct_looks": 5,
@@ -315,5 +500,5 @@
       "frames_digest": "19c82bda706a200382aa24754ba0b3a4928e23819b38d0e4fab574b3191ba516"
     }
   ],
-  "generated": "2026-10-21T18:42:29"
+  "generated": "2026-10-22T17:58:34"
 }

@@ -52,10 +52,16 @@ class TrackEval:
     frames_digest: str
 
 
+def rules_fingerprint() -> str:
+    """Identifies the scorer's rule set, so a baseline from an older scorer is never compared against."""
+    return hashlib.sha256("|".join(f"{r}:{s}" for r, s, _ in RULES).encode()).hexdigest()[:12]
+
+
 @dataclass
 class Evaluation:
     params: dict
     tracks: list[TrackEval] = field(default_factory=list)
+    rules: str = field(default_factory=rules_fingerprint)
 
     def subset(self, holdout: bool) -> list[TrackEval]:
         return [t for t in self.tracks if t.holdout == holdout]
@@ -80,12 +86,12 @@ class Evaluation:
         return {"tuning": self._score(self.subset(False)), "holdout": self._score(self.subset(True))}
 
     def to_json(self) -> dict:
-        return {"params": self.params, "summary": self.summary(),
+        return {"params": self.params, "rules": self.rules, "summary": self.summary(),
                 "tracks": [t.__dict__ for t in self.tracks]}
 
     @classmethod
     def from_json(cls, d: dict) -> "Evaluation":
-        ev = cls(params=d["params"])
+        ev = cls(params=d["params"], rules=d.get("rules", "unknown"))
         ev.tracks = [TrackEval(**t) for t in d["tracks"]]
         return ev
 
