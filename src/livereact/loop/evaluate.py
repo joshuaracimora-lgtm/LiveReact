@@ -21,6 +21,11 @@ AUDIO_EXT = {".mp3", ".wav", ".flac", ".m4a", ".aiff", ".aif", ".ogg"}
 HOLDOUT_FRACTION = 0.25
 
 
+def is_ear_verified(tl) -> bool:
+    """True when every marker is Josh's (no 'est:' machine guess, no estimated source)."""
+    return bool(tl.markers) and not any(m.note.startswith("est:") for m in tl.markers) and "estimated" not in tl.source
+
+
 def labeled_tracks(tracks_dir: str | Path = "tracks") -> list[Path]:
     out = []
     for p in sorted(Path(tracks_dir).iterdir()):
@@ -29,8 +34,7 @@ def labeled_tracks(tracks_dir: str | Path = "tracks") -> list[Path]:
         tp = timeline_path_for(p)
         if not tp.exists():
             continue
-        tl = Timeline.load(tp)
-        if not tl.markers or any(m.note.startswith("est:") for m in tl.markers) or "estimated" in tl.source:
+        if not is_ear_verified(Timeline.load(tp)):
             continue
         out.append(p)
     return out

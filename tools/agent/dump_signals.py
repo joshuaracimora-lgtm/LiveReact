@@ -29,6 +29,8 @@ def main() -> int:
     p.add_argument("--before", type=float, default=4.0, help="bars before each marker")
     p.add_argument("--after", type=float, default=8.0, help="bars after each marker (or to its end)")
     p.add_argument("--all", action="store_true", help="print every beat of the track")
+    p.add_argument("--allow-unverified", action="store_true",
+                   help="also accept a track whose markers are machine guesses (est: notes). Not for agent nights.")
     a = p.parse_args()
     import numpy as np
     from livereact.fixtures.rig import load_rig
@@ -36,9 +38,15 @@ def main() -> int:
     from livereact.sim.harness import run_sim
     from livereact.sim.score import Run
     from livereact.sim.timeline import Timeline, timeline_path_for
+    from livereact.loop.evaluate import is_ear_verified
 
     tp = Path(a.track)
     tl = Timeline.load(timeline_path_for(tp))
+    if not a.allow_unverified and not is_ear_verified(tl):
+        print(f"REFUSED: {tp.name} is not ear-verified (markers carry 'est:' notes or an estimated source). "
+              "Josh has not finished its pass; the scorer ignores it and so must you. "
+              "Work only the tracks status.py lists.", file=sys.stderr)
+        return 2
     r = run_sim(tp, tl, a.rig, seed_range=default_seed_range())
     run = Run(r.frames, r.t, r.signals, tl, load_rig(a.rig))
     t = np.asarray(r.t, dtype=float)

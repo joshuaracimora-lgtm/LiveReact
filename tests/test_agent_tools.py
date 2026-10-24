@@ -87,3 +87,27 @@ def test_record_night_merges_agent_and_orchestrator_records(tmp_path):
     assert len(st["nights"]) == 2
     (tmp_path / "state.json").write_text(json.dumps(st))
     assert rn.load(tmp_path / "state.json")["nights"][0]["gate"] == "REJECT"
+
+
+def test_only_ear_verified_tracks_count_and_dump_signals_refuses_the_rest(tmp_path):
+    """Josh's rule: the agent works only tracks whose pass he has finished (no 'est:' notes)."""
+    import json
+    import subprocess
+    import sys
+    from livereact.loop.evaluate import is_ear_verified, labeled_tracks
+    from livereact.sim.timeline import Timeline
+
+    good = {"bpm": 128.0, "first_downbeat_s": 0.5, "beats_per_bar": 4, "source": "ear",
+            "markers": [{"t": 30.0, "kind": "drop", "note": "big drop, whiteout before", "end": None}]}
+    est = {**good, "markers": [{"t": 30.0, "kind": "drop", "note": "est: kick 0.1->1.0", "end": None}]}
+    for name, tl in (("good", good), ("est", est)):
+        (tmp_path / f"{name}.mp3").write_bytes(b"")
+        (tmp_path / f"{name}.timeline.json").write_text(json.dumps(tl), encoding="utf-8")
+    assert is_ear_verified(Timeline.load(tmp_path / "good.timeline.json"))
+    assert not is_ear_verified(Timeline.load(tmp_path / "est.timeline.json"))
+    assert [p.name for p in labeled_tracks(tmp_path)] == ["good.mp3"]
+
+    r = subprocess.run([sys.executable, "tools/agent/dump_signals.py", str(tmp_path / "est.mp3"), "--all"],
+                       capture_output=True, text=True, cwd=str(ROOT))
+    assert r.returncode == 2, r.stderr
+    assert "not ear-verified" in r.stderr

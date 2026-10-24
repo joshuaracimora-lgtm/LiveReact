@@ -48,7 +48,12 @@ on its own; it cannot invent a detector, a state, or a look. Knobs:
   a per-beat table of bucket, energy, bands, roll periodicity, onsets, per-fixture brightness, strobe byte
   and scene around the labeled markers. Study the failing tracks named by `status.py` this way first.
   Reference tracks per behaviour are listed in `docs/HANDOFF_engine_work.md`.
-- `tracks/*.timeline.json` are Josh's ear-verified markers and notes. Read them; never edit them.
+- **Only the tracks `status.py` lists exist for you.** Those are the ones Josh has finished by ear
+  (`tracks/*.timeline.json` with no `est:` marker notes). The other timelines are machine guesses Josh has
+  not reviewed: the scorer ignores them, `dump_signals.py` refuses them, and a change that helps them
+  earns nothing. Never study, test against, or mention them in the report as evidence.
+- The ear-verified timelines are Josh's markers and notes. Read every note on the tracks you work; the
+  note says what Josh heard and what the lights should do there. Never edit them.
 - Keep study scripts in `results/agent/<date>/study/` (gitignored), not in the repo.
 
 ## Build, test, gate
