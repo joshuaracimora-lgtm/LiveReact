@@ -64,7 +64,9 @@ own account). The desktop task runs with `-Push` (since 2026-10-23), so every ni
 branch under `docs/agent_nights/<date>/` (a second run on the same date gets `agent/<date>-2`). When
 the agent lands nothing, the orchestrator spends the search budget plus the agent's unused time on a
 knob search over `harness` itself (`results/search/<date>-<HHMM>-harness/` on the desktop; its summary is
-in NIGHT.md). On the Mac:
+in NIGHT.md). Whichever search ran, its `best_params.json`, `search.md` (summary) and `search.json` are
+pushed next to the reports. They are not applied: the search's knobs reach `params.json` only when Josh
+copies them there. On the Mac:
 
 ```
 git fetch origin && git log --oneline harness..origin/agent/<date>

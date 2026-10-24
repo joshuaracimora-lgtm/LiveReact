@@ -221,6 +221,13 @@ $reportHead
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
     Copy-Item (Join-Path $night "NIGHT.md") "$dst\NIGHT.md" -Force
     if (Test-Path $report) { Copy-Item $report "$dst\REPORT.md" -Force }
+    # the knob search's result lives in gitignored results\search\; carry it too so the Mac can apply it
+    # (search.json = the search's summary.json, renamed so it does not read as the night's summary)
+    if ($searchOut) {
+      foreach ($f in @(@("best_params.json", "best_params.json"), @("summary.md", "search.md"), @("summary.json", "search.json"))) {
+        if (Test-Path "$searchOut\$($f[0])") { Copy-Item "$searchOut\$($f[0])" "$dst\$($f[1])" -Force }
+      }
+    }
     git add $dst 2>&1 | Out-Null
     git commit -q -m "agent night $date : reports" 2>&1 | Out-Null
     git push -u origin $branch 2>&1 | ForEach-Object { Write-Host $_ }
