@@ -30,7 +30,7 @@ wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'LiveReact nightly 
    must show the command being refused, not a dry-run result. If it ran, stop and report.
 4. Dry run of the orchestrator, short budget, no search, so Josh sees the whole shape once:
    `powershell -ExecutionPolicy Bypass -File tools/windows/nightly_agent.ps1 -Hours 0.25 -SearchHours 0`
-   Expect in the log (`results/nightly/<date>-agent.log`): `power: ...held`, `claude: <version>`,
+   Expect in the log (`results/nightly/<date>-agent.log`): `job: kill-on-close job object held`, `power: ...held`, `claude: <version>`,
    `code: <harness tip>`, `1 passed` for the determinism test, `branch: agent/<date>`, `agent: starting`, then
    after ~15 min either `agent: exited 0` or `agent: deadline reached`. `results/agent/<date>/` must
    contain `prompt.md`, `agent.out`, `NIGHT.md`, and (if it got that far) `REPORT.md`. Show `NIGHT.md`

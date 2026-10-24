@@ -12,17 +12,9 @@ New-Item -ItemType Directory -Force -Path results\nightly | Out-Null
 $log = "results\nightly\$(Get-Date -Format yyyyMMdd-HHmm).log"
 Start-Transcript -Path $log | Out-Null
 
-# Keep the machine awake for the whole run (ES_CONTINUOUS | ES_SYSTEM_REQUIRED). Best effort.
-$awake = $false
-try {
-  Add-Type -Name Power -Namespace LiveReact -MemberDefinition @"
-[DllImport("kernel32.dll", SetLastError = true)]
-public static extern uint SetThreadExecutionState(uint esFlags);
-"@
-  [void][LiveReact.Power]::SetThreadExecutionState(0x80000000 -bor 0x00000001)
-  $awake = $true
-  Write-Host "power: system-required request held for this run"
-} catch { Write-Host "power: could not hold a wake request ($($_.Exception.Message)); relying on power plan" }
+. "$PSScriptRoot\common.ps1"      # UTF-8 python env, Hold-Wake/Release-Wake, Join-KillOnCloseJob
+Join-KillOnCloseJob
+$awake = Hold-Wake
 
 try {
   # 1. The tree must be clean, or the pull below can never fast-forward.
@@ -46,13 +38,13 @@ try {
   & $py -m pytest -o addopts="" -q tests\test_harness_determinism.py 2>&1 | Select-Object -Last 1
   if ($LASTEXITCODE -ne 0) { Write-Host "PREFLIGHT FAILED: determinism test; aborting"; exit 3 }
   # 4. Search.
-  & $py tools\loop\search.py --hours $Hours --patience $Patience
+  & $py tools\loop\search.py --hours $Hours --patience $Patience 2>&1 | Out-Host   # Out-Host: reach the transcript
   $code = $LASTEXITCODE
   $latest = Get-ChildItem results\search -Directory | Sort-Object LastWriteTime | Select-Object -Last 1
   if ($latest -and (Test-Path "$($latest.FullName)\summary.md")) { Get-Content "$($latest.FullName)\summary.md" -Encoding UTF8 | Select-Object -First 12 }
   else { Write-Host "no summary.md written - the search did not finish on its own (killed? sleep?)" }
   exit $code
 } finally {
-  if ($awake) { try { [void][LiveReact.Power]::SetThreadExecutionState(0x80000000) } catch {} }
+  if ($awake) { Release-Wake }
   Stop-Transcript | Out-Null
 }

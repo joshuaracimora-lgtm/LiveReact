@@ -24,16 +24,10 @@ $py = ".\.venv\Scripts\python.exe"
 $utf8 = New-Object System.Text.UTF8Encoding($false)   # no BOM: these files are read by python/claude
 $exit = 0
 
-$awake = $false
-try {
-  Add-Type -Name Power -Namespace LiveReact -MemberDefinition @"
-[DllImport("kernel32.dll", SetLastError = true)]
-public static extern uint SetThreadExecutionState(uint esFlags);
-"@
-  [void][LiveReact.Power]::SetThreadExecutionState(0x80000000 -bor 0x00000001)
-  $awake = $true
-  Write-Host "power: system-required request held for this run"
-} catch { Write-Host "power: could not hold a wake request ($($_.Exception.Message))" }
+. "$PSScriptRoot\common.ps1"      # UTF-8 python env, Hold-Wake/Release-Wake, Join-KillOnCloseJob
+Join-KillOnCloseJob
+$awake = Hold-Wake
+$proc = $null
 
 function Fail($msg) { Write-Host "PREFLIGHT FAILED: $msg" }
 
@@ -158,7 +152,8 @@ try {
   if ($commits -gt 0 -and $gate -eq "ACCEPT" -and $tests -eq "ok" -and $SearchHours -gt 0 -and (Test-Path $headEval)) {
     $searchOut = "results\search\$date-$(Get-Date -Format HHmm)-agent"
     Write-Host "search: $SearchHours h around $branch -> $searchOut"
-    & $py tools\loop\search.py --hours $SearchHours --patience $Patience --baseline $headEval --out $searchOut
+    # Out-Host: a native command's stdout does not reach the transcript on its own under Task Scheduler
+    & $py tools\loop\search.py --hours $SearchHours --patience $Patience --baseline $headEval --out $searchOut 2>&1 | Out-Host
     if ($LASTEXITCODE -eq 2) { $exit = 2 }
     $sm = "$searchOut\summary.md"
     if (Test-Path $sm) { $searchNote = (Get-Content $sm -Encoding UTF8 | Select-Object -First 6) -join "`n" ; Write-Host $searchNote }
@@ -197,6 +192,7 @@ $reportHead
   Write-Host "done: $branch commits=$commits gate=$gate tests=$tests -> $night\NIGHT.md"
   exit $exit
 } finally {
-  if ($awake) { try { [void][LiveReact.Power]::SetThreadExecutionState(0x80000000) } catch {} }
+  if ($proc -and -not $proc.HasExited) { Write-Host "cleanup: agent still running, killing its tree"; & taskkill /T /F /PID $proc.Id 2>&1 | Out-Null }
+  if ($awake) { Release-Wake }
   Stop-Transcript | Out-Null
 }

@@ -14,6 +14,10 @@ fast-forward — it never searches stale code silently. If a log says PREFLIGHT 
 `docs/HANDOFF_windows_resync.md`. The script also holds a Windows system-required power request for the
 run; set the AC sleep *and* unattended-sleep timeouts to never as well (same doc, step 5).
 
+Both nightly scripts dot-source `common.ps1`: UTF-8 python environment (Windows console is not UTF-8;
+`status.py` died on an accented track name), the wake request, and a kill-on-close job object so a
+stopped task (`Stop-ScheduledTask`, the 8 h limit) kills the agent's `claude.exe` tree too, not just the script.
+
 ## Two nightly modes
 
 - `nightly.ps1` — knob search only (random perturbation of `tunable` params, gated). Cheap; useful right
