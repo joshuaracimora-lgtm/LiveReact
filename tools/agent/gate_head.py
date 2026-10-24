@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -25,10 +26,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 def flips(base: dict, cand: dict) -> list[dict]:
     """Per-track rule status changes between two evaluation jsons."""
-    bt = {t["track"]: t for t in base["tracks"]}
+    # NFC on both sides, like gate.compare: Mac audio names are NFD, the baseline may hold either
+    bt = {unicodedata.normalize("NFC", t["track"]): t for t in base["tracks"]}
     out = []
     for t in cand["tracks"]:
-        b = bt.get(t["track"])
+        b = bt.get(unicodedata.normalize("NFC", t["track"]))
         if not b:
             out.append({"track": t["track"], "rule": "*", "from": None, "to": "new track"})
             continue
@@ -69,7 +71,8 @@ def main() -> int:
     base = Evaluation.from_json(base_json)
     tracks = labeled_tracks()
     print(f"evaluating {len(tracks)} labeled tracks against {bp} ...", flush=True)
-    cand = evaluate(None, tracks, rig=a.rig,
+    # simulate from the seed the baseline was made with (an older baseline has none -> the pinned default)
+    cand = evaluate(None, tracks, rig=a.rig, seed_range=base.seed_range,
                     on_track=lambda t: print(f"  {'holdout' if t.holdout else 'tuning '} {t.status:7} {t.compliance}  {t.track[:50]}", flush=True))
     if base.rules != cand.rules:
         print(f"RULE SET CHANGED ({base.rules} -> {cand.rules}): the baseline is from another scorer; regenerate it first")

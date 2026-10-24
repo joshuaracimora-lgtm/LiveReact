@@ -82,3 +82,48 @@ its NIGHT.md stays on the desktop in `results/agent/<date>/`. Nothing the agent 
 without that merge, and each night starts from `harness`, so an unmerged night's work is not built on.
 
 Do not push `harness`. Do not run the search in the foreground. If a step needs Josh's input, ask.
+
+## Power: the PC must stay up from 1:00 to 8:00 (added 2026-10-24)
+
+Two nights in a row were lost to sleep (10-23 the 1 AM run was killed after 25 trials; 10-24 the PC slept
+03:22-11:29 in the middle of the agent's run, power events 42/107/1, and the agent got 15 minutes of work).
+The orchestrator's wake request stops idle sleep only. Three things it cannot stop are power-plan settings.
+
+One time, in an **administrator** PowerShell on the desktop:
+
+```powershell
+cd <repo>
+.\tools\windows\power_setup.ps1          # sets, then verifies
+```
+
+It sets, on the AC side of the active plan: hibernate after = never, **unattended sleep timeout = 0** (after a
+wake-to-run with nobody signed in Windows otherwise goes back to sleep 2 minutes later), and allow wake timers =
+enabled (the 1:00 trigger cannot wake the PC without it). It leaves the daytime sleep timeout alone (keep 30 min:
+the PC sleeps normally in the day). `-Check` reads without changing.
+Then re-register the task so the new settings file is used (same command as before):
+
+```powershell
+.\tools\windows\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-Hours 4 -SearchHours 1.5"
+```
+
+What the nightly now does on its own: holds a thread execution state AND a kernel power request (visible while it
+runs with `powercfg /requests`), sets the plan's sleep and hibernate timeouts to never **for the run only** and
+restores them at the end (the previous values are saved in `results\nightly\power_plan_prev.json` first, so a
+killed run is repaired at the next start), and prints the live plan values at the top of the log with a WARNING
+line if the admin-only settings are wrong. Check the next morning's log for that line.
+
+What "regardless of power state" can and cannot mean:
+- **Asleep or hibernated:** the task wakes the PC (WakeToRun + wake timers enabled). This is the intended state.
+- **On, signed in, locked:** runs. Locked is fine.
+- **Rebooted by Windows Update, nobody signed in:** the task is registered "only while logged on" and will NOT run.
+  Either set Windows Update active hours to cover 1-8 AM (Settings > Windows Update > Advanced options), or register
+  with a stored password so it runs without a sign-in: `.\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs
+  "-Hours 4 -SearchHours 1.5" -RunWhenLoggedOff` (prompts for the Windows password; re-run after a password change).
+  Untested on the desktop as of 10-24: do a 15-minute dry run after registering this way, since Claude Code's and
+  git's stored credentials must still be readable from that logon session.
+- **Shut down:** nothing in Windows can wake it. Use the BIOS/UEFI "Power On By RTC Alarm" (name varies by board)
+  set to 00:55 daily, or simply never shut it down -- sleep instead.
+
+Also from 10-24: the simulation's energy-normalizer seed is now pinned in code (`sim/harness.py SIM_SEED_RANGE`)
+and recorded in every evaluation; the gate refuses to compare evaluations made from different seeds. The desktop's
+`config.json` no longer affects the baseline, the gate or the knob search, so running the live app there is safe.

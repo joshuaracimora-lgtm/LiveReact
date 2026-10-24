@@ -15,6 +15,9 @@ Start-Transcript -Path $log | Out-Null
 . "$PSScriptRoot\common.ps1"      # UTF-8 python env, Hold-Wake/Release-Wake, Join-KillOnCloseJob
 Join-KillOnCloseJob
 $awake = Hold-Wake
+$held = Hold-PowerRequest "LiveReact nightly knob search"
+$planOk = Check-PowerPlan
+$planSet = Set-RunPowerPlan     # sleep never for the run only; restored in finally
 $runStart = Get-Date
 
 try {
@@ -55,6 +58,7 @@ try {
   Write-Host $_.ScriptStackTrace
   exit 2
 } finally {
-  if ($awake) { Release-Wake }
+  if ($awake -or $held) { Release-Wake }
+  Restore-RunPowerPlan
   Stop-Transcript | Out-Null
 }

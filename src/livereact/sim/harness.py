@@ -60,14 +60,19 @@ TARGET_RAW_RMS = 0.08
 # Rules the simulation can never verify: strobe Hz lives in fixture firmware
 # (one written byte -> a rate the engine never sees). The scorer must report
 # these as unverifiable, never as PASS. (Confirmed Case B, Oct 2026.)
-def default_seed_range(config_path: str | Path = "config.json") -> "tuple[float, float] | None":
-    """The live app's saved normalizer range, if config.json has one (fingerprint ignored:
-    the sim's gain calibration targets the same measured raw range as the live mic path)."""
-    try:
-        seed = json.loads(Path(config_path).read_text(encoding="utf-8")).get("energy_norm") or {}
-        return float(seed["floor"]), float(seed["ceiling"])
-    except Exception:
-        return None
+# The energy-normalizer seed every simulated run starts from. PINNED here, not read from
+# config.json: the live app rewrites config.json's energy_norm on every mic calibration, and
+# the baseline, the gate and the knob search all have to simulate from the SAME seed or the
+# comparison is meaningless (2026-10-24: a tree with no config.json cold-started the normalizer
+# and the unchanged engine "flipped" 7 rules against its own baseline). These are the values
+# the committed baselines were made with (Josh's MacBook mic calibration, 2026-10-11).
+SIM_SEED_RANGE: tuple[float, float] = (0.0795, 0.8728)
+
+
+def default_seed_range(config_path: str | Path | None = None) -> "tuple[float, float]":
+    """The normalizer seed for simulation: SIM_SEED_RANGE, always. ``config_path`` is accepted
+    for old callers and ignored -- the sim no longer depends on the live app's config.json."""
+    return SIM_SEED_RANGE
 
 
 UNVERIFIABLE_IN_SIM = ["SAFE-01", "SAFE-02", "SAFE-03", "SAFE-04", "SAFE-05", "SAFE-06"]

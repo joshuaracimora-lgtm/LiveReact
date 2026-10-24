@@ -24,20 +24,20 @@ cmdlets must be wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'Li
    which Windows treats as different names — the loader now tolerates this, do NOT rename the mp3s):
    `.venv/Scripts/python.exe -c "import sys; sys.path.insert(0,'src'); from livereact.loop.evaluate import labeled_tracks; t=labeled_tracks(); print(len(t)); [print(' ', p.name) for p in t]"`
    must print `10` and list Inez and messy among them.
-5. Power. The PC is meant to sleep normally and wake itself for the run: the nightly scripts hold a
-   system-required request (`power: system-required request held`) that blocks idle and unattended
-   sleep while they run, and release it at the end so the PC goes back to sleep on its own. Keep the
-   Windows defaults for sleep and set hibernate to never (a wake timer may not wake a hibernated PC):
+5. Power. The PC is meant to sleep normally in the day and be awake for the whole run. The nightly scripts
+   hold two power requests (`power: system-required request held`, `power: kernel power request held`) AND
+   set the plan's sleep/hibernate timeouts to never for the run only, restoring them at the end (saved first
+   in `results\nightly\power_plan_prev.json`, repaired at the next start if a run died). Two settings need
+   admin once; in an **administrator** PowerShell:
    ```
-   powercfg /change standby-timeout-ac 30
-   powercfg /change hibernate-timeout-ac 0
-   powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP UNATTENDSLEEP 120
-   powercfg /setactive SCHEME_CURRENT
-   powercfg /waketimers
+   .\tools\windows\power_setup.ps1
    ```
-   `/waketimers` must list the 'LiveReact nightly search' task. (Until 2026-10-24 this step set sleep to
-   never; that kept the PC awake all day after every run. A manual Sleep during a run still pauses it;
-   nothing blocks that.)
+   It sets hibernate = never (a wake timer may not wake a hibernated PC), unattended sleep timeout = 0 (after a
+   wake-to-run Windows otherwise sleeps again 2 minutes later, whatever the sleep timeout says), wake timers =
+   enabled, and prints `powercfg /waketimers` (must list 'LiveReact nightly search') and `powercfg /a`. Keep the
+   daytime sleep timeout at the 30 min default. (History: until 2026-10-24 morning this step set sleep to never,
+   which kept the PC awake all day; the 13:18 rewrite relied on the thread-level request alone, which had just
+   failed: the PC slept 03:22-11:29 inside the run. A manual Sleep during a run still pauses it.)
 6. Find out what killed the 01:00 run. In Event Viewer (or `Get-WinEvent`) list System events between
    2026-10-23 01:20 and 01:30: Kernel-Power (41/42/107), Power-Troubleshooter (1), and any
    shutdown/restart (1074, 6006). Report what you find; do not guess.

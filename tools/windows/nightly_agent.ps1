@@ -27,6 +27,9 @@ $exit = 0
 . "$PSScriptRoot\common.ps1"      # UTF-8 python env, Hold-Wake/Release-Wake, Join-KillOnCloseJob
 Join-KillOnCloseJob
 $awake = Hold-Wake
+$held = Hold-PowerRequest "LiveReact nightly engine agent"
+$planOk = Check-PowerPlan
+$planSet = Set-RunPowerPlan     # sleep never for the run only; restored in finally
 $proc = $null
 
 function Fail($msg) { Write-Host "PREFLIGHT FAILED: $msg" }
@@ -244,6 +247,7 @@ $reportHead
   exit 2
 } finally {
   if ($proc -and -not $proc.HasExited) { Write-Host "cleanup: agent still running, killing its tree"; & taskkill /T /F /PID $proc.Id 2>&1 | Out-Null }
-  if ($awake) { Release-Wake }
+  if ($awake -or $held) { Release-Wake }
+  Restore-RunPowerPlan
   Stop-Transcript | Out-Null
 }

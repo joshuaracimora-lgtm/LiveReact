@@ -27,6 +27,14 @@ def compare(baseline: Evaluation, candidate: Evaluation) -> dict:
     reasons: list[str] = []
     b, c = baseline.summary(), candidate.summary()
 
+    # Both sides must have simulated from the same normalizer seed, or every frame differs for
+    # reasons that have nothing to do with the engine (see sim/harness.py SIM_SEED_RANGE). An older
+    # baseline without the field is taken at its word.
+    if baseline.seed_range is not None and candidate.seed_range is not None \
+            and [round(float(x), 6) for x in baseline.seed_range] != [round(float(x), 6) for x in candidate.seed_range]:
+        reasons.append(f"normalizer seed differs (baseline {baseline.seed_range} vs candidate {candidate.seed_range}); "
+                       "simulate both from the same seed")
+
     bt, ct = b["tuning"], c["tuning"]
     improved = ct["compliance"] is not None and bt["compliance"] is not None and ct["compliance"] >= bt["compliance"] + MIN_IMPROVEMENT
     if not improved:

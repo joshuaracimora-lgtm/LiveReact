@@ -66,6 +66,7 @@ class Evaluation:
     params: dict
     tracks: list[TrackEval] = field(default_factory=list)
     rules: str = field(default_factory=rules_fingerprint)
+    seed_range: list | None = None   # the normalizer seed the runs started from; None = older baseline (pre 2026-10-24)
 
     def subset(self, holdout: bool) -> list[TrackEval]:
         return [t for t in self.tracks if t.holdout == holdout]
@@ -90,12 +91,12 @@ class Evaluation:
         return {"tuning": self._score(self.subset(False)), "holdout": self._score(self.subset(True))}
 
     def to_json(self) -> dict:
-        return {"params": self.params, "rules": self.rules, "summary": self.summary(),
+        return {"params": self.params, "rules": self.rules, "seed_range": self.seed_range, "summary": self.summary(),
                 "tracks": [t.__dict__ for t in self.tracks]}
 
     @classmethod
     def from_json(cls, d: dict) -> "Evaluation":
-        ev = cls(params=d["params"], rules=d.get("rules", "unknown"))
+        ev = cls(params=d["params"], rules=d.get("rules", "unknown"), seed_range=d.get("seed_range"))
         ev.tracks = [TrackEval(**t) for t in d["tracks"]]
         return ev
 
@@ -115,8 +116,8 @@ def _audio(p: Path):
 def evaluate(params: dict | None, tracks: list[Path] | None = None, rig: str = "rigs/josh_rig.json",
              gestures: str | None = None, seed_range=None, on_track=None) -> Evaluation:
     tracks = tracks if tracks is not None else labeled_tracks()
-    seed_range = seed_range if seed_range is not None else default_seed_range()
-    ev = Evaluation(params=dict(params or {}))
+    seed_range = tuple(seed_range) if seed_range is not None else default_seed_range()
+    ev = Evaluation(params=dict(params or {}), seed_range=[float(seed_range[0]), float(seed_range[1])])
     for p in tracks:
         tl = Timeline.load(timeline_path_for(p))
         r = run_sim(p, tl, rig, gestures=gestures, seed_range=seed_range, params=params, audio=_audio(p))
