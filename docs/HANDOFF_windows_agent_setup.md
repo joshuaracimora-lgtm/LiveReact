@@ -53,20 +53,26 @@ wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'LiveReact nightly 
    for the branch and folder it created (kill any leftover `claude`/`node` process from the test first:
    `tasklist | grep -i -E "claude|node"`).
 8. Confirm the task: enabled, daily 1:00 AM, wake-to-run on, execution limit 8 h, action shows
-   `nightly_agent.ps1 -Hours 4 -SearchHours 1.5`. Note for Josh: the task runs only while his user is
+   `nightly_agent.ps1 -Hours 4 -SearchHours 1.5` (plus ` -Push` if chosen). Note for Josh: the task runs only while his user is
    logged on (locked is fine). If Windows Update reboots the PC overnight and nobody logs back in, the
    night is skipped — tell him, so he can decide on auto-login or "run whether user is logged on or not".
 9. Report: Claude Code version, whether login succeeded, the dry run's `NIGHT.md`, the task's action
    line, and anything the agent tried to do that the brief forbids.
 
-Each morning Josh reads `results/agent/<date>/NIGHT.md` (the orchestrator's verified summary) and
-`REPORT.md` (the agent's own account), then on the Mac:
+Each morning Josh reads `NIGHT.md` (the orchestrator's verified summary) and `REPORT.md` (the agent's
+own account). The desktop task runs with `-Push` (since 2026-10-23), so on a night with commits both are
+on the pushed branch under `docs/agent_nights/<date>/`; on the Mac:
 
 ```
-git fetch origin && git log --oneline harness..origin/agent/<date>     # if -Push is on
+git fetch origin && git log --oneline harness..origin/agent/<date>
+git show origin/agent/<date>:docs/agent_nights/<date>/NIGHT.md
 git merge --ff-only origin/agent/<date>                                 # accept the night into harness
 ```
 
-or deletes the branch. Nothing the agent does reaches `harness` without that merge.
+Merge only when NIGHT.md says `tests: ok` and `independent gate vs harness (...): ACCEPT`. A night with
+commits marked `OUT-OF-SCOPE`, `REJECT` or `ERROR` is pushed too (so it can be read), but must not be
+merged; delete it with `git push origin --delete agent/<date>`. A night with no commits, or one that
+`CRASHED`, pushes nothing: its NIGHT.md stays on the desktop in `results/agent/<date>/`. Nothing the agent does reaches `harness`
+without that merge, and each night starts from `harness`, so an unmerged night's work is not built on.
 
 Do not push `harness`. Do not run the search in the foreground. If a step needs Josh's input, ask.
