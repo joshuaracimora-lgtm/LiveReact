@@ -1,7 +1,7 @@
 <# The nightly job: pull latest, run the search for N hours.
    Everything it prints goes to results\nightly\<date>.log.
    Exit codes: 0 ok, 2 crash, 3 preflight failed (dirty tree, failed pull, determinism).
-   The run ABORTS if the pull fails — searching stale code looked like progress once (Oct 2026)
+   The run ABORTS if the pull fails - searching stale code looked like progress once (Oct 2026)
    and wasted nights. It also holds a system-required power request so a wake-to-run start is not
    put back to sleep by the unattended idle timeout. #>
 param([double]$Hours = 6, [int]$Patience = 300)
@@ -33,7 +33,7 @@ try {
     Write-Host "Fix on the desktop: git stash  (or git checkout -- <file>)  then re-run."
     exit 3
   }
-  # 2. Pull. A failed pull is fatal — never search yesterday's engine by accident.
+  # 2. Pull. A failed pull is fatal - never search yesterday's engine by accident.
   git fetch origin 2>&1 | Out-Null
   git checkout harness 2>&1 | Out-Null
   $pull = git pull --ff-only origin harness 2>&1
@@ -50,7 +50,7 @@ try {
   $code = $LASTEXITCODE
   $latest = Get-ChildItem results\search -Directory | Sort-Object LastWriteTime | Select-Object -Last 1
   if ($latest -and (Test-Path "$($latest.FullName)\summary.md")) { Get-Content "$($latest.FullName)\summary.md" -Encoding UTF8 | Select-Object -First 12 }
-  else { Write-Host "no summary.md written — the search did not finish on its own (killed? sleep?)" }
+  else { Write-Host "no summary.md written - the search did not finish on its own (killed? sleep?)" }
   exit $code
 } finally {
   if ($awake) { try { [void][LiveReact.Power]::SetThreadExecutionState(0x80000000) } catch {} }

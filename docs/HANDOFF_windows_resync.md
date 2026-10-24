@@ -18,8 +18,12 @@ cmdlets must be wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'Li
 3. `git pull --ff-only origin harness`. Expect the tip to be the "tools/windows: nightly aborts on a
    dirty tree..." commit or later. Show `git log --oneline -3`.
 4. `.venv/Scripts/python.exe -m pip install -e ".[sim,dev]"` then
-   `.venv/Scripts/python.exe -m pytest -q tests/test_harness_determinism.py tests/test_roll_period.py tests/test_scorer.py tests/test_agent_tools.py`
-   — all must pass.
+   `.venv/Scripts/python.exe -m pytest -o addopts= -q tests/test_harness_determinism.py tests/test_roll_period.py tests/test_scorer.py tests/test_agent_tools.py tests/test_timeline_pairing.py tests/test_windows_scripts.py`
+   — all must pass. Then confirm all ten labeled tracks pair with their timelines (two file names carry
+   accents; the audio copied from the Mac is in a different Unicode form from the committed timelines,
+   which Windows treats as different names — the loader now tolerates this, do NOT rename the mp3s):
+   `.venv/Scripts/python.exe -c "import sys; sys.path.insert(0,'src'); from livereact.loop.evaluate import labeled_tracks; t=labeled_tracks(); print(len(t)); [print(' ', p.name) for p in t]"`
+   must print `10` and list Inez and messy among them.
 5. Power. Set both the normal and the *unattended* sleep timeouts to never on AC (the unattended one
    is what puts a wake-to-run machine back to sleep after ~2 minutes):
    ```

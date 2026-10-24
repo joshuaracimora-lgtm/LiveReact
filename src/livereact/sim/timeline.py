@@ -11,6 +11,7 @@ used by the scorer, never by the engine.
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -83,7 +84,35 @@ class Timeline:
         Path(path).write_text(self.to_json(), encoding="utf-8")
 
 
+def match_timeline_name(expected: str, candidates: "list[str]") -> "str | None":
+    """Find ``expected`` among ``candidates`` ignoring Unicode normalization form.
+
+    The committed timelines are NFC (git stores paths in NFC on this project);
+    audio copied from the Mac arrives NFD (``é`` as ``e`` + U+0301). macOS treats
+    the two spellings as one file name, Windows as two, so a plain
+    ``with_name()`` lookup silently loses the accented tracks there (found on the
+    desktop 2026-10-23: 8 of 10 labeled tracks). Exact match wins; else the unique
+    candidate with the same NFC form.
+    """
+    if expected in candidates:
+        return expected
+    want = unicodedata.normalize("NFC", expected)
+    hits = [c for c in candidates if unicodedata.normalize("NFC", c) == want]
+    return hits[0] if len(hits) == 1 else None
+
+
 def timeline_path_for(audio_path: str | Path) -> Path:
-    """``tracks/song.mp3`` -> ``tracks/song.timeline.json``."""
+    """``tracks/song.mp3`` -> ``tracks/song.timeline.json``.
+
+    If that exact path does not exist but a sibling differs only in Unicode
+    normalization form, return the sibling (see ``match_timeline_name``).
+    Otherwise return the plain derived path, so callers that *create* timelines
+    (analyze_track.py) keep working.
+    """
     p = Path(audio_path)
-    return p.with_name(p.stem + ".timeline.json")
+    direct = p.with_name(p.stem + ".timeline.json")
+    if direct.exists() or not p.parent.is_dir():
+        return direct
+    names = [q.name for q in p.parent.iterdir() if q.name.endswith(".timeline.json")]
+    hit = match_timeline_name(direct.name, names)
+    return p.with_name(hit) if hit else direct
