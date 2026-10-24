@@ -7,6 +7,11 @@ $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
 $env:PYTHONUNBUFFERED = "1"
 
+# Nobody is at the keyboard: if the stored GitHub credential is missing or expired, git must fail
+# (and the log say so) instead of opening a sign-in window that holds the night until the time limit.
+$env:GIT_TERMINAL_PROMPT = "0"
+$env:GCM_INTERACTIVE = "never"
+
 # Keep the machine awake for the run (ES_CONTINUOUS | ES_SYSTEM_REQUIRED = 0x80000001). Best effort.
 # A plain 0x80000000 literal is Int64 in PowerShell; pass the exact uint32 the API wants.
 function Hold-Wake {
