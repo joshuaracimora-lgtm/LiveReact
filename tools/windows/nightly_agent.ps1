@@ -175,7 +175,8 @@ try {
     # Nothing accepted: tune knobs on harness itself for the search budget plus whatever the agent left
     # unused, so a quiet agent night is not an idle one (2026-10-24: agent done after 30 min of 4 h).
     # harness's committed baseline is its own evaluation, so search.py's default --baseline is right.
-    $fallbackHours = [math]::Round($SearchHours + [math]::Max(0, $Hours - ((Get-Date) - $start).TotalHours), 2)
+    # [double]0: with an int first argument PowerShell picks Max(int,int) and truncates 3.4 h to 3
+    $fallbackHours = [math]::Round($SearchHours + [math]::Max([double]0, $Hours - ((Get-Date) - $start).TotalHours), 2)
     $searchOut = "results\search\$date-$(Get-Date -Format HHmm)-harness"
     git checkout harness 2>&1 | Out-Null
     Write-Host "search: nothing accepted tonight; $fallbackHours h on harness $base -> $searchOut"
