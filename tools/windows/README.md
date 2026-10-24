@@ -13,3 +13,14 @@ The nightly script aborts (exit 3, logged) if the working tree has local changes
 fast-forward — it never searches stale code silently. If a log says PREFLIGHT FAILED, follow
 `docs/HANDOFF_windows_resync.md`. The script also holds a Windows system-required power request for the
 run; set the AC sleep *and* unattended-sleep timeouts to never as well (same doc, step 5).
+
+## Two nightly modes
+
+- `nightly.ps1` — knob search only (random perturbation of `tunable` params, gated). Cheap; useful right
+  after an engine change lands, pointless night after night on an unchanged engine.
+- `nightly_agent.ps1` — the **engine agent**: a headless Claude Code session works one scorer rule family
+  for `-Hours` on a branch `agent/<date>` (brief: `docs/AGENT_BRIEF.md`), the orchestrator re-runs the gate
+  itself against harness's baseline (`tools/agent/gate_head.py`), then spends `-SearchHours` on the knob
+  search around the accepted code. Nothing reaches `harness` until Josh merges the branch. Setup:
+  `docs/HANDOFF_windows_agent_setup.md`. Morning read: `results\agent\<date>\NIGHT.md` then `REPORT.md`.
+  Switch the task with `register_task.ps1 -Script nightly_agent.ps1 -Args "-Hours 4 -SearchHours 1.5"`.

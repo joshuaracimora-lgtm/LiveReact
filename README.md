@@ -150,7 +150,8 @@ src/livereact/
   recorder.py, diagnostics.py, network.py, tap_tempo.py, dynamics.py
 rigs/                    rig JSON files (fixtures, addresses, venue geometry, laser profile)
 spec/                    LIGHTING_BIBLE.md + conformance.md
-tools/                   run_show.sh relaunch loop, laser_probe.py, offline simulators / replays
+tools/                   run_show.sh relaunch loop, laser_probe.py, harness + scorer CLIs, loop (knob search),
+                         agent (status / study / gate tools for the nightly engine agent), windows (scheduled runs)
 tests/                   pytest suite (deterministic via FakeClock)
 ```
 

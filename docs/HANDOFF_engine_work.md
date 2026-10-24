@@ -1,6 +1,9 @@
 # Handoff: engine work, driven by the scorer
 
 **For:** a Claude Code session in `~/LiveReact` on branch `harness` (Mac). Josh reviews every change.
+The same work runs unattended on the desktop each night via `docs/AGENT_BRIEF.md` + `tools/windows/nightly_agent.ps1`;
+`python tools/agent/status.py` shows where the families stand, `tools/agent/dump_signals.py` is the study table,
+`tools/agent/gate_head.py` is the acceptance test.
 **Goal:** make the engine pass the rules it currently fails, one rule family at a time, with the
 scorer as the acceptance test. Scorer first, code second: the failing verdicts ARE the spec.
 
