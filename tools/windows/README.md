@@ -8,3 +8,8 @@
 6. Morning: `results\nightly\<date>.log` and `results\search\<timestamp>\summary.md`.
 
 Nothing here edits engine code. The search may only change `params.json` values tagged `tunable`.
+
+The nightly script aborts (exit 3, logged) if the working tree has local changes or the pull does not
+fast-forward — it never searches stale code silently. If a log says PREFLIGHT FAILED, follow
+`docs/HANDOFF_windows_resync.md`. The script also holds a Windows system-required power request for the
+run; set the AC sleep *and* unattended-sleep timeouts to never as well (same doc, step 5).
