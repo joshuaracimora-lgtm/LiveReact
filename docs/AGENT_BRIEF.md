@@ -80,9 +80,12 @@ on its own; it cannot invent a detector, a state, or a look. Knobs:
 ## Hard limits
 
 - Never push. Never change branch. Never merge or rebase. Never touch `main` or `harness`.
-- Never edit `tracks/`, `spec/conformance.md`, `spec/LIGHTING_BIBLE.md`, the rule logic in
-  `src/livereact/sim/score.py`, existing knobs' tags or ranges in `params.json`, or anything under
-  `tools/windows/`, `tools/loop/`, `src/livereact/loop/`.
+- Never edit `tracks/`, `spec/`, `src/livereact/sim/score.py`, `src/livereact/loop/`, anything under
+  `tools/`, `.claude/`, the pytest configuration (`pyproject.toml`, `conftest.py`), or existing knobs'
+  tags or ranges in `params.json`, and never delete a test file. **The orchestrator enforces this:** a
+  branch whose commits touch any of those paths fails the night as OUT-OF-SCOPE before tests, gate or
+  search run, whatever the gate would have said. If a tool is broken (e.g. `status.py`), work around it
+  and report it; do not fix it.
 - Never add strobe or laser behaviour that is not gated by the existing safety clamps in `merge/`.
 - Never install packages, never run `tools/loop/search.py` (the orchestrator runs the knob search after
   you), never run the live app or anything with `--hardware`.

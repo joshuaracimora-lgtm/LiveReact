@@ -24,6 +24,23 @@ public static extern uint SetThreadExecutionState(uint esFlags);
 }
 function Release-Wake { try { [void][LiveReact.Power]::SetThreadExecutionState([uint32]2147483648) } catch {} }
 
+# Sleep, wake, shutdown and unexpected-restart events since $Since, one line each. The wake request above
+# stops idle sleep but not an app asking for sleep outright (2026-10-23 01:40: SetSuspendState through
+# RuntimeBroker.exe), so the morning note lists what happened instead of leaving a gap in the log.
+function Get-PowerEvents([datetime]$Since) {
+  try {
+    $ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41, 42, 107, 187, 1074, 6006, 6008; StartTime = $Since } -ErrorAction Stop)
+  } catch { return @("none") }
+  $ev | Sort-Object TimeCreated | ForEach-Object {
+    $line = "$($_.TimeCreated.ToString('HH:mm:ss')) id $($_.Id) $(($_.Message -split "`n")[0].Trim())"
+    if ($_.Id -eq 187) {
+      $caller = ([xml]$_.ToXml()).Event.EventData.Data | Where-Object { $_.Name -eq 'ApiCallerName' }
+      if ($caller) { $line += " caller: $($caller.'#text')" }
+    }
+    $line
+  }
+}
+
 # Put THIS PowerShell process in a Windows job object with KILL_ON_JOB_CLOSE. Every child it starts
 # (cmd.exe -> claude.exe -> bash -> python, or the search) inherits the job, so when this process ends
 # for any reason -- Stop-ScheduledTask, the task's 8 h limit, a crash -- the whole tree dies with it.

@@ -15,8 +15,11 @@ Start-Transcript -Path $log | Out-Null
 . "$PSScriptRoot\common.ps1"      # UTF-8 python env, Hold-Wake/Release-Wake, Join-KillOnCloseJob
 Join-KillOnCloseJob
 $awake = Hold-Wake
+$runStart = Get-Date
 
 try {
+  # 0. Without git every check below reads as empty and the run looks clean (seen 2026-10-23).
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host "PREFLIGHT FAILED: git not found on PATH"; exit 3 }
   # 1. The tree must be clean, or the pull below can never fast-forward.
   $dirty = (git status --porcelain 2>$null | Where-Object { $_ -notmatch '^\?\?' })
   if ($dirty) {
@@ -43,7 +46,14 @@ try {
   $latest = Get-ChildItem results\search -Directory | Sort-Object LastWriteTime | Select-Object -Last 1
   if ($latest -and (Test-Path "$($latest.FullName)\summary.md")) { Get-Content "$($latest.FullName)\summary.md" -Encoding UTF8 | Select-Object -First 12 }
   else { Write-Host "no summary.md written - the search did not finish on its own (killed? sleep?)" }
+  Write-Host "power events during the run:"
+  Get-PowerEvents $runStart | ForEach-Object { Write-Host "  $_" }
   exit $code
+} catch {
+  # without this an unexpected error skips the rest silently and the task reports 0 (seen 2026-10-23)
+  Write-Host "CRASH: $($_.Exception.Message)"
+  Write-Host $_.ScriptStackTrace
+  exit 2
 } finally {
   if ($awake) { Release-Wake }
   Stop-Transcript | Out-Null
