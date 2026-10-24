@@ -32,10 +32,14 @@ function Release-Wake { try { [void][LiveReact.Power]::SetThreadExecutionState([
 # Sleep, wake, shutdown and unexpected-restart events since $Since, one line each. The wake request above
 # stops idle sleep but not an app asking for sleep outright (2026-10-23 01:40: SetSuspendState through
 # RuntimeBroker.exe), so the morning note lists what happened instead of leaving a gap in the log.
+# Callers pass the run's start; the window opens 5 minutes earlier so the wake that started a 1:00 run
+# (Power-Troubleshooter id 1, logged ~20 s before the task starts) is listed too.
 function Get-PowerEvents([datetime]$Since) {
-  try {
-    $ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41, 42, 107, 187, 1074, 6006, 6008; StartTime = $Since } -ErrorAction Stop)
-  } catch { return @("none") }
+  # SilentlyContinue, not Stop: "no events found" is the normal case and Stop wrote a TerminatingError
+  # record into the transcript every quiet night
+  $ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 1, 41, 42, 107, 187, 1074, 6006, 6008; StartTime = $Since.AddMinutes(-5) } -ErrorAction SilentlyContinue |
+          Where-Object { $_.Id -ne 1 -or $_.ProviderName -eq 'Microsoft-Windows-Power-Troubleshooter' })
+  if ($ev.Count -eq 0) { return @("none") }
   $ev | Sort-Object TimeCreated | ForEach-Object {
     $line = "$($_.TimeCreated.ToString('HH:mm:ss')) id $($_.Id) $(($_.Message -split "`n")[0].Trim())"
     if ($_.Id -eq 187) {

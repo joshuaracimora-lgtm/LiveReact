@@ -164,14 +164,29 @@ try {
   # if the agent forgot to regenerate it, a stale baseline would credit the engine's gain to the first
   # harmless random perturbation.
   $searchNote = "skipped"
-  if ($commits -gt 0 -and $gate -eq "ACCEPT" -and $tests -eq "ok" -and $SearchHours -gt 0 -and (Test-Path $headEval)) {
+  $searchOut = $null
+  if ($SearchHours -gt 0 -and $commits -gt 0 -and $gate -eq "ACCEPT" -and $tests -eq "ok" -and (Test-Path $headEval)) {
     $searchOut = "results\search\$date-$(Get-Date -Format HHmm)-agent"
     Write-Host "search: $SearchHours h around $branch -> $searchOut"
     # Out-Host: a native command's stdout does not reach the transcript on its own under Task Scheduler
     & $py tools\loop\search.py --hours $SearchHours --patience $Patience --baseline $headEval --out $searchOut 2>&1 | Out-Host
     if ($LASTEXITCODE -eq 2) { $exit = 2 }
+  } elseif ($SearchHours -gt 0 -and $treeClean) {
+    # Nothing accepted: tune knobs on harness itself for the search budget plus whatever the agent left
+    # unused, so a quiet agent night is not an idle one (2026-10-24: agent done after 30 min of 4 h).
+    # harness's committed baseline is its own evaluation, so search.py's default --baseline is right.
+    $fallbackHours = [math]::Round($SearchHours + [math]::Max(0, $Hours - ((Get-Date) - $start).TotalHours), 2)
+    $searchOut = "results\search\$date-$(Get-Date -Format HHmm)-harness"
+    git checkout harness 2>&1 | Out-Null
+    Write-Host "search: nothing accepted tonight; $fallbackHours h on harness $base -> $searchOut"
+    & $py tools\loop\search.py --hours $fallbackHours --patience $Patience --out $searchOut 2>&1 | Out-Host
+    if ($LASTEXITCODE -eq 2) { $exit = 2 }
+    git checkout $branch 2>&1 | Out-Null
+  }
+  if ($searchOut) {
     $sm = "$searchOut\summary.md"
     if (Test-Path $sm) { $searchNote = (Get-Content $sm -Encoding UTF8 | Select-Object -First 6) -join "`n" ; Write-Host $searchNote }
+    else { $searchNote = "no summary.md in $searchOut (search did not finish)" }
   }
 
   # ---- morning note ------------------------------------------------------------------------------
@@ -186,7 +201,7 @@ try {
 - knob search:
 $searchNote
 
-## Power events during the run
+## Power events during the run (from 5 min before the start)
 $((Get-PowerEvents $start) -join "`n")
 
 ## Commits
@@ -197,8 +212,10 @@ $reportHead
 "@
   [IO.File]::WriteAllText((Join-Path $night "NIGHT.md"), $nightMd, $utf8)
   & $py tools\agent\record_night.py --date $date --branch $branch --commits $commits --gate $gate --tests $tests --note "orchestrator: $agentStatus" | Out-Null
-  if ($Push -and $commits -gt 0) {
-    # the night folder is gitignored; carry the two reports in-repo so the branch is reviewable from GitHub
+  if ($Push) {
+    # Every night, not only nights with commits: the reports (and a night's questions for Josh) are the
+    # point of a quiet night too. On a 0-commit night the branch holds only this reports commit.
+    # The night folder is gitignored; carry the two reports in-repo so the branch is reviewable from GitHub.
     $dst = "docs\agent_nights\$date"
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
     Copy-Item (Join-Path $night "NIGHT.md") "$dst\NIGHT.md" -Force

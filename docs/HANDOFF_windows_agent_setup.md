@@ -60,8 +60,11 @@ wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'LiveReact nightly 
    line, and anything the agent tried to do that the brief forbids.
 
 Each morning Josh reads `NIGHT.md` (the orchestrator's verified summary) and `REPORT.md` (the agent's
-own account). The desktop task runs with `-Push` (since 2026-10-23), so on a night with commits both are
-on the pushed branch under `docs/agent_nights/<date>/`; on the Mac:
+own account). The desktop task runs with `-Push` (since 2026-10-23), so every night both are on the pushed
+branch under `docs/agent_nights/<date>/` (a second run on the same date gets `agent/<date>-2`). When
+the agent lands nothing, the orchestrator spends the search budget plus the agent's unused time on a
+knob search over `harness` itself (`results/search/<date>-<HHMM>-harness/` on the desktop; its summary is
+in NIGHT.md). On the Mac:
 
 ```
 git fetch origin && git log --oneline harness..origin/agent/<date>
@@ -69,10 +72,11 @@ git show origin/agent/<date>:docs/agent_nights/<date>/NIGHT.md
 git merge --ff-only origin/agent/<date>                                 # accept the night into harness
 ```
 
-Merge only when NIGHT.md says `tests: ok` and `independent gate vs harness (...): ACCEPT`. A night with
-commits marked `OUT-OF-SCOPE`, `REJECT` or `ERROR` is pushed too (so it can be read), but must not be
-merged; delete it with `git push origin --delete agent/<date>`. A night with no commits, or one that
-`CRASHED`, pushes nothing: its NIGHT.md stays on the desktop in `results/agent/<date>/`. Nothing the agent does reaches `harness`
+Merge only when NIGHT.md says `tests: ok` and `independent gate vs harness (...): ACCEPT`. A night marked
+`OUT-OF-SCOPE`, `REJECT`, `ERROR` or `NO-CHANGE` is pushed too (so it can be read), but must not be
+merged: a `NO-CHANGE` branch holds only the reports commit, the others hold work the gate did not pass.
+Delete them with `git push origin --delete agent/<date>`. Only a night that `CRASHED` pushes nothing:
+its NIGHT.md stays on the desktop in `results/agent/<date>/`. Nothing the agent does reaches `harness`
 without that merge, and each night starts from `harness`, so an unmerged night's work is not built on.
 
 Do not push `harness`. Do not run the search in the foreground. If a step needs Josh's input, ask.
