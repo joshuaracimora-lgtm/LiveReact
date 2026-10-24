@@ -36,7 +36,7 @@ Love (three rolls), Sweet Nothing (quiet roll, still breakdown), Talk To You (at
 
 ## Work order (FAIL counts across the 10 labeled tracks, scorer v2 baseline)
 
-1. **Drop detection — STRUCT-03 (8/10 fail) and STRUCT-01 (2).** Everything else depends on the engine
+1. **Drop detection — STRUCT-03 (8/10 fail) and STRUCT-01 (2).** **CLOSED 2026-10-22 by Josh (commit `c4e2159`: roll-start detector landed; the remaining cases need a rule change or Josh, not more engine work). The counts in this list are historical — `python tools/agent/status.py` has the live ones.** Everything else depends on the engine
    knowing where the drop is. STRUCT-03: the engine should enter DROP/PEAK within 2 beats of the labeled
    roll start; today it is "never" on most tracks and +11 beats on Latch. Study the dip/rebound and
    roll-arm logic in `core/metronome.py` against the labeled rolls (snare-band rise, kick often ABSENT

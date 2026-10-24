@@ -43,13 +43,13 @@ try {
   $py = ".\.venv\Scripts\python.exe"
   & $py -m pip install --quiet -e ".[sim,dev]" 2>&1 | Out-Null
   # 3. Determinism preflight.
-  & $py -m pytest -q tests\test_harness_determinism.py 2>&1 | Select-Object -Last 1
+  & $py -m pytest -o addopts="" -q tests\test_harness_determinism.py 2>&1 | Select-Object -Last 1
   if ($LASTEXITCODE -ne 0) { Write-Host "PREFLIGHT FAILED: determinism test; aborting"; exit 3 }
   # 4. Search.
   & $py tools\loop\search.py --hours $Hours --patience $Patience
   $code = $LASTEXITCODE
   $latest = Get-ChildItem results\search -Directory | Sort-Object LastWriteTime | Select-Object -Last 1
-  if ($latest -and (Test-Path "$($latest.FullName)\summary.md")) { Get-Content "$($latest.FullName)\summary.md" | Select-Object -First 12 }
+  if ($latest -and (Test-Path "$($latest.FullName)\summary.md")) { Get-Content "$($latest.FullName)\summary.md" -Encoding UTF8 | Select-Object -First 12 }
   else { Write-Host "no summary.md written — the search did not finish on its own (killed? sleep?)" }
   exit $code
 } finally {

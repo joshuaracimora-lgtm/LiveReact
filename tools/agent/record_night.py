@@ -24,14 +24,29 @@ def load(path: Path) -> dict:
 
 
 def record(state: dict, **night) -> dict:
+    """Merge one record into the night keyed by (date, branch).
+
+    Both the agent (family, subgoal, its own note) and the orchestrator (verified
+    commits/gate/tests) record the same night; neither may erase the other's
+    fields. Non-empty values win, notes are concatenated.
+    """
+    questions = night.pop("questions", None) or []
     nights = state.setdefault("nights", [])
-    nights[:] = [n for n in nights if n.get("date") != night["date"] or n.get("branch") != night["branch"]]
-    nights.append(night)
+    prev = next((n for n in nights if n.get("date") == night["date"] and n.get("branch") == night["branch"]), None)
+    if prev is None:
+        nights.append(dict(night))
+    else:
+        for k, v in night.items():
+            if k == "note":
+                if v and v not in (prev.get("note") or ""):
+                    prev["note"] = f"{prev['note']}; {v}" if prev.get("note") else v
+            elif v not in (None, ""):
+                prev[k] = v
     if night.get("family") is not None:
         state["family"] = night["family"]
     if night.get("subgoal"):
         state["subgoal"] = night["subgoal"]
-    for q in night.pop("questions", []) or []:
+    for q in questions:
         if q not in state.setdefault("open_questions", []):
             state["open_questions"].append(q)
     state["updated"] = datetime.now().isoformat(timespec="seconds")

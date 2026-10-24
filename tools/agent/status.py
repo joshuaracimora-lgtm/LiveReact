@@ -65,8 +65,23 @@ def family_table(ev: dict) -> list[dict]:
     return rows
 
 
-def next_family(rows: list[dict]) -> int | None:
+# Families Josh has closed: their remaining FAILs need a rule change or his input, not more engine
+# work. A state.json `family` set explicitly to one of these reopens it.
+CLOSED: dict[int, str] = {
+    1: "closed by Josh 2026-10-22 (commit c4e2159): the remaining STRUCT-03/STRUCT-01 cases (SWEETER clap "
+       "drops, messy 128.31, One More Time 232.55, Latch 64.14, Sweet Nothing 22.21; fills vs cut-then-drop) "
+       "are not separable by any audio rule",
+}
+
+
+def next_family(rows: list[dict], state: dict | None = None) -> int | None:
+    """The family to work on: the state file's `family` when set, else the lowest
+    family that still has failures and is not in CLOSED."""
+    if state and state.get("family") is not None:
+        return int(state["family"])
     for num, _, _ in FAMILIES:
+        if num in CLOSED:
+            continue
         if any(r["family"] == num and r["fail"] > 0 for r in rows):
             return num
     return None
@@ -83,11 +98,13 @@ def render(ev: dict, state: dict | None, baseline_path: str) -> str:
     for r in rows:
         if r["family"] != cur:
             cur = r["family"]
-            L.append(f"  family {cur}: {r['name']}" if cur else "  other rules:")
+            closed = f"  [CLOSED: {CLOSED[cur]}]" if cur in CLOSED else ""
+            L.append(f"  family {cur}: {r['name']}{closed}" if cur else "  other rules:")
         flag = "" if r["fail"] else "  (clean)"
         L.append(f"    {r['rule']:9} FAIL {r['fail']:2}  (tuning {r['tuning']}, holdout {r['holdout']}){flag}")
-    nf = next_family(rows)
-    L += ["", f"NEXT FAMILY WITH FAILURES: {nf if nf else 'none'}", "", "per track (failing rules):"]
+    nf = next_family(rows, state)
+    src = "from state.json" if state and state.get("family") is not None else "lowest family with failures"
+    L += ["", f"NEXT FAMILY: {nf if nf else 'none'}  ({src})", "", "per track (failing rules):"]
     for t in sorted(ev["tracks"], key=lambda t: (t["holdout"], t["track"])):
         fails = sorted(r for r, st in t["verdicts"].items() if st == "FAIL")
         L.append(f"  {'H' if t['holdout'] else 'T'} {t['compliance']!s:6} {t['track'][:44]:44} {' '.join(fails)}")
@@ -114,7 +131,7 @@ def main() -> int:
     state = json.loads(Path(a.state).read_text(encoding="utf-8")) if Path(a.state).exists() else None
     if a.json:
         rows = family_table(ev)
-        print(json.dumps({"head": head(), "summary": ev["summary"], "rules": rows, "next_family": next_family(rows),
+        print(json.dumps({"head": head(), "summary": ev["summary"], "rules": rows, "next_family": next_family(rows, state),
                           "state": state}, indent=1))
     else:
         print(render(ev, state, str(bp)))

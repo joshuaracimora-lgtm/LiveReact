@@ -23,4 +23,4 @@ run; set the AC sleep *and* unattended-sleep timeouts to never as well (same doc
   itself against harness's baseline (`tools/agent/gate_head.py`), then spends `-SearchHours` on the knob
   search around the accepted code. Nothing reaches `harness` until Josh merges the branch. Setup:
   `docs/HANDOFF_windows_agent_setup.md`. Morning read: `results\agent\<date>\NIGHT.md` then `REPORT.md`.
-  Switch the task with `register_task.ps1 -Script nightly_agent.ps1 -Args "-Hours 4 -SearchHours 1.5"`.
+  Switch the task with `register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-Hours 4 -SearchHours 1.5"`.

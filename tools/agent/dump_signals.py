@@ -25,7 +25,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("track")
     p.add_argument("--rig", default="rigs/josh_rig.json")
-    p.add_argument("--around", default=None, help="marker kind(s) to window on, comma-separated (drop,fill,breakdown,build,whiteout,groove)")
+    p.add_argument("--around", default=None, help="marker kind(s) to window on, comma-separated (drop,fill,breakdown,build,whiteout,groove,outro)")
     p.add_argument("--before", type=float, default=4.0, help="bars before each marker")
     p.add_argument("--after", type=float, default=8.0, help="bars after each marker (or to its end)")
     p.add_argument("--all", action="store_true", help="print every beat of the track")
@@ -83,7 +83,7 @@ def main() -> int:
             xs = [float(x[k]) for x in rows if x.get(k) not in (None, "")]
             vals.append(f"{(max(xs) if k == 'roll_period' else sum(xs) / len(xs)):.3f}" if xs else "")
         laser = "L" if bool(run.laser_any[idx].any()) else ""
-        strobe = int(round(float(run.strobe[idx].max()) * (255 if run.strobe.max() <= 1.0 else 1)))
+        strobe = int(round(float(run.strobe[idx].max()) * 255))   # Run.strobe is the strobe channel / 255
         drop_mk = "D" if any(str(x.get("drop_marker")) == "True" for x in rows) else ""
         scene = rows[-1].get("scene", "")
         print("\t".join([f"{bt0:.2f}", str(b // tl.beats_per_bar), str(b % tl.beats_per_bar + 1), tag, bucket, *vals,

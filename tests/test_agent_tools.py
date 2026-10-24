@@ -35,7 +35,18 @@ def test_status_family_table_counts_fails_and_picks_next_family():
     assert by_rule["LOOK-05"]["family"] == 0  # not in a family -> "other"
     assert status.next_family(rows) == 2       # family 1 clean, family 2 has failures
     text = status.render(ev, None, "x.json")
-    assert "NEXT FAMILY WITH FAILURES: 2" in text and "TIME-11   FAIL  2" in text
+    assert "NEXT FAMILY: 2  (lowest family with failures)" in text and "TIME-11   FAIL  2" in text
+
+
+def test_status_closed_family_is_skipped_unless_state_reopens_it():
+    status = _load("status")
+    rows = status.family_table(_ev({"a": {"STRUCT-03": "FAIL", "TIME-11": "FAIL"}}))
+    assert 1 in status.CLOSED
+    assert status.next_family(rows) == 2                    # family 1 still fails but is closed
+    assert status.next_family(rows, {"family": 1}) == 1     # state.json may reopen it explicitly
+    assert status.next_family(rows, {"family": 3}) == 3
+    text = status.render(_ev({"a": {"STRUCT-03": "FAIL"}}), {"family": 3}, "x")
+    assert "NEXT FAMILY: 3  (from state.json)" in text and "[CLOSED:" in text
 
 
 def test_status_next_family_none_when_all_clean():
@@ -55,16 +66,24 @@ def test_gate_head_flips_lists_both_directions_and_new_tracks():
     assert any(f["track"] == "c" and f["to"] == "new track" for f in fl)
 
 
-def test_record_night_appends_dedupes_and_collects_questions(tmp_path):
+def test_record_night_merges_agent_and_orchestrator_records(tmp_path):
     rn = _load("record_night")
     st = rn.load(tmp_path / "state.json")
     assert st["nights"] == [] and st["family"] is None
+    # the agent records first: family, subgoal, its note, a question
     st = rn.record(st, date="20261024", branch="agent/20261024", commits=1, gate="ACCEPT", tests="ok",
                    family=2, subgoal="TIME-02 next", note="dwell in bars", questions=["is HOLD 8 right?"])
-    st = rn.record(st, date="20261024", branch="agent/20261024", commits=1, gate="ACCEPT", tests="ok",
+    # the orchestrator records the verified numbers afterwards, with no family/subgoal
+    st = rn.record(st, date="20261024", branch="agent/20261024", commits=1, gate="REJECT", tests="FAIL",
                    family=None, subgoal="", note="orchestrator: exited 0", questions=["is HOLD 8 right?"])
-    assert len(st["nights"]) == 1 and st["nights"][0]["note"] == "orchestrator: exited 0"
-    assert st["family"] == 2 and st["subgoal"] == "TIME-02 next"      # kept from the agent's own record
+    assert len(st["nights"]) == 1
+    n = st["nights"][0]
+    assert n["gate"] == "REJECT" and n["tests"] == "FAIL"           # verified values win
+    assert n["family"] == 2 and n["note"] == "dwell in bars; orchestrator: exited 0"   # nothing erased
+    assert st["family"] == 2 and st["subgoal"] == "TIME-02 next"
     assert st["open_questions"] == ["is HOLD 8 right?"]
+    # a different night is a new entry
+    st = rn.record(st, date="20261025", branch="agent/20261025", commits=0, gate="NO-CHANGE", tests="skipped")
+    assert len(st["nights"]) == 2
     (tmp_path / "state.json").write_text(json.dumps(st))
-    assert rn.load(tmp_path / "state.json")["nights"][0]["gate"] == "ACCEPT"
+    assert rn.load(tmp_path / "state.json")["nights"][0]["gate"] == "REJECT"

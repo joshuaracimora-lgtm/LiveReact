@@ -41,17 +41,31 @@ def flips(base: dict, cand: dict) -> list[dict]:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--baseline", default="results/baseline/evaluation.json")
+    p.add_argument("--baseline-ref", default=None,
+                   help="git ref whose committed results/baseline/evaluation.json is the baseline (e.g. harness); overrides --baseline")
     p.add_argument("--rig", default="rigs/josh_rig.json")
     p.add_argument("--write-baseline", action="store_true", help="on ACCEPT, write the candidate as results/baseline/evaluation.json")
     p.add_argument("--out", default=None, help="also write the candidate evaluation + gate to this json")
+    p.add_argument("--out-eval", default=None,
+                   help="also write the bare candidate evaluation (same shape as results/baseline/evaluation.json), "
+                        "usable as --baseline for tools/loop/search.py")
     a = p.parse_args()
     from livereact.loop.evaluate import Evaluation, evaluate, labeled_tracks
     from livereact.loop.gate import compare
-    bp = Path(a.baseline)
-    if not bp.exists():
-        print(f"no baseline at {bp}")
-        return 2
-    base_json = json.loads(bp.read_text(encoding="utf-8"))
+    if a.baseline_ref:
+        import subprocess
+        bp = f"{a.baseline_ref}:results/baseline/evaluation.json"
+        got = subprocess.run(["git", "show", bp], cwd=ROOT, capture_output=True)
+        if got.returncode != 0:
+            print(f"no committed baseline at {bp}: {got.stderr.decode(errors='replace').strip()}")
+            return 2
+        base_json = json.loads(got.stdout.decode("utf-8"))
+    else:
+        bp = Path(a.baseline)
+        if not bp.exists():
+            print(f"no baseline at {bp}")
+            return 2
+        base_json = json.loads(bp.read_text(encoding="utf-8"))
     base = Evaluation.from_json(base_json)
     tracks = labeled_tracks()
     print(f"evaluating {len(tracks)} labeled tracks against {bp} ...", flush=True)
@@ -77,6 +91,13 @@ def main() -> int:
         op.parent.mkdir(parents=True, exist_ok=True)
         op.write_text(json.dumps({"gate": verdict, "flips": fl, "candidate": cj}, indent=1), encoding="utf-8")
         print(f"-> {op}")
+    if a.out_eval:
+        ep = Path(a.out_eval)
+        ep.parent.mkdir(parents=True, exist_ok=True)
+        ej = dict(cj)
+        ej["generated"] = datetime.now().isoformat(timespec="seconds")
+        ep.write_text(json.dumps(ej, indent=2), encoding="utf-8")
+        print(f"-> {ep}")
     if verdict["accept"] and a.write_baseline:
         cj["generated"] = datetime.now().isoformat(timespec="seconds")
         out = ROOT / "results" / "baseline" / "evaluation.json"
