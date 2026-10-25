@@ -1,12 +1,13 @@
-<# Registers (or replaces) the "LiveReact nightly search" Task Scheduler job: 1:00 AM daily,
-   wakes the PC, runs a tools\windows script for N hours. Run once per change.
+<# Registers (or replaces) the "LiveReact nightly search" Task Scheduler job: 4:00 PM daily (moved from
+   1:00 AM on 2026-10-25 so the run fits 4-10 PM while the PC is up anyway), wakes the PC if it sleeps,
+   runs a tools\windows script for N hours. Run once per change.
 
      .\register_task.ps1                                                             # knob search only (nightly.ps1, 6 h)
      .\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-Hours 4 -SearchHours 1.5"   # the engine agent
 
    The task keeps one name so re-registering replaces the previous job. It runs as the current user,
    only while that user is logged on (a locked screen is fine; a reboot without a login is not). #>
-param([string]$Script = "nightly.ps1", [string]$ScriptArgs = "-Hours 6 -Patience 300", [string]$At = "1:00AM", [int]$LimitHours = 8,
+param([string]$Script = "nightly.ps1", [string]$ScriptArgs = "-Hours 6 -Patience 300", [string]$At = "4:00PM", [int]$LimitHours = 8,
       [switch]$RunWhenLoggedOff)   # register with a stored password so the task also runs after a reboot with nobody signed in
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $path = Join-Path $root "tools\windows\$Script"
