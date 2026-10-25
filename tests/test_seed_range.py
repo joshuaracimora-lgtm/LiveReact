@@ -70,3 +70,15 @@ def test_gate_head_flips_match_track_names_across_nfc_nfd():
     cand = {"tracks": [{"track": nfc, "verdicts": {"TIME-02": "PASS"}}]}
     fl = gh.flips(base, cand)
     assert fl == [{"track": nfc, "rule": "TIME-02", "from": "FAIL", "to": "PASS"}]
+
+
+def test_rules_fingerprint_tracks_the_scorer_source(tmp_path, monkeypatch):
+    """A baseline must be regenerated when a rule's logic changes, not only when a rule is added."""
+    import hashlib
+    from pathlib import Path
+    from livereact.loop import evaluate
+    from livereact.sim.score import RULES
+    src = (Path(evaluate.__file__).resolve().parents[1] / "sim" / "score.py").read_bytes()
+    ids = "|".join(f"{r}:{s}" for r, s, _ in RULES)
+    assert evaluate.rules_fingerprint() == hashlib.sha256(ids.encode() + b"\n" + src).hexdigest()[:12]
+    assert evaluate.rules_fingerprint() != hashlib.sha256(ids.encode()).hexdigest()[:12]

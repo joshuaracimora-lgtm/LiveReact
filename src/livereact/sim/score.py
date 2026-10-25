@@ -35,12 +35,19 @@ from .timeline import Marker, Timeline
 
 SEVERITY_WEIGHT = {"critical": 3, "major": 2, "minor": 1}
 DROP_FAMILY = ("DROP", "PEAK")
-MIN_HOLD_BARS = {"BREAK": 8, "BUILD": 4, "DROP": 8, "PEAK": 8, "OUTRO": 16}   # TIME-11
+MIN_HOLD_BARS = {"BREAK": 8, "BUILD": 4, "DROP": 8, "PEAK": 8, "OUTRO": 8}    # TIME-11 (OUTRO = BREAK, D4)
 LOOK_MIN_HOLD_BARS = {"BREAK": 16, "OUTRO": 16}                                  # TIME-02 (default 8)
-LEGAL = {  # scenes/catalog.py LEGAL_TRANSITIONS, as the bible states them
+LEGAL = {  # scenes/catalog.py LEGAL_TRANSITIONS, as the bible states them -- except OUTRO (D4)
     "BREAK": {"BUILD", "DROP", "OUTRO"}, "BUILD": {"BREAK", "DROP"},
-    "DROP": {"BREAK", "BUILD", "PEAK", "OUTRO"}, "PEAK": {"BREAK", "DROP", "OUTRO"}, "OUTRO": set(),
+    "DROP": {"BREAK", "BUILD", "PEAK", "OUTRO"}, "PEAK": {"BREAK", "DROP", "OUTRO"},
+    "OUTRO": {"BREAK", "BUILD", "DROP"},   # D4 (Josh, 2026-10-25): an outro is a quiet part, never a dead end
 }
+# D5 (Josh, 2026-10-25): the dwell floors (TIME-11) and look holds (TIME-02) guard against flapping,
+# never against following the music. A run that ends within this many bars of an ear-labeled section
+# edge (any marker's start, or a drop's labeled end) is a correct reaction, not a violation. The
+# opening run of a track is where the engine was standing when the music started, so it is exempt
+# like the last run (truncated by the end of the track) already was.
+SECTION_CHANGE_TOL_BARS = 1.0
 STATIC_CUT_LOOKS = ("Blackout Hit", "Slam")     # LOOK-03: "the cut IS the effect"
 BUILD_BARS = 16                                   # window before a labeled drop
 FILL_BARS = 8                                     # window after a labeled fill
@@ -224,6 +231,23 @@ class Run:
     def markers(self, kind: str) -> list[Marker]:
         return [m for m in self.tl.markers if m.kind == kind]
 
+    def section_edges(self) -> list[float]:
+        """Ear-labeled section boundaries: every marker's start plus a drop's labeled end (its cut).
+        Empty unless the markers are verified -- an `est:` guess never excuses a short run."""
+        if not self.verified_markers():
+            return []
+        edges = [m.t for m in self.tl.markers] + [m.end for m in self.tl.markers if m.end is not None]
+        return sorted(edges)
+
+    def ends_on_section_change(self, e: int) -> bool:
+        """True when the run ending at index ``e`` (exclusive) hands over within
+        SECTION_CHANGE_TOL_BARS of a labeled section edge (D5)."""
+        if e >= self.n:
+            return False
+        t_change = float(self.t[e])
+        tol = SECTION_CHANGE_TOL_BARS * self.bar_dur
+        return any(abs(t_change - edge) <= tol for edge in self.section_edges())
+
     def next_marker_t(self, after: float) -> float:
         later = [m.t for m in self.tl.markers if m.t > after + 1e-6]
         return min(later) if later else float(self.t[-1]) + self.dt
@@ -262,15 +286,16 @@ def _needs_markers(run: Run, rid, sev, what="labeled markers") -> Verdict | None
 
 @rule("TIME-11", "critical")
 def time_11_bucket_dwell(run: Run) -> Verdict:
-    """Each energy state holds its own minimum dwell (bars)."""
+    """Each energy state holds its own minimum dwell (bars). OUTRO's floor is BREAK's (D4). The
+    opening run and a run that ends on a labeled section change are not scored (D5)."""
     fails, worst = [], {}
     rs = run.runs(run.bucket)
     for k, (b, s, e) in enumerate(rs):
-        if k == len(rs) - 1:
-            continue  # truncated by end of track
+        if k == 0 or k == len(rs) - 1:
+            continue  # power-on state / truncated by end of track (D5)
         need = MIN_HOLD_BARS.get(b)
         bars = run.bars_in(s, e)
-        if need and bars < need - 0.25:
+        if need and bars < need - 0.25 and not run.ends_on_section_change(e):
             fails.append((round(float(run.t[s]), 2), f"{b} held {bars:.1f} bars, needs {need}"))
             worst[b] = min(worst.get(b, 99), bars)
     return Verdict("TIME-11", "FAIL" if fails else "PASS", "critical",
@@ -280,16 +305,18 @@ def time_11_bucket_dwell(run: Run) -> Verdict:
 
 @rule("TIME-02", "critical")
 def time_02_look_hold(run: Run) -> Verdict:
-    """A committed look may not change more often than min_hold_bars (8; 16 for BREAK/OUTRO)."""
+    """A committed look may not change more often than min_hold_bars (8; 16 for BREAK/OUTRO).
+    A look is measured within its section: the opening look and a look that hands over on a labeled
+    section change are not scored (D5)."""
     fails = []
     rs = run.runs(run.scene)
     for k, (sc, s, e) in enumerate(rs):
-        if k == len(rs) - 1:
-            continue
+        if k == 0 or k == len(rs) - 1:
+            continue  # D5
         bucket = run.bucket[s]
         need = LOOK_MIN_HOLD_BARS.get(bucket, 8)
         bars = run.bars_in(s, e)
-        if bars < need - 0.25:
+        if bars < need - 0.25 and not run.ends_on_section_change(e):
             fails.append((round(float(run.t[s]), 2), f"'{sc}' held {bars:.1f} bars in {bucket}, needs {need}"))
     return Verdict("TIME-02", "FAIL" if fails else "PASS", "critical",
                    {"violations": len(fails), "look_changes": max(0, len(rs) - 1)}, fails[:12])

@@ -57,8 +57,14 @@ class TrackEval:
 
 
 def rules_fingerprint() -> str:
-    """Identifies the scorer's rule set, so a baseline from an older scorer is never compared against."""
-    return hashlib.sha256("|".join(f"{r}:{s}" for r, s, _ in RULES).encode()).hexdigest()[:12]
+    """Identifies the scorer, so a baseline from an older scorer is never compared against.
+
+    Hashes the rule ids + severities AND the scorer's source bytes: a change to a rule's logic or a
+    threshold (2026-10-25, D4/D5) must force a baseline regeneration just like a new rule does, or the
+    gate would report the scorer's own change as track flips."""
+    ids = "|".join(f"{r}:{s}" for r, s, _ in RULES)
+    src = (Path(__file__).resolve().parents[1] / "sim" / "score.py").read_bytes()
+    return hashlib.sha256(ids.encode() + b"\n" + src).hexdigest()[:12]
 
 
 @dataclass

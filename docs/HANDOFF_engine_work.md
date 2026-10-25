@@ -45,7 +45,7 @@ Love (three rolls), Sweet Nothing (quiet roll, still breakdown), Talk To You (at
    signal (e.g. snare/clap-band roll detector, sustained-energy-without-dip) over threshold fiddling
    the search could do itself. Keep new thresholds as tunable knobs.
 2. **Dwell and transitions — TIME-11 (10), TIME-02 (9), TIME-13 (5).** The engine dwells in seconds
-   (3 s); the bible dwells in bars per state (BREAK 8, BUILD 4, DROP 8, PEAK 8, OUTRO 16) and holds a
+   (3 s); the bible dwells in bars per state (BREAK 8, BUILD 4, DROP 8, PEAK 8, OUTRO 8 since D4) and holds a
    look 8 bars (16 in BREAK/OUTRO). Also OUTRO is exited without a track transition on Latch/Beautiful
    Now — find what resets it. Beware: longer dwell will slow STRUCT-03 unless entry is fast and exit is
    slow (TIME-12 asymmetry).

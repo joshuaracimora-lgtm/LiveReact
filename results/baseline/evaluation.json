@@ -1,6 +1,6 @@
 {
   "params": {},
-  "rules": "72b91cba1220",
+  "rules": "6b8c2abfbd1e",
   "seed_range": [
     0.0795,
     0.8728
@@ -8,8 +8,8 @@
   "summary": {
     "tuning": {
       "n": 7,
-      "compliance": 0.3523,
-      "critical_fails": 24,
+      "compliance": 0.4219,
+      "critical_fails": 19,
       "blocked": 7,
       "quality": {
         "distinct_looks": 4.286,
@@ -20,8 +20,8 @@
     },
     "holdout": {
       "n": 3,
-      "compliance": 0.32,
-      "critical_fails": 11,
+      "compliance": 0.4247,
+      "critical_fails": 8,
       "blocked": 3,
       "quality": {
         "distinct_looks": 3.333,
@@ -176,11 +176,11 @@
       "track": "SWEETER_KLICKAUD.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.345,
+      "compliance": 0.552,
       "verdicts": {
-        "TIME-11": "FAIL",
+        "TIME-11": "PASS",
         "TIME-02": "PASS",
-        "TIME-13": "FAIL",
+        "TIME-13": "PASS",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
         "LOOK-05": "PASS",
@@ -223,11 +223,11 @@
       "track": "Sam Smith, Disclosure - Latch (Original Mix).mp3",
       "holdout": true,
       "status": "BLOCKED",
-      "compliance": 0.179,
+      "compliance": 0.286,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
-        "TIME-13": "FAIL",
+        "TIME-13": "PASS",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
         "LOOK-05": "FAIL",
@@ -317,11 +317,11 @@
       "track": "Sweet_Nothing_2025_Edit_KLICKAUD.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.25,
+      "compliance": 0.333,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
-        "TIME-13": "FAIL",
+        "TIME-13": "PASS",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
         "LOOK-05": "FAIL",
@@ -364,11 +364,11 @@
       "track": "Talk_To_You_ft_54_Ultra_KLICKAUD.mp3",
       "holdout": true,
       "status": "BLOCKED",
-      "compliance": 0.31,
+      "compliance": 0.517,
       "verdicts": {
         "TIME-11": "FAIL",
-        "TIME-02": "FAIL",
-        "TIME-13": "FAIL",
+        "TIME-02": "PASS",
+        "TIME-13": "PASS",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
         "LOOK-05": "PASS",
@@ -411,11 +411,11 @@
       "track": "Zedd, Jon Bellion - Beautiful Now (Extended .mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.281,
+      "compliance": 0.375,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "FAIL",
-        "TIME-13": "FAIL",
+        "TIME-13": "PASS",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
         "LOOK-05": "PASS",
@@ -459,11 +459,11 @@
       "track": "messy _laszewo edit_ - A\u030a\u0081aszewo - SoundLoadM.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.414,
+      "compliance": 0.517,
       "verdicts": {
         "TIME-11": "FAIL",
         "TIME-02": "PASS",
-        "TIME-13": "FAIL",
+        "TIME-13": "PASS",
         "TIME-04": "FAIL",
         "TIME-05": "FAIL",
         "LOOK-05": "PASS",
@@ -503,5 +503,5 @@
       "frames_digest": "3f168f36e163c111a286f58e71dc180cf8872e8ad13a405a2cd492b4d97f7821"
     }
   ],
-  "generated": "2026-10-25T11:57:10"
+  "generated": "2026-10-25T16:14:02"
 }

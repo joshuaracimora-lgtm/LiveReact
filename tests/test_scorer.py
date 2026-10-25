@@ -555,3 +555,64 @@ def test_power_off_skips_a_drops_cut_and_an_already_dark_rig():
     frames[t >= 70.0, PAR_DIM] = 0
     v = verdict(score(frames, t, sig, tl), "STRUCT-05")
     assert v["status"] == "NOT_SCORED" and any("already dim" in s for _, s in v["metric"]["skipped"])
+
+
+# ---- D4 / D5 (Josh, 2026-10-25): outro is not a dead end; dwell floors yield to the music
+
+def test_opening_run_is_exempt_from_dwell_and_look_rules():
+    frames, t, sig, tl = make_run()
+    for i, r in enumerate(sig):            # BREAK for 2 bars only at power-on (needs 8), then BUILD to the end
+        if t[i] >= 4.0:
+            r["bucket"], r["scene"] = "BUILD", "Rising Tide"
+    sc = score(frames, t, sig, tl)
+    assert verdict(sc, "TIME-11")["status"] == "PASS"
+    assert verdict(sc, "TIME-02")["status"] == "PASS"
+
+
+@pytest.mark.parametrize("marker_t, note, expect", [
+    (44.0, "", "PASS"),                 # the look/state change lands on an ear-labeled section edge
+    (45.5, "", "PASS"),                 # within one bar (2 s) of it
+    (50.0, "", "FAIL"),                 # three bars away: this is flapping
+    (44.0, "est: guessed", "FAIL"),     # an estimated marker never excuses a short run
+])
+def test_short_run_ending_on_a_labeled_section_change_is_not_a_violation(marker_t, note, expect):
+    frames, t, sig, tl = make_run(markers=[Marker(marker_t, "breakdown", note)])
+    for i, r in enumerate(sig):            # BUILD for 2 bars only (needs 4), then back to BREAK
+        if 40.0 <= t[i] < 44.0:
+            r["bucket"], r["scene"] = "BUILD", "Rising Tide"
+    sc = score(frames, t, sig, tl)
+    assert verdict(sc, "TIME-11")["status"] == expect
+    assert verdict(sc, "TIME-02")["status"] == expect
+
+
+def test_a_drops_labeled_end_counts_as_a_section_edge():
+    frames, t, sig, tl = make_run(markers=[Marker(30.0, "drop", "", 44.0)])
+    for i, r in enumerate(sig):            # DROP 40-44 s (2 bars, needs 8) ends exactly on the labeled cut
+        if 40.0 <= t[i] < 44.0:
+            r["bucket"], r["scene"] = "DROP", "Drop Beam Fan"
+    sc = score(frames, t, sig, tl)
+    assert verdict(sc, "TIME-11")["status"] == "PASS"
+
+
+def test_outro_holds_8_bars_and_may_exit_to_a_build():
+    frames, t, sig, tl = make_run()
+    for i, r in enumerate(sig):            # BREAK 0-40, OUTRO 40-72 (16 bars: the look hold), BUILD 72-80
+        if 40.0 <= t[i] < 72.0:
+            r["bucket"], r["scene"] = "OUTRO", "Outro Fade Wash"
+        elif t[i] >= 72.0:
+            r["bucket"], r["scene"] = "BUILD", "Rising Tide"
+    sc = score(frames, t, sig, tl)
+    assert verdict(sc, "TIME-13")["status"] == "PASS"
+    assert verdict(sc, "TIME-11")["status"] == "PASS"
+    assert verdict(sc, "TIME-02")["status"] == "PASS"
+
+
+def test_outro_shorter_than_8_bars_still_fails_time_11():
+    frames, t, sig, tl = make_run()
+    for i, r in enumerate(sig):            # OUTRO 40-48 (4 bars), no marker near 48 s
+        if 40.0 <= t[i] < 48.0:
+            r["bucket"], r["scene"] = "OUTRO", "Outro Fade Wash"
+        elif t[i] >= 48.0:
+            r["bucket"], r["scene"] = "BUILD", "Rising Tide"
+    sc = score(frames, t, sig, tl)
+    assert any("OUTRO held 4.0 bars, needs 8" in e[1] for e in verdict(sc, "TIME-11")["evidence"])

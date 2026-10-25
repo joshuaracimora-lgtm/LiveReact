@@ -156,3 +156,53 @@ confirmation, not by the table.
 **What would change the answer.** Song-structure data (D1) that could say
 "this is the same drop, still going" during a two-bar mid-energy passage;
 until then two bars under the drop band is treated as a section change.
+
+## D4 — §9.8 / TIME-11: OUTRO is not a terminal state and dwells 8 bars, not 16
+
+**What the Bible asks for.** OUTRO has no legal exit (the set is ending)
+and holds a 16-bar minimum dwell.
+
+**Why it's deviated from.** Josh (2026-10-25): "Outro and break can look
+similar, as long as being an outro doesn't stop another build-up within
+that song. A DJ can transition during a break; it's just the quiet part of
+it." LiveReact has no way to know a set is ending versus a breakdown
+between two drops, and `core/metronome.py` has deliberately un-promoted
+OUTRO on a real energy rise since Phase 2 (see the OUTRO_LOOKBACK_S
+comment). The scorer still graded by the Bible, so every correct exit out
+of a quiet part counted as a TIME-11 and TIME-13 failure (6 tracks on
+2026-10-25).
+
+**What LiveReact does instead.** `sim/score.py`: `MIN_HOLD_BARS["OUTRO"]`
+is 8 (BREAK's), `LEGAL["OUTRO"]` is BREAK's exits plus BREAK itself (the
+un-promotion). The look hold (TIME-02) stays 16 bars for both. No engine
+change; OUTRO remains an overlay on BREAK that a build or drop clears.
+
+**What would change the answer.** A DJ-cued "set ending" signal. Until
+then an outro is a flavour of break.
+
+## D5 — TIME-11 / TIME-02: dwell floors and look holds yield to a labeled section change
+
+**What the Bible asks for.** Every state holds its minimum dwell and every
+look its minimum hold, full stop.
+
+**Why it's deviated from.** Josh (2026-10-25): "have the lights as reactive
+to the music as possible -- less latency between the lights and the music
+will always be approved." The floors exist to stop flapping on a dip, not
+to hold a drop look through a DJ's cut. The two-bar cut exit (D3,
+2026-09-16/17) already follows a real cut early; measured by the Bible's
+floor alone that correct behaviour fails TIME-11 whenever the drop was
+short. Likewise a look that hands over because a labeled breakdown is
+shorter than 16 bars is a correct look, not a flap. And the opening run of
+a track is where the engine stood at power-on, not a decision.
+
+**What LiveReact does instead.** `sim/score.py`: a run (TIME-11) or a look
+(TIME-02) that ends within `SECTION_CHANGE_TOL_BARS` (1 bar) of an
+ear-labeled section edge -- any marker's start, or a drop's labeled end --
+is not scored; only verified markers count (an `est:` guess never excuses
+a short run). The first run of a track is exempt like the last already
+was. A short run with no labeled edge near its end is still flapping and
+still fails. The engine is unchanged: its floors still apply to dips; the
+scorer now agrees that following the music is right.
+
+**What would change the answer.** Nothing foreseen; this encodes the
+project's standing priority (react first, hold only against noise).

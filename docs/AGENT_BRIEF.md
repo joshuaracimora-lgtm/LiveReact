@@ -42,6 +42,29 @@ on its own; it cannot invent a detector, a state, or a look. Knobs:
   default and the module constant to match — change both. Never change a knob's tag or range.
 - Never change a `safety-frozen` or `ear-tuned` value.
 
+## Josh's standing decisions (2026-10-25) -- these answer the open questions in state.json
+
+Josh owns the rules; these are his answers. Do not re-ask them. `docs/bible_integration/SPEC_DEVIATIONS.md`
+D4/D5 has the reasoning; `sim/score.py` already measures this way.
+
+- **Priority: react to the music first.** Less latency between the lights and the music is always
+  approved. A dwell floor or look hold exists to stop flapping on a dip, never to delay following a real
+  cut, drop or section change. Never strobe through silence: if the music cuts while a strobe is running,
+  the lights cut with it, as close to the same instant as possible.
+- **Outro is not a dead end (D4).** An outro is a quiet part; a build or drop may leave it at any time
+  (same rules as BREAK: 8-bar dwell, look held 16 bars). Outro and break may share looks.
+- **Power-on run is exempt (D5).** The opening run of a track is not scored by TIME-11/TIME-02.
+- **Short runs that land on a labeled section change are correct (D5).** TIME-11/TIME-02 skip a run that
+  ends within 1 bar of an ear-labeled marker (or a drop's labeled end). The 8-bar DROP floor and the 2-bar
+  cut exit both stand: the floor is for dips, the cut exit is for real cuts.
+- **PEAK holds through a fade** (commit `79ea278`) is accepted; revisit only on hardware.
+- **One More Time's false builds are expected.** The kick stays at build level through its labeled
+  breakdowns; Josh's manual build key (C) is the answer, not a special case. A build detector that needs
+  a *rising* signal as well as a present kick is welcome IF it gates ACCEPT on its own -- not required.
+- **Open engine item (Josh-approved, any family):** `engines/reactive.py _strobe_rate` fires the DROP/PEAK
+  phrase-tail burst from the bar count alone, so a cut that lands on the last bar of an 8-bar phrase can
+  strobe into silence for up to the 2-bar cut confirmation. Gate the tail burst on the current level too.
+
 ## Study before you build
 
 - `.venv/Scripts/python.exe tools/agent/dump_signals.py tracks/<track>.mp3 --around <marker kind>` prints
