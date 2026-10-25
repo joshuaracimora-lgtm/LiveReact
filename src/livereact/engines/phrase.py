@@ -169,6 +169,17 @@ class PhraseEngine:
             cur = self._current.bucket.value
             if _FAMILY.get(cur) == _FAMILY.get(snap.bucket) and _RANK.get(cur, 0) > _RANK.get(snap.bucket, 0):
                 return
+            # Nor inside a break: the break look holds until the bucket moves
+            # (LIGHTING_BIBLE.md §9.1 "Break: slow, static hue"; break_low_wash's
+            # fail mode "motion/hue churn kills the rest"). A scheduled swap there
+            # starts a look that needs 16 bars (TIME-02) in a break that may end
+            # first -- on the ear-verified set it was cut by the drop after 0.1-8.8
+            # bars every time (SWEETER 32.8/203.7 s, messy 133.7 s). OUTRO is the
+            # same family: a BREAK look under a promoted OUTRO keeps holding too
+            # (the promotion is often a mid-track break, messy 136.1 s), and a
+            # break-family look is still left by the bucket rule or a skip/settle.
+            if _FAMILY.get(snap.bucket) == "break" and _FAMILY.get(cur) == "break":
+                return
         if self._skip_requested or self._bucket_rotation_requested or bars_since_change >= ROTATION_BARS:
             if self._hard_cut_requested:
                 crossfade = 0.0

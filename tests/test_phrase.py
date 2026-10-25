@@ -301,7 +301,10 @@ def test_escalation_mid_crossfade_finishes_it_and_rotates_same_bar():
     rig = load_rig()
     eng = PhraseEngine()
     eng.tick(_snap(0, energy=0.2), rig)
-    eng.tick(_snap(ROTATION_BARS, energy=0.2), rig)  # scheduled break rotation starts a crossfade
+    # the scheduler no longer rotates inside a break (see the break-hold tests
+    # below); a skip (DJ, or the settle after a mix) still starts a crossfade there
+    eng.skip()
+    eng.tick(_snap(ROTATION_BARS, energy=0.2), rig)  # break -> break crossfade starts
     assert eng._next is not None and eng._next.bucket.value == "break"
     eng.tick(_snap(ROTATION_BARS + 1, energy=0.5), rig)  # -> build, mid-crossfade
     assert eng.rotations == 2
@@ -348,3 +351,56 @@ def test_drop_scene_emits_laser_channels_through_the_engine():
     laser = rig.fixture("laser_l")
     c = eng.tick(_snap(2, energy=1.0), rig)
     assert any(c.touched[laser.offset + i] for i in range(12))
+
+
+def test_break_look_holds_for_the_whole_break_without_scheduled_rotation():
+    """A scheduled swap inside a break started a look that needs 16 bars
+    (TIME-02) in a break that ended first -- on the ear-verified tracks it was
+    cut by the drop after 0.1-8.8 bars every time (SWEETER 32.8/203.7 s,
+    messy 133.7 s). LIGHTING_BIBLE.md §9.1: a break is slow with a static hue,
+    so the break look holds until the bucket moves."""
+    from livereact.scenes.library import BreakLowWash
+    rig = load_rig()
+    eng = PhraseEngine()
+    eng.force_scene(BreakLowWash())
+    for bar in range(0, 3 * ROTATION_BARS + 1):
+        eng.tick(_snap(bar, energy=0.2, bucket="break"), rig)
+    assert eng.rotations == 0 and eng._current.name == BreakLowWash().name
+
+
+def test_break_look_also_holds_under_a_promoted_outro():
+    """OUTRO is in the break family: an OUTRO promoted under a BREAK look (often
+    a mid-track break, messy 136.1 s) keeps the look instead of swapping in an
+    outro look the next drop cuts short."""
+    from livereact.scenes.library import BreakLowWash
+    rig = load_rig()
+    eng = PhraseEngine()
+    eng.force_scene(BreakLowWash())
+    eng.tick(_snap(0, energy=0.2, bucket="break"), rig)
+    for bar in range(1, 3 * ROTATION_BARS + 1):
+        eng.tick(_snap(bar, energy=0.2, bucket="outro"), rig)
+    assert eng.rotations == 0
+
+
+def test_skip_still_rotates_a_break_look():
+    """The hold is on the scheduler only: a DJ skip (or the settle after a mix)
+    still changes the break look once its own min_hold_bars has passed."""
+    from livereact.scenes.library import BreakLowWash
+    rig = load_rig()
+    eng = PhraseEngine()
+    eng.force_scene(BreakLowWash())
+    eng.tick(_snap(0, energy=0.2, bucket="break"), rig)
+    eng.skip()
+    eng.tick(_snap(16, energy=0.2, bucket="break"), rig)
+    assert eng.rotations == 1
+
+
+def test_break_look_still_leaves_when_the_bucket_leaves_the_break():
+    from livereact.scenes.library import BreakLowWash
+    rig = load_rig()
+    eng = PhraseEngine()
+    eng.force_scene(BreakLowWash())
+    for bar in range(0, ROTATION_BARS + 4):
+        eng.tick(_snap(bar, energy=0.2, bucket="break"), rig)
+    eng.tick(_snap(ROTATION_BARS + 4, energy=1.0, bucket="drop"), rig)
+    assert eng.rotations == 1 and eng._current.bucket.value == "drop"
