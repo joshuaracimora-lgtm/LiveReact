@@ -1,0 +1,76 @@
+{
+  "stopped": "wall-clock budget",
+  "trials": 66,
+  "accepted": 2,
+  "hours": 1.52,
+  "baseline": {
+    "tuning": {
+      "n": 7,
+      "compliance": 0.3226,
+      "critical_fails": 26,
+      "blocked": 7,
+      "quality": {
+        "distinct_looks": 4.286,
+        "brightness_dynamic_range": 0.798,
+        "fixture_utilization": 1.0,
+        "drop_response_mean": 0.006
+      }
+    },
+    "holdout": {
+      "n": 3,
+      "compliance": 0.32,
+      "critical_fails": 11,
+      "blocked": 3,
+      "quality": {
+        "distinct_looks": 4.0,
+        "brightness_dynamic_range": 0.803,
+        "fixture_utilization": 1.0,
+        "drop_response_mean": 0.376
+      }
+    }
+  },
+  "best": {
+    "tuning": {
+      "n": 7,
+      "compliance": 0.367,
+      "critical_fails": 23,
+      "blocked": 7,
+      "quality": {
+        "distinct_looks": 4.429,
+        "brightness_dynamic_range": 0.802,
+        "fixture_utilization": 1.0,
+        "drop_response_mean": 0.009
+      }
+    },
+    "holdout": {
+      "n": 3,
+      "compliance": 0.32,
+      "critical_fails": 11,
+      "blocked": 3,
+      "quality": {
+        "distinct_looks": 3.667,
+        "brightness_dynamic_range": 0.801,
+        "fixture_utilization": 1.0,
+        "drop_response_mean": 0.376
+      }
+    }
+  },
+  "best_params": {
+    "ROLL_ARM_MIN_S": 1.8668,
+    "ROTATION_BARS": 24,
+    "ROLL_ARM_HOLD_BARS": 2.7133,
+    "BUILD_CUE_HOLD_BARS": 25.4393
+  },
+  "tracks": [
+    "messy _laszewo edit_ - A\u030a\u0081aszewo - SoundLoadM.mp3",
+    "Michael_Jackson_-_Thriller_BVRNOUT_Haunted_R.mp3",
+    "Namerakana_2_0_KLICKAUD.mp3",
+    "One_More_Time_Radio_Edit_KLICKAUD.mp3",
+    "Sam Smith, Disclosure - Latch (Original Mix).mp3",
+    "Somebody_To_Love_CHALANT_Close_Friends_Onl-1.mp3",
+    "Sweet_Nothing_2025_Edit_KLICKAUD.mp3",
+    "SWEETER_KLICKAUD.mp3",
+    "Talk_To_You_ft_54_Ultra_KLICKAUD.mp3",
+    "Zedd, Jon Bellion - Beautiful Now (Extended .mp3"
+  ]
+}
