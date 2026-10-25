@@ -364,6 +364,17 @@
       ],
       "note": "how long a build cue stays armed"
     },
+    "PEAK_EXIT_CONFIRM_BARS": {
+      "module": "livereact.core.metronome",
+      "default": 8.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        2.5,
+        8.0
+      ],
+      "note": "bars energy must sit between BREAK_MAX and PEAK's exit line before PEAK de-escalates to DROP (TIME-11); a BREAK-range reading restarts the count (a cut under way goes PEAK -> BREAK directly)"
+    },
     "BREAK_MAX": {
       "module": "livereact.scenes.catalog",
       "default": 0.3,

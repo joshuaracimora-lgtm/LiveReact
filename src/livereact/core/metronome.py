@@ -29,9 +29,10 @@ from collections import deque
 from ..clock import Clock, LoopTimer
 from ..engines import palette as palette_mod
 from ..scenes.base import EnergyBucket
-from .build_rule import AUTO_HOLD_BARS, KickLevelBuildRule
+from .build_rule import AUTO_HOLD_BARS, BUILD_BARS as AUTO_BUILD_BARS, KickLevelBuildRule
 from .rise import RiseDetector
 from .roll_period import RollPeriodDetector
+from ..scenes import catalog as _catalog
 from ..scenes.catalog import _BUCKET_ORDER, BUILD_MAX, LEGAL_TRANSITIONS, bucket_for_energy_with_hysteresis
 from .messages import AudioLevelMessage, BeatMessage, MidiControlMessage, StatusMessage, TransitionMessage
 from .show_state import ShowSnapshot, ShowState
@@ -448,6 +449,32 @@ PEAK_EXIT_MARGIN = 0.10  # once PEAK, stay PEAK until energy_norm falls this far
                          # below BUILD_MAX (see _apply_bucket_overlay) -- this
                          # project's own number, not the Bible's; same size as
                          # the base classifier's downward margin.
+# PEAK's own dwell (2026-10-24, TIME-11): PEAK used to fall back to DROP the
+# tick energy_norm dipped under the exit line, and re-escalate the tick it
+# came back -- on the ten ear-verified tracks that produced DROP runs of
+# 0.1-2 bars between two PEAKs (Latch 94.8/110.4 s, Thriller 114.1 s, messy
+# 185.6 s) and a 2-bar DROP blip on every PEAK -> breakdown (SWEETER 131 s,
+# One More Time 59.9/286 s): the overlay de-escalated at once while the base
+# was still confirming its 2-bar cut exit. Now the EXPOSED state keeps its
+# own clock: DROP must have been exposed for its full dwell before PEAK
+# escalates, PEAK holds its dwell, and a de-escalation needs the low reading
+# to persist PEAK_EXIT_CONFIRM_BARS -- longer than CUT_EXIT_CONFIRM_S, so a
+# real breakdown goes PEAK -> BREAK directly (legal) without the blip.
+#
+# Fade vs. de-escalation (2026-10-25, TIME-11): with a 4-bar confirmation,
+# all nine PEAK -> DROP de-escalations on the ten ear-verified tracks were
+# followed by a BREAK, seven of them within 8 bars (messy 93.8 s 2.8 bars,
+# Latch 253.1 s 0.7, Somebody To Love 45.1 s 1.5, Beautiful Now 164.9 s 1.2,
+# Namerakana 111.6 s 4.8, One More Time 133.5 s 5.6, Thriller 203.7 s 7.3):
+# the energy was FADING INTO the breakdown, not settling at a lower drop
+# level, and the DROP look showed for a few bars before the break look.
+# Two changes: (1) a reading in BREAK range (energy_norm < catalog.BREAK_MAX)
+# is a cut under way -- the base's cut exit will take PEAK -> BREAK directly
+# -- so it holds PEAK and restarts the confirmation; (2) the confirmation is
+# a full DROP dwell (8 bars): the lower section must prove it is a section
+# as long as the DROP state it would enter has to hold. Measured with both:
+# no PEAK -> DROP -> BREAK run under 8 bars remains on the labeled set.
+PEAK_EXIT_CONFIRM_BARS = 8.0  # [CONVENTION], tunable (params.json)
 
 # `transition_likely` heuristic (Bible-integration Phase 3, D1 in
 # docs/bible_integration/SPEC_DEVIATIONS.md's "partial mitigation" note --
@@ -585,6 +612,8 @@ class Metronome(threading.Thread):
         self._base_committed = EnergyBucket.BREAK  # BREAK/BUILD/DROP only -- see EnergyBucket's docstring
         self._base_committed_since = clock.monotonic()
         self._bucket_committed = EnergyBucket.BREAK  # the FULL exposed state (may be PEAK/OUTRO overlay)
+        self._exposed_since = clock.monotonic()      # when _bucket_committed last changed (PEAK's own dwell)
+        self._peak_low_since: float | None = None    # PEAK exposed, energy under its exit line since then
         self._bucket_candidate: EnergyBucket | None = None
         self._bucket_candidate_since: float | None = None
         self._bucket_candidate_bar: int | None = None  # bar the candidate first appeared in -> drop_start_bar
@@ -599,6 +628,13 @@ class Metronome(threading.Thread):
         self._rule_energy_sum = 0.0
         self._rule_n = 0
         self._rule_prev_base = EnergyBucket.BREAK
+        self._auto_build_pending = False             # rule fired inside BREAK's dwell floor; commit when it clears
+        self._auto_build_floor_t = 0.0               # ... at this time (the shown BREAK's start + its dwell)
+        self._auto_build_rule_t = 0.0                # when the rule fired (the cue's hold counts from here)
+        self._rule_bar_t = clock.monotonic()         # when the rule's current bar started
+        self._rule_bars_in_break: deque[bool] = deque(maxlen=AUTO_BUILD_BARS)  # completed bars wholly SHOWN as BREAK
+        self._look_prev = EnergyBucket.BREAK         # look_bucket last tick, and since when (the floor above
+        self._look_since = clock.monotonic()         # counts from the BREAK the SHOW entered, not the base's)
         # hit lead state (see DROP_HIT_LOW_RATIO)
         self._low_avg = 0.0
         self._low_recent: deque[tuple[float, float]] = deque()  # (t, band_low_abs) over INST_PEAK_HOLD_S
@@ -1057,6 +1093,16 @@ class Metronome(threading.Thread):
         self._base_committed_since = now
         self._build_cue_until = None  # the drop the cue was for has landed
 
+    def _bar_s(self) -> float:
+        """One bar at the live tempo (2026-10-24, TIME-11): the dwell floors
+        were bars converted at NOMINAL_BPM, so on a 122-123 BPM track (Latch,
+        One More Time) "8 bars" ran out after 7.6-7.7 real bars."""
+        return 4.0 * 60.0 / (self._bpm if self._bpm > 0 else NOMINAL_BPM)
+
+    def _dwell_s(self, bucket: EnergyBucket) -> float:
+        """PER_STATE_DWELL_BARS[bucket] in seconds at the live tempo."""
+        return PER_STATE_DWELL_BARS[bucket] * self._bar_s()
+
     def _apply_manual_override(self, bucket: EnergyBucket, now: float) -> None:
         """Commit a manual cue (see request_manual_bucket) so that the NEXT
         tick's automated classifier + overlay agree with it, instead of
@@ -1081,15 +1127,18 @@ class Metronome(threading.Thread):
             self._base_committed = base
             self._base_committed_since = now
         if bucket == EnergyBucket.PEAK:
-            self._base_committed_since = now - PER_STATE_DWELL_S[EnergyBucket.DROP]
+            self._base_committed_since = now - self._dwell_s(EnergyBucket.DROP)
         elif bucket == EnergyBucket.OUTRO:
-            self._base_committed_since = now - PER_STATE_DWELL_S[EnergyBucket.BREAK]
+            self._base_committed_since = now - self._dwell_s(EnergyBucket.BREAK)
             self._last_drop_or_peak_t = now  # "after a recent drop" -- the operator says so
         self._apply_bucket_overlay(now)
         if bucket == EnergyBucket.PEAK and self._bucket_committed != EnergyBucket.PEAK:
             # The overlay also wants energy_norm near the top; the cue overrides
-            # that reading for this tick so the look actually lands.
+            # that reading for this tick so the look actually lands -- and,
+            # since 2026-10-24, holds it for PEAK's own dwell like any PEAK.
             self._bucket_committed = EnergyBucket.PEAK
+            self._exposed_since = now
+            self._peak_low_since = None
 
     def _derive_bucket(self, now: float) -> None:
         """Debounce bucket_for_energy's output against the base 3-state
@@ -1269,7 +1318,7 @@ class Metronome(threading.Thread):
                     # two bars of drop-range level, late rather than wrong.
                     confirm_s = AUTO_DROP_CONFIRM_S if raw == EnergyBucket.DROP else FAST_ENTRY_DWELL_S
                 else:
-                    floor_ok = now - self._base_committed_since >= PER_STATE_DWELL_S[self._base_committed]
+                    floor_ok = now - self._base_committed_since >= self._dwell_s(self._base_committed)
                     confirm_s = EXIT_CONFIRM_DWELL_S
                     if self._base_committed == EnergyBucket.DROP:
                         # Sustained-cut exit (2026-09-15, same capture): the
@@ -1376,14 +1425,38 @@ class Metronome(threading.Thread):
         self._rise_on_sum += float(self._audio_high_onset_rate)
         self._rise_n += 1
 
+    def _fire_auto_build(self, now: float) -> None:
+        """Raise core/build_rule.py's automatic cue: BUILD on the next tick.
+
+        Deferred past BREAK's own dwell floor when the rule's kick streak
+        began before the shown BREAK did (2026-10-25, TIME-11): the rule
+        counted its four kick bars from the last bar of the drop it follows,
+        so on One More Time it cued BUILD 3.2 bars into the 140.85 s
+        breakdown (its kick sits at ~0.4x the drop's through the whole
+        breakdown; the next drop is at 232.55 s) -- a BREAK run under its
+        8-bar minimum, LIGHTING_BIBLE.md §9.8 "minimum dwell (before any
+        exit)". Somebody To Love's 177 s cue (four kick bars all inside the
+        break, drop at 184.63 s) is the shape the rule exists for and still
+        fires at once, as do the DJ's C key and every DROP path. The hold
+        still counts from the bar the rule fired: waiting for the floor must
+        not lengthen a build the kick evidence no longer supports."""
+        self._auto_build_pending = False
+        self._build_cue_until = self._auto_build_rule_t + AUTO_BUILD_HOLD_S
+        self._build_cue_source = "auto"
+        self.request_manual_bucket(EnergyBucket.BUILD)
+
     def _derive_build_rule(self, now: float) -> None:
         """core/build_rule.py: feed the completed bar's means on every bar
         change; raise/release the automatic build cue. Runs after
         _derive_bucket so it sees this tick's committed base."""
         rule = self._build_rule
+        look = self.look_bucket
+        if look != self._look_prev:
+            self._look_prev, self._look_since = look, now
         if self._rule_bar is None:
             self._rule_bar = self._bar
         if self._bar != self._rule_bar and self._rule_n > 0:
+            self._rule_bars_in_break.append(look == EnergyBucket.BREAK and self._look_since <= self._rule_bar_t)
             low = self._rule_low_sum / self._rule_n
             energy = self._rule_energy_sum / self._rule_n
             base = self._base_committed
@@ -1393,24 +1466,46 @@ class Metronome(threading.Thread):
                 rule.note_drop_bar(low)
             manual_cue = self._build_cue_until is not None and self._build_cue_source == "dj"
             fresh = self._is_audio_fresh(now)
-            if rule.armed and self._build_cue_until is None:
+            if rule.armed and self._build_cue_until is None and not self._auto_build_pending:
                 rule.released()  # the drop landed (or the hold ran out): the cue is over
             if fresh and not manual_cue and rule.on_bar(low, energy, base == EnergyBucket.BREAK):
-                self._build_cue_until = now + AUTO_BUILD_HOLD_S
-                self._build_cue_source = "auto"
-                self.request_manual_bucket(EnergyBucket.BUILD)
                 log.info("Auto build cue: kick at %.1f vs drop ref %.1f for %d bars", low, rule.ref, self._rule_bar)
+                # Kick bars that all sat inside the shown BREAK are a build's
+                # kick coming back: cue now. A streak that began in the drop's
+                # own last bars is (partly) the drop's kick fading: wait for
+                # BREAK's floor (see _fire_auto_build).
+                clean = len(self._rule_bars_in_break) == AUTO_BUILD_BARS and all(self._rule_bars_in_break)
+                floor_t = (self._look_since + self._dwell_s(EnergyBucket.BREAK)
+                           if look == EnergyBucket.BREAK and not clean else now)
+                self._auto_build_rule_t = now
+                if now >= floor_t:
+                    self._fire_auto_build(now)
+                else:
+                    self._auto_build_pending = True  # see _fire_auto_build
+                    self._auto_build_floor_t = floor_t
             elif rule.release_due():
                 log.info("Auto build cue released: kick gone %d bars without a drop", self._rule_bar)
                 self._build_cue_until = None
                 self._build_cue_source = ""
+                self._auto_build_pending = False
                 rule.released()
             self._rule_prev_base = base
             self._rule_bar = self._bar
+            self._rule_bar_t = now
             self._rule_low_sum = self._rule_energy_sum = 0.0
             self._rule_n = 0
         elif self._bar != self._rule_bar:
             self._rule_bar = self._bar
+            self._rule_bar_t = now
+        if self._auto_build_pending:
+            # An unconfirmed classifier BUILD is still SHOWN as the BREAK
+            # (see look_bucket), so it keeps the cue pending; a drop, a DJ
+            # cue or a release ends it.
+            if (self._base_committed == EnergyBucket.DROP or not rule.armed
+                    or self._build_cue_source == "dj"):
+                self._auto_build_pending = False
+            elif now >= self._auto_build_floor_t and self._is_audio_fresh(now):
+                self._fire_auto_build(now)
         self._rule_low_sum += float(self._audio_band_low_abs)
         self._rule_energy_sum += float(self._energy)
         self._rule_n += 1
@@ -1419,8 +1514,9 @@ class Metronome(threading.Thread):
         """PEAK escalation and OUTRO promotion (see the module-level comment
         above PER_STATE_DWELL_S) -- computed fresh every tick from the base
         classifier's own state, never itself gating the base."""
+        exposed = self._bucket_committed
         if self._base_committed == EnergyBucket.DROP:
-            sustained = now - self._base_committed_since >= PER_STATE_DWELL_S[EnergyBucket.DROP]
+            sustained = now - self._base_committed_since >= self._dwell_s(EnergyBucket.DROP)
             # Hysteresis on the escalation (2026-09-15, replaying recordings/
             # session-20260915-114303 through this code): energy_norm sat
             # within a hair of BUILD_MAX for a real ~10s stretch and the
@@ -1428,8 +1524,27 @@ class Metronome(threading.Thread):
             # identical (PEAK_BOOST is tiny), but every toggle is a bucket
             # change PhraseEngine treats as a reason to consider rotating
             # the look. Same fix shape as the base classifier's own margins.
-            threshold = BUILD_MAX - (PEAK_EXIT_MARGIN if self._bucket_committed == EnergyBucket.PEAK else 0.0)
-            final = EnergyBucket.PEAK if (sustained and self._energy_norm >= threshold) else EnergyBucket.DROP
+            if exposed == EnergyBucket.PEAK:
+                # PEAK's own dwell + a confirmed exit (see PEAK_EXIT_CONFIRM_BARS).
+                if self._energy_norm >= BUILD_MAX - PEAK_EXIT_MARGIN:
+                    self._peak_low_since = None
+                    final = EnergyBucket.PEAK
+                elif self._energy_norm < _catalog.BREAK_MAX:
+                    # A cut under way, not a de-escalation: hold PEAK for the
+                    # base's cut exit (PEAK -> BREAK) and restart the count.
+                    self._peak_low_since = None
+                    final = EnergyBucket.PEAK
+                else:
+                    if self._peak_low_since is None:
+                        self._peak_low_since = now
+                    held = now - self._exposed_since >= self._dwell_s(EnergyBucket.PEAK)
+                    confirmed = now - self._peak_low_since >= PEAK_EXIT_CONFIRM_BARS * self._bar_s()
+                    final = EnergyBucket.DROP if (held and confirmed) else EnergyBucket.PEAK
+            else:
+                # DROP itself must have been ON SHOW for its dwell -- after a
+                # de-escalation the base's own clock is long past it.
+                drop_held = exposed == EnergyBucket.DROP and now - self._exposed_since >= self._dwell_s(EnergyBucket.DROP)
+                final = EnergyBucket.PEAK if (sustained and drop_held and self._energy_norm >= BUILD_MAX) else EnergyBucket.DROP
         elif self._base_committed == EnergyBucket.BREAK:
             # Sustained-dwell requirement added 2026-09-13 (first real
             # --hardware --record session): PEAK escalation above already
@@ -1444,17 +1559,28 @@ class Metronome(threading.Thread):
             # BREAK's own dwell floor first (same symmetry as DROP->PEAK)
             # gives a fresh break a real chance to just be BREAK before
             # this heuristic even considers promoting it.
-            sustained = now - self._base_committed_since >= PER_STATE_DWELL_S[EnergyBucket.BREAK]
+            sustained = now - self._base_committed_since >= self._dwell_s(EnergyBucket.BREAK)
             recent_drop = (
                 self._last_drop_or_peak_t is not None
                 and now - self._last_drop_or_peak_t <= OUTRO_LOOKBACK_S
             )
-            final = EnergyBucket.OUTRO if (sustained and recent_drop) else EnergyBucket.BREAK
+            # A pending automatic build cue (see _fire_auto_build) means the
+            # kick is back at build level: whatever this is, it isn't an outro.
+            final = (EnergyBucket.OUTRO if (sustained and recent_drop and not self._auto_build_pending)
+                     else EnergyBucket.BREAK)
+        elif exposed == EnergyBucket.PEAK:
+            # BUILD has no overlay, but PEAK -> BUILD is not a legal move
+            # (LIGHTING_BIBLE.md's matrix): step through DROP, which is.
+            final = EnergyBucket.DROP
         else:  # BUILD has no overlay
             final = self._base_committed
 
         if final in (EnergyBucket.DROP, EnergyBucket.PEAK):
             self._last_drop_or_peak_t = now
+        if final != exposed:
+            self._exposed_since = now
+        if final != EnergyBucket.PEAK:
+            self._peak_low_since = None
         self._bucket_committed = final
 
         dwelling_long = (

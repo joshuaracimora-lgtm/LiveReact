@@ -26,7 +26,6 @@ from livereact.core.metronome import (
     AUTO_DROP_CONFIRM_S,
     FAST_ENTRY_DWELL_S,
     Metronome,
-    PER_STATE_DWELL_S,
 )
 from livereact.core.show_state import ShowState
 from livereact.scenes.base import EnergyBucket
@@ -449,7 +448,7 @@ def test_drop_falls_back_to_build_only_after_two_bars_of_build_range_energy():
     clock.advance(CUT_EXIT_CONFIRM_S + 0.1)
     m._derive_bucket(clock.monotonic())
     assert m._base_committed == EnergyBucket.BUILD  # well before DROP's own 8-bar floor
-    assert clock.monotonic() < PER_STATE_DWELL_S[EnergyBucket.DROP]
+    assert clock.monotonic() < m._dwell_s(EnergyBucket.DROP)
 
 
 def test_a_drop_dip_shorter_than_the_cut_confirmation_never_becomes_a_build():
@@ -485,10 +484,119 @@ def test_drop_escalates_to_peak_after_sustained_dwell():
     m._derive_bucket(clock.monotonic())
     assert m._bucket_committed == EnergyBucket.DROP  # not yet -- hasn't sustained DROP's own dwell
 
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.DROP])  # now past DROP's own floor, still DROP-range
+    clock.advance(m._dwell_s(EnergyBucket.DROP))  # now past DROP's own floor, still DROP-range
     m._derive_bucket(clock.monotonic())
     assert m._bucket_committed == EnergyBucket.PEAK
     assert m._base_committed == EnergyBucket.DROP  # base classifier itself is untouched by the overlay
+
+
+def _to_peak(clock, m):
+    """Commit DROP, hold it for its dwell, escalate to PEAK, then sit past
+    PEAK's own dwell so only the exit confirmation holds it."""
+    m._energy_norm = 0.9
+    m._derive_bucket(clock.monotonic())
+    clock.advance(AUTO_DROP_CONFIRM_S + 0.5)
+    m._derive_bucket(clock.monotonic())
+    clock.advance(m._dwell_s(EnergyBucket.DROP) + 0.1)
+    m._derive_bucket(clock.monotonic())
+    assert m._bucket_committed == EnergyBucket.PEAK
+    clock.advance(m._dwell_s(EnergyBucket.PEAK))
+    m._derive_bucket(clock.monotonic())
+    assert m._bucket_committed == EnergyBucket.PEAK
+
+
+def _run(clock, m, seconds, dt=0.1):
+    seen = set()
+    for _ in range(int(round(seconds / dt))):
+        clock.advance(dt)
+        m._derive_bucket(clock.monotonic())
+        seen.add(m._bucket_committed)
+    return seen
+
+
+def test_dwell_floors_are_bars_at_the_live_tempo():
+    """2026-10-24 (TIME-11): 8 bars at 122 BPM is longer than at 128 BPM."""
+    clock = FakeClock()
+    m = _metronome(clock)
+    m._bpm = 122.0
+    assert m._dwell_s(EnergyBucket.DROP) == pytest.approx(8 * 4 * 60.0 / 122.0)
+    m._bpm = 0.0  # no tempo yet: the nominal one
+    assert m._dwell_s(EnergyBucket.DROP) == pytest.approx(8 * 4 * 60.0 / 128.0)
+
+
+def test_peak_holds_through_a_short_dip_instead_of_blipping_to_drop():
+    """Latch 94.8 s / Thriller 114.1 s: a one-bar dip under the PEAK exit
+    line used to expose DROP for under a bar between two PEAKs."""
+    clock = FakeClock()
+    m = _metronome(clock)
+    _to_peak(clock, m)
+    m._energy_norm = 0.67  # DROP range for the base (floor ~0.65), under the PEAK exit line (0.70)
+    assert _run(clock, m, m._bar_s()) == {EnergyBucket.PEAK}
+    m._energy_norm = 0.9
+    assert _run(clock, m, 0.1) == {EnergyBucket.PEAK}
+
+
+def test_peak_de_escalates_to_drop_only_after_a_full_drop_dwell_of_lower_level():
+    """2026-10-25: the lower section must last as long as the DROP it would
+    enter has to hold (PEAK_EXIT_CONFIRM_BARS = 8)."""
+    from livereact.core.metronome import PEAK_EXIT_CONFIRM_BARS
+    clock = FakeClock()
+    m = _metronome(clock)
+    _to_peak(clock, m)
+    m._energy_norm = 0.67
+    m._derive_bucket(clock.monotonic())
+    assert _run(clock, m, PEAK_EXIT_CONFIRM_BARS * m._bar_s() - 0.3) == {EnergyBucket.PEAK}
+    _run(clock, m, 0.4)
+    assert m._bucket_committed == EnergyBucket.DROP
+    # ... and DROP must now be on show for its own dwell before PEAK again
+    m._energy_norm = 0.9
+    assert _run(clock, m, 1.0) == {EnergyBucket.DROP}
+
+
+def test_a_break_range_reading_under_peak_is_a_cut_and_restarts_the_count():
+    """2026-10-25 (TIME-11): every PEAK -> DROP on the ear-verified tracks
+    was the energy fading into a breakdown (One More Time 133.5 s, messy
+    93.8 s, Latch 253.1 s ...). A reading in BREAK range holds PEAK and
+    restarts the de-escalation count."""
+    from livereact.core.metronome import PEAK_EXIT_CONFIRM_BARS
+    clock = FakeClock()
+    m = _metronome(clock)
+    _to_peak(clock, m)
+    confirm_s = PEAK_EXIT_CONFIRM_BARS * m._bar_s()
+    m._energy_norm = 0.67
+    assert _run(clock, m, confirm_s - 1.0) == {EnergyBucket.PEAK}
+    m._energy_norm = 0.2  # one tick in BREAK range: a cut under way, not a lower drop
+    assert _run(clock, m, 0.1) == {EnergyBucket.PEAK}
+    m._energy_norm = 0.67
+    assert _run(clock, m, confirm_s - 0.3) == {EnergyBucket.PEAK}  # the count started over
+    _run(clock, m, 0.5)
+    assert m._bucket_committed == EnergyBucket.DROP
+
+
+def test_a_breakdown_goes_peak_to_break_without_a_drop_blip():
+    """SWEETER 131 s / One More Time 59.9 s: the base's 2-bar cut exit wins
+    over PEAK's exit confirmation, so DROP never shows in between."""
+    clock = FakeClock()
+    m = _metronome(clock)
+    _to_peak(clock, m)
+    m._energy_norm = 0.05
+    seen = _run(clock, m, CUT_EXIT_CONFIRM_S + 1.0)
+    assert m._base_committed == EnergyBucket.BREAK
+    assert seen == {EnergyBucket.PEAK, EnergyBucket.BREAK}
+
+
+def test_peak_never_exposes_an_illegal_move_to_build():
+    """PEAK -> BUILD is not in the bible's matrix: a base DROP -> BUILD under
+    a held PEAK steps through DROP (legal both ways)."""
+    from livereact.scenes.catalog import LEGAL_TRANSITIONS
+    clock = FakeClock()
+    m = _metronome(clock)
+    _to_peak(clock, m)
+    m._base_committed = EnergyBucket.BUILD  # the base's confirmed DROP -> BUILD exit (D3)
+    m._apply_bucket_overlay(clock.monotonic())
+    assert m._bucket_committed == EnergyBucket.DROP
+    assert EnergyBucket.DROP in LEGAL_TRANSITIONS[EnergyBucket.PEAK]
+    assert EnergyBucket.BUILD in LEGAL_TRANSITIONS[EnergyBucket.DROP]
 
 
 def test_break_promotes_to_outro_after_a_recent_drop_then_reverts():
@@ -501,7 +609,7 @@ def test_break_promotes_to_outro_after_a_recent_drop_then_reverts():
     assert m._bucket_committed == EnergyBucket.DROP
 
     m._energy_norm = 0.1  # fall legally to BREAK
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.DROP])  # DROP's own floor must clear before any exit
+    clock.advance(m._dwell_s(EnergyBucket.DROP))  # DROP's own floor must clear before any exit
     m._derive_bucket(clock.monotonic())
     clock.advance(CUT_EXIT_CONFIRM_S + 0.1)  # DROP -> BREAK always takes the 2-bar confirmation (2026-09-16)
     m._derive_bucket(clock.monotonic())
@@ -514,7 +622,7 @@ def test_break_promotes_to_outro_after_a_recent_drop_then_reverts():
     # NOT promoted yet, right at BREAK's commit.
     assert m._bucket_committed == EnergyBucket.BREAK
 
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.BREAK])  # BREAK's own floor now clears too
+    clock.advance(m._dwell_s(EnergyBucket.BREAK))  # BREAK's own floor now clears too
     m._derive_bucket(clock.monotonic())
     assert m._bucket_committed == EnergyBucket.OUTRO  # NOW promoted -- sustained AND a drop was recent
 
@@ -534,7 +642,7 @@ def test_a_fast_recovering_break_never_gets_promoted_to_outro_at_all():
     m._derive_bucket(clock.monotonic())
 
     m._energy_norm = 0.1  # fall to BREAK
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.DROP])
+    clock.advance(m._dwell_s(EnergyBucket.DROP))
     m._derive_bucket(clock.monotonic())
     clock.advance(CUT_EXIT_CONFIRM_S + 0.1)  # DROP -> BREAK always takes the 2-bar confirmation (2026-09-16)
     m._derive_bucket(clock.monotonic())
@@ -565,11 +673,11 @@ def test_outro_does_not_illegally_block_a_real_second_build():
     clock.advance(AUTO_DROP_CONFIRM_S + 1.0)
     m._derive_bucket(clock.monotonic())
     m._energy_norm = 0.1
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.DROP])  # DROP's own floor must clear before any exit
+    clock.advance(m._dwell_s(EnergyBucket.DROP))  # DROP's own floor must clear before any exit
     m._derive_bucket(clock.monotonic())
     clock.advance(CUT_EXIT_CONFIRM_S + 0.1)  # DROP -> BREAK always takes the 2-bar confirmation (2026-09-16)
     m._derive_bucket(clock.monotonic())
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.BREAK])  # BREAK's own sustained-dwell floor (2026-09-13 fix)
+    clock.advance(m._dwell_s(EnergyBucket.BREAK))  # BREAK's own sustained-dwell floor (2026-09-13 fix)
     m._derive_bucket(clock.monotonic())
     assert m._bucket_committed == EnergyBucket.OUTRO
 
@@ -612,10 +720,11 @@ def test_manual_override_to_an_overlay_state_holds_and_never_crashes(cue):
         clock.advance(0.1)
         m._derive_bucket(clock.monotonic())  # used to raise here
         assert m._base_committed in (EnergyBucket.BREAK, EnergyBucket.BUILD, EnergyBucket.DROP)
-    # OUTRO's overlay holds on its own (a recent drop + a sustained break, both
-    # set by the cue); PEAK's additionally reads energy_norm, which is 0 here,
-    # so after the cue tick it correctly falls back to its DROP base.
-    assert m._bucket_committed == (EnergyBucket.OUTRO if cue == EnergyBucket.OUTRO else EnergyBucket.DROP)
+    # Both hold: OUTRO's overlay on its own (a recent drop + a sustained break,
+    # both set by the cue); PEAK since 2026-10-24 holds its own dwell (the cue
+    # used to fall back to DROP on the next tick), and energy_norm 0 reads as
+    # a cut under way, which waits for the base's exit (2026-10-25).
+    assert m._bucket_committed == cue
 
 
 def test_manual_drop_override_captures_the_drop_bookkeeping():
@@ -643,7 +752,7 @@ def test_classifier_uses_the_declared_legal_transition_matrix():
     clock.advance(AUTO_DROP_CONFIRM_S + 0.5)
     m._derive_bucket(clock.monotonic())
     assert m._base_committed == EnergyBucket.DROP
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.DROP])
+    clock.advance(m._dwell_s(EnergyBucket.DROP))
     LEGAL_TRANSITIONS[EnergyBucket.DROP].discard(EnergyBucket.BUILD)
     try:
         m._energy_norm = 0.5  # BUILD range, well clear of the downward margin
@@ -759,7 +868,7 @@ def test_a_sustained_cut_exits_the_drop_before_its_dwell_floor():
     floor held full drop lighting over ~8s of quiet ("break setting didn't
     work"). A BREAK-range reading that persists CUT_EXIT_CONFIRM_S is a
     real breakdown and may leave DROP early; a shorter dip may not."""
-    from livereact.core.metronome import CUT_EXIT_CONFIRM_S, PER_STATE_DWELL_S
+    from livereact.core.metronome import CUT_EXIT_CONFIRM_S
     clock = FakeClock()
     m = _metronome(clock)
     m._energy_norm = 0.9
@@ -776,7 +885,7 @@ def test_a_sustained_cut_exits_the_drop_before_its_dwell_floor():
     clock.advance(CUT_EXIT_CONFIRM_S * 0.5 + 0.1)
     m._derive_bucket(clock.monotonic())
     assert m._base_committed == EnergyBucket.BREAK  # sustained -> out, ~4s in, not 15s
-    assert clock.monotonic() < PER_STATE_DWELL_S[EnergyBucket.DROP]
+    assert clock.monotonic() < m._dwell_s(EnergyBucket.DROP)
 
 
 # --- Bible-integration Phase 3: transition_likely heuristic -----------------
@@ -926,7 +1035,7 @@ def test_a_one_bar_gap_past_the_drop_floor_does_not_exit_the_drop():
     clock.advance(AUTO_DROP_CONFIRM_S + 0.1)
     m._derive_bucket(clock.monotonic())
     assert m._base_committed == EnergyBucket.DROP
-    clock.advance(PER_STATE_DWELL_S[EnergyBucket.DROP] + 1.0)  # well past the floor
+    clock.advance(m._dwell_s(EnergyBucket.DROP) + 1.0)  # well past the floor
     m._derive_bucket(clock.monotonic())
 
     m._energy_norm = 0.05  # the gap
@@ -993,7 +1102,7 @@ def test_build_cue_second_press_cancels_and_the_hold_times_out():
     clock.advance(BUILD_CUE_HOLD_S + 0.1)
     m._derive_bucket(clock.monotonic())
     assert not m.build_cue_active  # timed out: the energy classifier is back in charge
-    clock.advance(EXIT_CONFIRM_DWELL_S + PER_STATE_DWELL_S[EnergyBucket.BUILD] + 0.5)
+    clock.advance(EXIT_CONFIRM_DWELL_S + m._dwell_s(EnergyBucket.BUILD) + 0.5)
     m._derive_bucket(clock.monotonic())
     assert m._base_committed == EnergyBucket.BREAK
 
@@ -1378,7 +1487,7 @@ def test_a_sustained_post_drop_bed_becomes_a_build():
         m._derive_bucket(clock.monotonic())
         clock.advance(0.1)
     assert m._base_committed == EnergyBucket.BUILD
-    assert clock.monotonic() < PER_STATE_DWELL_S[EnergyBucket.DROP]
+    assert clock.monotonic() < m._dwell_s(EnergyBucket.DROP)
 
 
 def test_on_audio_copies_the_onset_rate_to_the_snapshot():

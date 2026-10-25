@@ -1,17 +1,21 @@
 {
   "params": {},
   "rules": "72b91cba1220",
+  "seed_range": [
+    0.0795,
+    0.8728
+  ],
   "summary": {
     "tuning": {
       "n": 7,
-      "compliance": 0.338,
-      "critical_fails": 25,
+      "compliance": 0.3523,
+      "critical_fails": 24,
       "blocked": 7,
       "quality": {
         "distinct_looks": 4.286,
-        "brightness_dynamic_range": 0.796,
+        "brightness_dynamic_range": 0.798,
         "fixture_utilization": 1.0,
-        "drop_response_mean": 0.007
+        "drop_response_mean": 0.006
       }
     },
     "holdout": {
@@ -21,60 +25,13 @@
       "blocked": 3,
       "quality": {
         "distinct_looks": 3.333,
-        "brightness_dynamic_range": 0.801,
+        "brightness_dynamic_range": 0.803,
         "fixture_utilization": 1.0,
         "drop_response_mean": 0.376
       }
     }
   },
   "tracks": [
-    {
-      "track": "messy _laszewo edit_ - A\u030a\u0081aszewo - SoundLoadM.mp3",
-      "holdout": false,
-      "status": "BLOCKED",
-      "compliance": 0.414,
-      "verdicts": {
-        "TIME-11": "FAIL",
-        "TIME-02": "PASS",
-        "TIME-13": "FAIL",
-        "TIME-04": "FAIL",
-        "TIME-05": "FAIL",
-        "LOOK-05": "PASS",
-        "TIME-06": "FAIL",
-        "TIME-21": "PASS",
-        "LOOK-03": "NOT_SCORED",
-        "SAFE-04": "PASS",
-        "SAFE-09": "UNVERIFIABLE_IN_SIM",
-        "SAFE-01": "UNVERIFIABLE_IN_SIM",
-        "SAFE-02": "UNVERIFIABLE_IN_SIM",
-        "SAFE-03": "UNVERIFIABLE_IN_SIM",
-        "SAFE-05": "UNVERIFIABLE_IN_SIM",
-        "SAFE-06": "UNVERIFIABLE_IN_SIM",
-        "STRUCT-01": "NOT_SCORED",
-        "STRUCT-02": "PASS",
-        "STRUCT-03": "FAIL",
-        "STRUCT-04": "NOT_SCORED",
-        "STRUCT-07": "NOT_SCORED",
-        "STRUCT-08": "NOT_SCORED",
-        "STRUCT-09": "NOT_SCORED",
-        "STRUCT-05": "FAIL",
-        "STRUCT-06": "NOT_SCORED"
-      },
-      "quality": {
-        "distinct_looks": 4,
-        "look_changes": 6,
-        "brightness_dynamic_range": 0.861,
-        "fixture_utilization": 1.0,
-        "bucket_coverage": [
-          "BREAK",
-          "DROP",
-          "OUTRO",
-          "PEAK"
-        ],
-        "drop_response_mean": 0.0
-      },
-      "frames_digest": "1ea03fd4b61cc8c5454c244d226a259dbb3aef3064bc68774c9f3fec43ddb43e"
-    },
     {
       "track": "Michael_Jackson_-_Thriller_BVRNOUT_Haunted_R.mp3",
       "holdout": false,
@@ -118,9 +75,9 @@
           "OUTRO",
           "PEAK"
         ],
-        "drop_response_mean": -0.085
+        "drop_response_mean": -0.075
       },
-      "frames_digest": "47b3abac1a02c9434f3e569c83bb5634fdae520a9dd955da85e4c41b54e500c2"
+      "frames_digest": "d045169584d484b2a205fd5600067daa41dbe3b19afed9acc04caab314fd2ed1"
     },
     {
       "track": "Namerakana_2_0_KLICKAUD.mp3",
@@ -157,7 +114,7 @@
       "quality": {
         "distinct_looks": 4,
         "look_changes": 7,
-        "brightness_dynamic_range": 0.736,
+        "brightness_dynamic_range": 0.739,
         "fixture_utilization": 1.0,
         "bucket_coverage": [
           "BREAK",
@@ -166,15 +123,15 @@
         ],
         "drop_response_mean": null
       },
-      "frames_digest": "24e471b5a0939fd665d9af42ab34c0007ddd1c85ef88c6d55b6745f07e0b71ad"
+      "frames_digest": "5bf6562afcb224f8a101e0d80eec3146e5cabdd7ccc73b3ad25a773d71d4a0c3"
     },
     {
       "track": "One_More_Time_Radio_Edit_KLICKAUD.mp3",
       "holdout": false,
       "status": "BLOCKED",
-      "compliance": 0.4,
+      "compliance": 0.5,
       "verdicts": {
-        "TIME-11": "FAIL",
+        "TIME-11": "PASS",
         "TIME-02": "FAIL",
         "TIME-13": "PASS",
         "TIME-04": "FAIL",
@@ -213,148 +170,7 @@
         ],
         "drop_response_mean": 0.086
       },
-      "frames_digest": "ef4796506150d7c5e99b1cebc9a77be4d3b1b442399730f1a868eb2c9198f2d3"
-    },
-    {
-      "track": "Sam Smith, Disclosure - Latch (Original Mix).mp3",
-      "holdout": true,
-      "status": "BLOCKED",
-      "compliance": 0.179,
-      "verdicts": {
-        "TIME-11": "FAIL",
-        "TIME-02": "FAIL",
-        "TIME-13": "FAIL",
-        "TIME-04": "FAIL",
-        "TIME-05": "FAIL",
-        "LOOK-05": "FAIL",
-        "TIME-06": "FAIL",
-        "TIME-21": "PASS",
-        "LOOK-03": "NOT_SCORED",
-        "SAFE-04": "PASS",
-        "SAFE-09": "UNVERIFIABLE_IN_SIM",
-        "SAFE-01": "UNVERIFIABLE_IN_SIM",
-        "SAFE-02": "UNVERIFIABLE_IN_SIM",
-        "SAFE-03": "UNVERIFIABLE_IN_SIM",
-        "SAFE-05": "UNVERIFIABLE_IN_SIM",
-        "SAFE-06": "UNVERIFIABLE_IN_SIM",
-        "STRUCT-01": "NOT_SCORED",
-        "STRUCT-02": "NOT_SCORED",
-        "STRUCT-03": "FAIL",
-        "STRUCT-04": "NOT_SCORED",
-        "STRUCT-07": "NOT_SCORED",
-        "STRUCT-08": "FAIL",
-        "STRUCT-09": "NOT_SCORED",
-        "STRUCT-05": "FAIL",
-        "STRUCT-06": "NOT_SCORED"
-      },
-      "quality": {
-        "distinct_looks": 3,
-        "look_changes": 5,
-        "brightness_dynamic_range": 0.861,
-        "fixture_utilization": 1.0,
-        "bucket_coverage": [
-          "BREAK",
-          "DROP",
-          "OUTRO",
-          "PEAK"
-        ],
-        "drop_response_mean": 0.439
-      },
-      "frames_digest": "c83433cde8c4bf61167ba48d6a6d777a95ef181c8b9d276d19338a03e9cbafbe"
-    },
-    {
-      "track": "Somebody_To_Love_CHALANT_Close_Friends_Onl-1.mp3",
-      "holdout": false,
-      "status": "BLOCKED",
-      "compliance": 0.343,
-      "verdicts": {
-        "TIME-11": "FAIL",
-        "TIME-02": "FAIL",
-        "TIME-13": "PASS",
-        "TIME-04": "FAIL",
-        "TIME-05": "FAIL",
-        "LOOK-05": "PASS",
-        "TIME-06": "FAIL",
-        "TIME-21": "PASS",
-        "LOOK-03": "NOT_SCORED",
-        "SAFE-04": "PASS",
-        "SAFE-09": "UNVERIFIABLE_IN_SIM",
-        "SAFE-01": "UNVERIFIABLE_IN_SIM",
-        "SAFE-02": "UNVERIFIABLE_IN_SIM",
-        "SAFE-03": "UNVERIFIABLE_IN_SIM",
-        "SAFE-05": "UNVERIFIABLE_IN_SIM",
-        "SAFE-06": "UNVERIFIABLE_IN_SIM",
-        "STRUCT-01": "NOT_SCORED",
-        "STRUCT-02": "PASS",
-        "STRUCT-03": "FAIL",
-        "STRUCT-04": "FAIL",
-        "STRUCT-07": "FAIL",
-        "STRUCT-08": "NOT_SCORED",
-        "STRUCT-09": "NOT_SCORED",
-        "STRUCT-05": "FAIL",
-        "STRUCT-06": "FAIL"
-      },
-      "quality": {
-        "distinct_looks": 5,
-        "look_changes": 16,
-        "brightness_dynamic_range": 0.804,
-        "fixture_utilization": 1.0,
-        "bucket_coverage": [
-          "BREAK",
-          "BUILD",
-          "DROP",
-          "PEAK"
-        ],
-        "drop_response_mean": 0.028
-      },
-      "frames_digest": "2528d374b30a1c69a0df08baf135f131dea4b906c27d759c67835aa1c2651f37"
-    },
-    {
-      "track": "Sweet_Nothing_2025_Edit_KLICKAUD.mp3",
-      "holdout": false,
-      "status": "BLOCKED",
-      "compliance": 0.25,
-      "verdicts": {
-        "TIME-11": "FAIL",
-        "TIME-02": "FAIL",
-        "TIME-13": "FAIL",
-        "TIME-04": "FAIL",
-        "TIME-05": "FAIL",
-        "LOOK-05": "FAIL",
-        "TIME-06": "FAIL",
-        "TIME-21": "PASS",
-        "LOOK-03": "NOT_SCORED",
-        "SAFE-04": "PASS",
-        "SAFE-09": "UNVERIFIABLE_IN_SIM",
-        "SAFE-01": "UNVERIFIABLE_IN_SIM",
-        "SAFE-02": "UNVERIFIABLE_IN_SIM",
-        "SAFE-03": "UNVERIFIABLE_IN_SIM",
-        "SAFE-05": "UNVERIFIABLE_IN_SIM",
-        "SAFE-06": "UNVERIFIABLE_IN_SIM",
-        "STRUCT-01": "NOT_SCORED",
-        "STRUCT-02": "PASS",
-        "STRUCT-03": "FAIL",
-        "STRUCT-04": "FAIL",
-        "STRUCT-07": "FAIL",
-        "STRUCT-08": "FAIL",
-        "STRUCT-09": "PASS",
-        "STRUCT-05": "FAIL",
-        "STRUCT-06": "NOT_SCORED"
-      },
-      "quality": {
-        "distinct_looks": 4,
-        "look_changes": 10,
-        "brightness_dynamic_range": 0.681,
-        "fixture_utilization": 1.0,
-        "bucket_coverage": [
-          "BREAK",
-          "DROP",
-          "OUTRO",
-          "PEAK"
-        ],
-        "drop_response_mean": -0.023
-      },
-      "frames_digest": "417c1a8d06efe9aed57e76877d94bfd3f56645b5388dbd8a6e2c263ed773826b"
+      "frames_digest": "b4aec912c977b6ac150fcad6a29946a3994c2ce926d360e5ca34cebe4c6d0b83"
     },
     {
       "track": "SWEETER_KLICKAUD.mp3",
@@ -401,7 +217,148 @@
         ],
         "drop_response_mean": 0.035
       },
-      "frames_digest": "b2222a82efa169a2f027a91ae68d073f7ce0845a9c29bf5081a2c168d9cf2ad9"
+      "frames_digest": "2a52e0329e5f68b659d01b04bc61bf9ce17e35721fb5a55b2c062e819c288695"
+    },
+    {
+      "track": "Sam Smith, Disclosure - Latch (Original Mix).mp3",
+      "holdout": true,
+      "status": "BLOCKED",
+      "compliance": 0.179,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "FAIL",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "NOT_SCORED",
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "NOT_SCORED",
+        "STRUCT-08": "FAIL",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
+      },
+      "quality": {
+        "distinct_looks": 3,
+        "look_changes": 5,
+        "brightness_dynamic_range": 0.861,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.439
+      },
+      "frames_digest": "d73c564d95aa1f5fb82f4e0f1029542c2e68bba8c6a0c392e53d7af6ee7f862e"
+    },
+    {
+      "track": "Somebody_To_Love_CHALANT_Close_Friends_Onl-1.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.343,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "PASS",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "PASS",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "PASS",
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "FAIL",
+        "STRUCT-07": "FAIL",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "FAIL"
+      },
+      "quality": {
+        "distinct_looks": 5,
+        "look_changes": 15,
+        "brightness_dynamic_range": 0.804,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "BUILD",
+          "DROP",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.013
+      },
+      "frames_digest": "23eb148d90556ccbee59e9f83f4c6391a0252c8892ba45917bc4e54b75cf70a1"
+    },
+    {
+      "track": "Sweet_Nothing_2025_Edit_KLICKAUD.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.25,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "FAIL",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "FAIL",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "PASS",
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "FAIL",
+        "STRUCT-07": "FAIL",
+        "STRUCT-08": "FAIL",
+        "STRUCT-09": "PASS",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
+      },
+      "quality": {
+        "distinct_looks": 4,
+        "look_changes": 10,
+        "brightness_dynamic_range": 0.697,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": -0.023
+      },
+      "frames_digest": "219ced5a62c0e709317337c4e774377ae5d21c3e093f0e2ee398503cfcee1b86"
     },
     {
       "track": "Talk_To_You_ft_54_Ultra_KLICKAUD.mp3",
@@ -438,7 +395,7 @@
       "quality": {
         "distinct_looks": 3,
         "look_changes": 5,
-        "brightness_dynamic_range": 0.807,
+        "brightness_dynamic_range": 0.809,
         "fixture_utilization": 1.0,
         "bucket_coverage": [
           "BREAK",
@@ -448,7 +405,7 @@
         ],
         "drop_response_mean": 0.312
       },
-      "frames_digest": "6b69bdd6054624eec3ac286885f769c9667e2024629d2ce8c5c3c341bef7a1c6"
+      "frames_digest": "1ea977e213d5d910ff2e78b08ae1a2c02c5bcd9be9a239a6b5154e4c74874c03"
     },
     {
       "track": "Zedd, Jon Bellion - Beautiful Now (Extended .mp3",
@@ -496,8 +453,55 @@
         ],
         "drop_response_mean": 0.007
       },
-      "frames_digest": "382d32067c888ecac40e12ef2c5731c608c1af86290df172066d12eac3b667d1"
+      "frames_digest": "6654e1753256fa04198dc5ce8bb7b2f6cb4cc0333cdf349ce89dafa2b6ab410a"
+    },
+    {
+      "track": "messy _laszewo edit_ - A\u030a\u0081aszewo - SoundLoadM.mp3",
+      "holdout": false,
+      "status": "BLOCKED",
+      "compliance": 0.414,
+      "verdicts": {
+        "TIME-11": "FAIL",
+        "TIME-02": "PASS",
+        "TIME-13": "FAIL",
+        "TIME-04": "FAIL",
+        "TIME-05": "FAIL",
+        "LOOK-05": "PASS",
+        "TIME-06": "FAIL",
+        "TIME-21": "PASS",
+        "LOOK-03": "NOT_SCORED",
+        "SAFE-04": "PASS",
+        "SAFE-09": "UNVERIFIABLE_IN_SIM",
+        "SAFE-01": "UNVERIFIABLE_IN_SIM",
+        "SAFE-02": "UNVERIFIABLE_IN_SIM",
+        "SAFE-03": "UNVERIFIABLE_IN_SIM",
+        "SAFE-05": "UNVERIFIABLE_IN_SIM",
+        "SAFE-06": "UNVERIFIABLE_IN_SIM",
+        "STRUCT-01": "NOT_SCORED",
+        "STRUCT-02": "PASS",
+        "STRUCT-03": "FAIL",
+        "STRUCT-04": "NOT_SCORED",
+        "STRUCT-07": "NOT_SCORED",
+        "STRUCT-08": "NOT_SCORED",
+        "STRUCT-09": "NOT_SCORED",
+        "STRUCT-05": "FAIL",
+        "STRUCT-06": "NOT_SCORED"
+      },
+      "quality": {
+        "distinct_looks": 4,
+        "look_changes": 6,
+        "brightness_dynamic_range": 0.861,
+        "fixture_utilization": 1.0,
+        "bucket_coverage": [
+          "BREAK",
+          "DROP",
+          "OUTRO",
+          "PEAK"
+        ],
+        "drop_response_mean": 0.0
+      },
+      "frames_digest": "3f168f36e163c111a286f58e71dc180cf8872e8ad13a405a2cd492b4d97f7821"
     }
   ],
-  "generated": "2026-10-24T03:18:00"
+  "generated": "2026-10-25T11:57:10"
 }

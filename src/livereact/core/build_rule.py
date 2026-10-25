@@ -27,8 +27,8 @@ C key's job; that's the disclosed cost of the zero-false-start bar.
 
 Release guard: the cue holds BUILD against the BREAK reading (same
 mechanism as the C key) but for AUTO_HOLD_BARS, not the DJ cue's 32, and it
-lets go early if the kick leaves the band for KICK_GONE_BARS bars without
-a drop landing -- the pre-drop breath is one or two bars; anything longer
+lets go early if the kick falls under the band for KICK_GONE_BARS bars without
+a drop landing (a kick rising above it is the drop arriving: see on_bar) -- the pre-drop breath is one or two bars; anything longer
 was a breakdown with a soft kick, and the ramp must not sit on it.
 
 Per-bar features only (the bar's mean low-band level and mean energy);
@@ -81,8 +81,13 @@ class KickLevelBuildRule:
     def on_bar(self, low: float, energy: float, base_is_break: bool) -> bool:
         """One completed bar. Returns True on the bar the build cue fires."""
         if self.armed:
-            # Holding: watch for the kick leaving the band without a drop.
-            self._gone = self._gone + 1 if not self.in_band(low) else 0
+            # Holding: watch for the kick leaving the band without a drop --
+            # DOWNWARD only (2026-10-25). A kick climbing above the band is
+            # the drop arriving, not the kick going: on Somebody To Love the
+            # cue raised at 177 s (kick 3.0 vs ref 6.1) was released on the
+            # labeled 184.63 s drop itself, the kick at 4-6 (0.65-1.0x ref)
+            # through the roll, and the show fell back to BREAK on the drop.
+            self._gone = self._gone + 1 if low < KICK_BAND_LO * self.ref else 0
             return False
         if self.ref is None or not base_is_break or energy < MIN_ENERGY or not self.in_band(low):
             self._streak = 0
