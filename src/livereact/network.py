@@ -98,6 +98,31 @@ def has_link_local(addresses: list[tuple[str, str]]) -> bool:
     return any(ip.startswith(LINK_LOCAL_PREFIX) for _, ip in addresses)
 
 
+def link_local_routes() -> list[str]:
+    """Interfaces that own a 169.254/16 route (macOS/Linux ``netstat -rn``).
+
+    More than one is the known cause of "No route to host" when announcing on Pro
+    DJ Link: broadcasts leave via Wi-Fi (en0) instead of the XDJ's cable. Fix:
+    ``sudo route delete 169.254.0.0/16 -ifscope en0``. Returns [] where netstat
+    is unavailable (Windows) or unparsable.
+    """
+    try:
+        import subprocess
+
+        result = subprocess.run(["netstat", "-rn", "-f", "inet"], capture_output=True, text=True, timeout=5)
+    except Exception:  # noqa: BLE001
+        return []
+    owners: list[str] = []
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and (parts[0] == "169.254" or parts[0].startswith("169.254.0.0") or parts[0].startswith("169.254/")):
+            iface = parts[3] if len(parts) >= 4 else "?"
+            # macOS columns: Destination Gateway Flags Netif Expire; Linux: Destination Gateway Genmask Flags ... Iface
+            if iface not in owners:
+                owners.append(iface if len(parts) < 8 else parts[-1])
+    return owners
+
+
 def diagnostics() -> str:
     """A human-readable readiness report for the DJ-Link network."""
     addrs = list_ipv4_addresses()
@@ -110,5 +135,14 @@ def diagnostics() -> str:
             f"  WARNING: No link-local address found. Set the wired NIC to a static "
             f"{RECOMMENDED_HOST_IP}/255.255.0.0 and allow UDP {DJLINK_PORTS} through "
             f"the firewall (see HARDWARE.md)."
+        )
+    routes = link_local_routes()
+    if routes:
+        lines.append(f"  169.254/16 routes on: {', '.join(routes)}")
+    if len(routes) > 1:
+        lines.append(
+            "  WARNING: more than one interface holds a 169.254/16 route — Pro DJ Link "
+            "announces may leave via the wrong NIC ('No route to host'). Fix: "
+            "sudo route delete 169.254.0.0/16 -ifscope en0  (the Wi-Fi one)."
         )
     return "\n".join(lines)

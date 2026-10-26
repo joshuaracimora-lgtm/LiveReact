@@ -61,6 +61,14 @@ def prodj_link_installed() -> bool:
         return False
 
 
+def prodj_nfs_importable() -> bool:
+    """The vendored library's NFS client (rekordbox export fetch from the player)."""
+    try:
+        return importlib.util.find_spec("prodj.network.nfsclient") is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def collect_environment() -> dict:
     return {
         "livereact_version": __version__,
@@ -70,6 +78,8 @@ def collect_environment() -> dict:
         "serial_ports": list_serial_ports(),
         "midi_inputs": list_midi_inputs(),
         "prodj_link_installed": prodj_link_installed(),
+        "prodj_nfs_importable": prodj_nfs_importable(),
+        "construct_version": _dep_version("construct"),
         "network": network_diagnostics(),
     }
 
@@ -84,6 +94,8 @@ def format_report(env: dict) -> str:
     for name, ver in env["dependencies"].items():
         lines.append(f"  {name:16} {ver}")
     lines.append(f"  python-prodj-link {'installed' if env['prodj_link_installed'] else 'NOT installed (git-only)'}")
+    lines.append(f"  prodj NFS client  {'importable' if env.get('prodj_nfs_importable') else 'NOT importable'}"
+                 f"  (construct {env.get('construct_version', '?')})")
     lines.append("")
     lines.append("serial ports:")
     for p in env["serial_ports"]:

@@ -69,6 +69,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--fixture-test", action="store_true", help="Open the manual fixture-test panel (drive raw DMX).")
     p.add_argument("--midi-monitor", action="store_true", help="Print/record incoming MIDI to remap the XDJ, then exit.")
     p.add_argument("--net-check", action="store_true", help="Print Pro DJ Link network diagnostics and exit.")
+    p.add_argument("--pdl-probe", action="store_true",
+                   help="Announce to the XDJ-XZ as rekordbox, print its status packets (track id, play state, "
+                        "beat counter) and exit (Ctrl-C or --duration). Pair with --pdl-fetch / --pdl-dump.")
+    p.add_argument("--pdl-no-announce", action="store_true", help="--pdl-probe: listen passively (A/B test).")
+    p.add_argument("--pdl-fetch", action="store_true",
+                   help="--pdl-probe: pull export.pdb + the loaded track's phrase table over NFS and show a live countdown.")
+    p.add_argument("--pdl-dump", default=None, help="--pdl-probe: save raw status packets + fetched files under DIR.")
     p.add_argument("--doctor", action="store_true", help="Write an environment/device diagnostics report and exit.")
     p.add_argument("--bundle", nargs="?", const="__latest__", default=None,
                    help="Zip a session folder for sharing (default: the latest), then exit.")
@@ -154,6 +161,11 @@ def main(argv: list[str] | None = None) -> int:
         from .network import diagnostics
         print(diagnostics())
         return 0
+    if args.pdl_probe:
+        from .inputs.pdl_probe_live import run_live
+
+        return run_live(interface=args.pdl_interface, announce=not args.pdl_no_announce,
+                        seconds=args.duration, fetch=args.pdl_fetch, dump_dir=args.pdl_dump)
     if args.midi_monitor:
         from .inputs.midi import monitor
 

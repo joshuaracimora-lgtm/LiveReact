@@ -41,6 +41,37 @@ class StatusMessage:
 
 
 @dataclass(frozen=True)
+class DeckStatusMessage:
+    """One CDJ status packet (port 50002) from one deck of the XDJ-XZ (measured).
+
+    Unlike ``StatusMessage`` (which the beat path *infers*), this is the player's
+    own report: which rekordbox track is loaded (``track_id`` + ``slot``), whether
+    it is playing / on air / tempo master, and ``beat_count`` — the absolute beat
+    index from the start of the track on the rekordbox beat grid (None when no
+    analyzed track is loaded). ``beat_count`` + the track's phrase table
+    (``rekordbox/pssi.py``) is what gives real song-structure awareness.
+    Arrives ~5x/s per deck once we have announced ourselves (``inputs/pdl_announce.py``).
+    """
+
+    timestamp: float
+    player: int            # 1 or 2 on the XDJ-XZ
+    track_id: int          # rekordbox database id (0 = nothing loaded)
+    loaded_player: int     # player whose media holds the track (1 on the XZ for both USB slots)
+    slot: str              # "sd" | "usb" | "cd" | "rekordbox" | "empty"  (XZ: USB1 reports as "sd")
+    analyze_type: str      # "rekordbox" | "file" | "cd" | "unknown"
+    play_state: str        # library PlayState name ("playing", "cued", "paused", ...)
+    playing: bool
+    on_air: bool
+    master: bool
+    sync: bool
+    bpm: float             # analyzed tempo (not pitch-adjusted)
+    pitch: float           # actual pitch multiplier (1.0 = neutral)
+    beat_count: int | None
+    beat_in_bar: int       # 1..4
+    source_ip: str = ""
+
+
+@dataclass(frozen=True)
 class MidiControlMessage:
     """One normalized mixer control. ``control`` is a semantic name (e.g.
     ``"crossfader"``, ``"fader_a"``, ``"eq_low_b"``); ``value`` is 0.0-1.0.

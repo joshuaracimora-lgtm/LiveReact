@@ -14,24 +14,33 @@ whichever sub-device just spoke (confirmed by raw capture: player_number cycling
 1 -> 2 -> 33 every ~2s, `33` + `is_mixer` flag being the unit's internal mixer).
 So when a beat packet arrives carrying its own real player_number, the library's
 `getClient(player_number)` lookup misses against the stomped record and the
-packet is silently dropped — even though it's genuinely on the wire. Also
-verified: this unit never broadcasts status packets (port 50002) at all, only
-keepalive (50000) and beat (50001), so on_air/master data isn't available from
-it; a virtual-CDJ presence announcement isn't needed either (the real device
-broadcasts regardless of whether it sees us, and our own vcdj announce failed
-outbound with "No route to host" in testing — moot once we stop needing it).
+packet is silently dropped — even though it's genuinely on the wire.
 
-So: we bind our own sockets on the three PDL ports and parse with the library's
-`packets` module directly. Single-device assumption: whichever player is
-currently sending beat packets is treated as the (de facto) master — there's no
-on_air/master broadcast to arbitrate with on this hardware, and a stopped deck
-simply stops sending beat packets, so "is a beat stream live" doubles as
+STATUS PACKETS (port 50002) — corrected 2026-10-25. The 2026-08-31 capture saw
+only keepalive (50000) and beat (50001) traffic and this module recorded "this
+unit never broadcasts status packets" as a hardware fact. That inference was
+wrong: CDJ status packets are never broadcast — a player *unicasts* them only to
+peers it has seen announce themselves on port 50000 (Deep Symmetry's protocol
+analysis), and our own announce had failed outbound that day ("No route to
+host": two 169.254/16 routes on the Mac). Status packets carry the loaded
+track's rekordbox id, slot, play state, on-air/master bits and an absolute beat
+counter — the key to real song-structure awareness (rekordbox phrase tables on
+the USB, `rekordbox/`). `pdl_announce.py` now announces as a rekordbox-class peer
+and answers the XZ's hello handshake; parsed status arrives here as
+`DeckStatusMessage`. Until verified live, the passive beat path below is still
+the only thing anything downstream depends on, and announce failure degrades to
+exactly the pre-2026-10-25 behaviour.
+
+Single-device assumption for the *beat* path is unchanged: whichever player is
+currently sending beat packets is treated as the (de facto) master; a stopped
+deck simply stops sending beat packets, so "is a beat stream live" doubles as
 "is playing" for this rig.
 
 `python-prodj-link` is git-only (not on PyPI) — install it into the venv before
 using hardware mode:
     pip install "git+https://github.com/flesniak/python-prodj-link@<pinned-sha>"
-(vendoring / pinning a SHA is recommended — docs/06 §4, docs/10 D5.)
+(vendoring / pinning a SHA is recommended — docs/06 §4, docs/10 D5. The copy in
+this Mac's .venv has no dist-info; treat it as the reference copy.)
 """
 
 from __future__ import annotations
@@ -40,9 +49,10 @@ import logging
 import select
 import socket
 import threading
+from typing import Callable
 
 from ..clock import Clock
-from ..core.messages import BeatMessage, StatusMessage
+from ..core.messages import BeatMessage, DeckStatusMessage, StatusMessage
 from .base import InputSource
 
 log = logging.getLogger(__name__)
@@ -51,6 +61,9 @@ NO_DEVICE_WARN_AFTER = 5.0  # seconds
 KEEPALIVE_PORT = 50000
 BEAT_PORT = 50001
 STATUS_PORT = 50002
+NO_TRACK_BEAT_COUNT = 0xFFFFFFFF  # beat_count when no rekordbox-analyzed track is loaded
+
+StatusCallback = Callable[[DeckStatusMessage, bytes], None]
 
 
 class ProDjLinkError(RuntimeError):
@@ -66,19 +79,35 @@ class ProDjLinkListener(InputSource):
         interface: str | None = None,
         player_number: int = 5,
         poll_hz: float = 50.0,
+        *,
+        announce: bool = True,
+        status_callback: StatusCallback | None = None,
+        emit_status: bool = False,
+        phrase_service=None,
     ) -> None:
         self.queue = output_queue
         self.clock = clock
         self.stop_event = stop_event
-        self.interface = interface          # reserved: explicit NIC bind (0.0.0.0 works fine so far)
-        self.player_number = player_number  # reserved: no vcdj identity needed for passive listening
+        self.interface = interface          # NIC name or IP to announce on (default: the 169.254 one)
+        self.player_number = player_number  # legacy; the announcer uses the rekordbox number (17)
         self.poll_hz = poll_hz              # unused now (receive is select()-driven, not polled)
+        self.announce = announce
+        self.status_callback = status_callback
+        self.emit_status = emit_status
+        self.phrase_service = phrase_service  # Stage 2: asked for a phrase table on track change
         self._packets = None
         self._socks: list[socket.socket] = []
         self._thread: threading.Thread | None = None
         self._last_beat_in_bar: int | None = None
         self._seen_device = False
         self._started_at = 0.0
+        self._announcer = None
+        self.identity = None
+        self.last_status: dict[int, DeckStatusMessage] = {}   # per player number
+        self.status_count = 0
+        self.hello_count = 0
+        self.first_status_at: float | None = None
+        self._last_track_key: dict[int, tuple] = {}
 
     @property
     def name(self) -> str:
@@ -89,10 +118,18 @@ class ProDjLinkListener(InputSource):
         self._packets = self._import_packets()
         self._socks = [self._bind(p) for p in (KEEPALIVE_PORT, BEAT_PORT, STATUS_PORT)]
         self._started_at = self.clock.monotonic()
+        if self.announce:
+            self._start_announcer()
         self._thread = threading.Thread(target=self._run, name="prodj-link", daemon=False)
         self._thread.start()
 
     def stop(self) -> None:
+        if self._announcer is not None:
+            try:
+                self._announcer.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            self._announcer = None
         if self._thread is not None:
             self._thread.join(timeout=2.0)
             self._thread = None
@@ -107,9 +144,35 @@ class ProDjLinkListener(InputSource):
     def _bind(port: int) -> socket.socket:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)  # a probe + the app may overlap briefly
+        except (AttributeError, OSError):
+            pass
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         s.bind(("0.0.0.0", port))
         return s
+
+    def _start_announcer(self) -> None:
+        """Announce as a rekordbox-class peer so the XZ unicasts status to us.
+        Any failure here logs a warning and leaves the passive beat path untouched."""
+        try:
+            from .pdl_announce import RekordboxAnnouncer, interface_identity, pin_to_interface
+
+            self.identity = interface_identity(self.interface)
+            pinned = [pin_to_interface(s, self.identity.ifindex) for s in self._socks]
+            self._announcer = RekordboxAnnouncer(
+                self._packets, self._socks[0], self._socks[2], self.identity, self.clock, self.stop_event)
+            self._announcer.start()
+            log.info("Pro DJ Link announcing as rekordbox (player %d) on %s %s mac=%s bcast=%s pinned=%s",
+                     self._announcer.player_number, self.identity.name, self.identity.ip,
+                     self.identity.mac, self.identity.broadcast, any(pinned))
+            if not self.identity.link_local:
+                log.warning("Announcing from a non-link-local address (%s); the XDJ-XZ lives on 169.254.x.x — "
+                            "status packets are unlikely to arrive (see HARDWARE.md §3).", self.identity.ip)
+        except Exception as exc:  # noqa: BLE001 - never fail hardware start over the announce
+            self._announcer = None
+            log.warning("Pro DJ Link announce unavailable (%s); listening passively — "
+                        "beat packets still work, status packets will not arrive.", exc)
 
     # ------------------------------------------------------------------ library glue (VERIFY ON HW)
     def _import_packets(self):
@@ -139,10 +202,10 @@ class ProDjLinkListener(InputSource):
                 break  # sockets closed under us during shutdown
             for s in ready:
                 try:
-                    data, _addr = s.recvfrom(2048)
+                    data, addr = s.recvfrom(2048)
                 except OSError:
                     continue
-                self._handle_packet(s, data)
+                self._handle_packet(s, data, addr)
             if (not self._seen_device and not warned
                     and self.clock.monotonic() - self._started_at > NO_DEVICE_WARN_AFTER):
                 warned = True
@@ -152,15 +215,17 @@ class ProDjLinkListener(InputSource):
                     "50000-50002 (see HARDWARE.md)."
                 )
 
-    def _handle_packet(self, sock: socket.socket, data: bytes) -> None:
+    def _handle_packet(self, sock: socket.socket, data: bytes, addr: tuple[str, int] = ("", 0)) -> None:
         port = sock.getsockname()[1]
         try:
             if port == BEAT_PORT:
                 self._handle_beat(data)
             elif port == KEEPALIVE_PORT:
                 self._seen_device = True
-            # STATUS_PORT: this hardware never sends it (verified) — nothing
-            # downstream depends on it yet, so it's not parsed.
+                if self._announcer is not None and addr[0]:
+                    self._announcer.note_peer(addr[0])
+            elif port == STATUS_PORT:
+                self._handle_status(data, addr)
         except Exception:  # noqa: BLE001 - never let the input thread die on one bad packet
             log.exception("Failed to parse Pro DJ Link packet on port %d", port)
 
@@ -182,8 +247,62 @@ class ProDjLinkListener(InputSource):
         if beat and beat != self._last_beat_in_bar:
             self._last_beat_in_bar = beat
             self.queue.put(BeatMessage(now, beat, bpm, is_master=True, player=player))
-        # No status broadcast from this hardware (verified) -> infer "playing"
-        # from the live beat stream itself; a deck that isn't playing doesn't
-        # send beat packets at all.
+        # Transport for the engines still comes from the live beat stream itself
+        # (a deck that isn't playing doesn't send beat packets at all) — the
+        # status-packet path is additive until Stage 2/3 verify it live.
         self.queue.put(StatusMessage(now, on_air=(player,), master_deck=player,
                                      playing=True, loop_active=False))
+
+    # ------------------------------------------------------------------ status (port 50002)
+    def _handle_status(self, data: bytes, addr: tuple[str, int]) -> None:
+        packet = self._packets.StatusPacket.parse(data)
+        ptype = str(packet.type)
+        if ptype == "rekordbox_hello":
+            self._seen_device = True
+            self.hello_count += 1
+            if self._announcer is not None:
+                self._announcer.reply_hello(addr)
+            return
+        if ptype != "cdj":
+            return
+        self._seen_device = True
+        now = self.clock.monotonic()
+        c = packet.content
+        beat_count = int(c.beat_count)
+        state = c.state
+        play_state = str(c.play_state)
+        msg = DeckStatusMessage(
+            timestamp=now,
+            player=int(packet.player_number),
+            track_id=int(c.track_id),
+            loaded_player=int(c.loaded_player_number),
+            slot=str(c.loaded_slot),
+            analyze_type=str(c.track_analyze_type),
+            play_state=play_state,
+            playing=play_state in self._packets.PlayStatePlaying,
+            on_air=bool(state.on_air),
+            master=bool(state.master),
+            sync=bool(state.sync),
+            bpm=float(c.bpm),
+            pitch=float(c.actual_pitch),
+            beat_count=None if beat_count == NO_TRACK_BEAT_COUNT else beat_count,
+            beat_in_bar=int(c.beat),
+            source_ip=addr[0],
+        )
+        self.status_count += 1
+        if self.first_status_at is None:
+            self.first_status_at = now
+        self.last_status[msg.player] = msg
+        if self._announcer is not None and addr[0]:
+            self._announcer.note_peer(addr[0])
+        key = (msg.source_ip, msg.slot, msg.track_id)
+        if self.phrase_service is not None and msg.track_id and key != self._last_track_key.get(msg.player):
+            self._last_track_key[msg.player] = key
+            try:
+                self.phrase_service.request(msg.source_ip, msg.slot, msg.player, msg.track_id)
+            except Exception:  # noqa: BLE001
+                log.exception("phrase service request failed")
+        if self.status_callback is not None:
+            self.status_callback(msg, data)
+        if self.emit_status:
+            self.queue.put(msg)
