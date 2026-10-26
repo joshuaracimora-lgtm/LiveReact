@@ -17,15 +17,33 @@ RANK = {"PASS": 3, "UNVERIFIABLE_IN_SIM": 2, "NOT_SCORED": 1, "FAIL": 0}
 QUALITY_FLOOR = {"distinct_looks": 0.8, "brightness_dynamic_range": 0.85,
                  "fixture_utilization": 0.9, "drop_response_mean": 0.8}   # fraction of baseline allowed
 MIN_IMPROVEMENT = 0.005                                                    # compliance points on the tuning set
+DROP_OFFSET_TOLERANCE_BARS = 0.25   # drive mode: mean |ear drop - DROP commit| may not grow by more than this
 
 
 def _key(track: str) -> str:
     return unicodedata.normalize("NFC", track)
 
 
+def mode_mismatch(baseline: Evaluation, candidate: Evaluation) -> str | None:
+    """A comparison across modes or across different rekordbox analysis of the scored tracks is meaningless:
+    the caller (gate_head.py) treats this like RULE SET CHANGED and asks for a new baseline."""
+    if baseline.mode != candidate.mode:
+        return (f"mode differs (baseline {baseline.mode}, candidate {candidate.mode}); regenerate the baseline "
+                f"in the mode you are gating")
+    if (baseline.analysis_fingerprint and candidate.analysis_fingerprint
+            and baseline.analysis_fingerprint != candidate.analysis_fingerprint):
+        return (f"rekordbox analysis of the scored tracks changed ({baseline.analysis_fingerprint} -> "
+                f"{candidate.analysis_fingerprint}); regenerate the baseline")
+    return None
+
+
 def compare(baseline: Evaluation, candidate: Evaluation) -> dict:
     reasons: list[str] = []
+    notes: list[str] = []
     b, c = baseline.summary(), candidate.summary()
+    mm = mode_mismatch(baseline, candidate)
+    if mm:
+        reasons.append(mm)
 
     # Both sides must have simulated from the same normalizer seed, or every frame differs for
     # reasons that have nothing to do with the engine (see sim/harness.py SIM_SEED_RANGE). An older
@@ -71,5 +89,36 @@ def compare(baseline: Evaluation, candidate: Evaluation) -> dict:
             if bq and cq is not None and cq < bq * floor:
                 reasons.append(f"{subset} {key} fell {bq} -> {cq} (floor {floor:.0%} of baseline)")
 
-    return {"accept": not reasons, "reasons": reasons, "baseline": b, "candidate": c,
+    # drive mode: the lights must not land further from Josh's drops than before
+    for subset in ("tuning", "holdout"):
+        bo, co = b[subset].get("drop_offset_bars_mean"), c[subset].get("drop_offset_bars_mean")
+        if bo is not None and co is not None and co > bo + DROP_OFFSET_TOLERANCE_BARS:
+            reasons.append(f"{subset} drop placement worse: {bo} -> {co} bars from the ear drops "
+                           f"(tolerance +{DROP_OFFSET_TOLERANCE_BARS})")
+
+    # generalisation: the marker-free sample must not get worse, track by track
+    bs, cs = b.get("sweep", {}), c.get("sweep", {})
+    if baseline.sweep and candidate.sweep:
+        if baseline.sweep_set == candidate.sweep_set:
+            if bs.get("compliance") is not None and cs.get("compliance") is not None \
+                    and cs["compliance"] < bs["compliance"] - 1e-9:
+                reasons.append(f"sweep set (marker-free rules, {cs['n']} USB tracks) regressed {bs['compliance']} -> {cs['compliance']}")
+            sweep_base = {_key(t.track): t for t in baseline.sweep}
+            sweep_regs = []
+            for t in candidate.sweep:
+                bt_ = sweep_base.get(_key(t.track))
+                if bt_ is None:
+                    continue
+                for rule, status in t.verdicts.items():
+                    old = bt_.verdicts.get(rule)
+                    if old is not None and RANK[status] < RANK[old]:
+                        sweep_regs.append(f"{t.track[:28]} {rule} {old}->{status}")
+            if sweep_regs:
+                reasons.append("sweep rule regressions: " + "; ".join(sweep_regs[:6]) + (" ..." if len(sweep_regs) > 6 else ""))
+        else:
+            notes.append("sweep set changed since the baseline; marker-free generalisation not compared")
+    elif candidate.sweep and not baseline.sweep:
+        notes.append("baseline has no sweep set; generalisation not compared")
+
+    return {"accept": not reasons, "reasons": reasons, "notes": notes, "baseline": b, "candidate": c,
             "rule_regressions": len(regressions)}

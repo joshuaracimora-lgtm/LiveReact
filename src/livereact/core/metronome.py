@@ -1770,7 +1770,10 @@ class Metronome(threading.Thread):
         if plan is not None:
             # pinned for the whole track (also through a short status gap): the auto state
             # machine is not advanced, so it resumes cleanly if the plan ever lets go
-            self.palette, self.palette_spot = palette_mod.pick(self.look_bucket.value, plan.palette_seed, 0, 0)
+            bucket = self.look_bucket.value
+            self.palette, self.palette_spot = palette_mod.pick(bucket, plan.palette_seed, 0, 0)
+            if plan.palette and palette_mod.family(bucket) == "drop":
+                self.palette = self.palette_spot = plan.palette   # look notes: the hook's own hue
             return
         self._derive_palette_auto()
 

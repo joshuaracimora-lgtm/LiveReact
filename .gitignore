@@ -34,6 +34,9 @@ logs/
 tracks/*
 !tracks/.gitkeep
 !tracks/*.timeline.json
+!tracks/*.look.json
+# a copy of the rekordbox USB export (audio + PIONEER/ analysis): the harness/agent corpus, never committed
+usb_export/
 results/
 
 # Claude Code per-machine permission grants (written by interactive sessions on any machine)

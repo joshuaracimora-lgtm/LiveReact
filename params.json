@@ -743,6 +743,94 @@
         2
       ],
       "note": "status beat_count -> rekordbox phrase-table beat index; measured on hardware (TESTING.md Test 2b), never searched"
+    },
+    "PLAN_ROLL_WINDOW_BEATS": {
+      "module": "livereact.core.metronome",
+      "default": 32,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        8,
+        64
+      ],
+      "note": "drive mode: a snare-roll start this close before a planned drop commits it early (Josh's drop = the roll)"
+    },
+    "PLAN_HOLD_AFTER_STALE_S": {
+      "module": "livereact.core.metronome",
+      "default": 2.0,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.5,
+        5.0
+      ],
+      "note": "drive mode: plan keeps authority this long past a status dropout"
+    },
+    "BUILD_COUNTIN_BEATS": {
+      "module": "livereact.engines.reactive",
+      "default": 8,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        4,
+        16
+      ],
+      "note": "drive mode: strobe counts in over the last N beats before a planned drop (LOOK-05 exception, rates still clamped)"
+    },
+    "TENSION_LEAD_BEATS": {
+      "module": "livereact.engines.laser_feature",
+      "default": 32,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        8,
+        64
+      ],
+      "note": "drive mode: laser TENSION ramps over the planned count-in"
+    },
+    "PREARM_BEATS": {
+      "module": "livereact.rekordbox.planner",
+      "default": 16,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        4,
+        32
+      ],
+      "note": "planner: drop_armed this many beats before a planned drop"
+    },
+    "MIN_SECTION_BEATS": {
+      "module": "livereact.rekordbox.planner",
+      "default": 32,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        16,
+        64
+      ],
+      "note": "planner: shorter interior break/drop/outro sections are absorbed"
+    },
+    "MIN_BUILD_BEATS": {
+      "module": "livereact.rekordbox.planner",
+      "default": 16,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        8,
+        32
+      ],
+      "note": "planner: shorter builds are absorbed"
+    },
+    "REGULAR_DROP_HIT": {
+      "module": "livereact.rekordbox.planner",
+      "default": 0.92,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        0.85,
+        0.94
+      ],
+      "note": "planner: hit intensity of a drop that is NOT the big moment; must stay under LASER_MIN_HIT_INTENSITY 0.95"
     }
   },
   "_approved": "Tags and ranges approved by Josh 2026-10-22. HOLD_BARS floor raised 2->4 (bible: looks hold 8, 16 in BREAK)."

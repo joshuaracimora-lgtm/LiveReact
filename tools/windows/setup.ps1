@@ -43,6 +43,10 @@ Step "venv + livereact[sim,dev] installed" ($LASTEXITCODE -eq 0) "see pip output
 $n = (Get-ChildItem tracks -Include *.mp3,*.wav,*.flac,*.m4a -Recurse -ErrorAction SilentlyContinue | Measure-Object).Count
 $t = (Get-ChildItem tracks -Filter *.timeline.json -ErrorAction SilentlyContinue | Measure-Object).Count
 Step "audio in tracks\ ($n files, $t timelines)" ($n -gt 0) "copy the tracks folder from the Mac (audio is not in git)"
+# --- 4b. rekordbox USB export copy (the planner-era corpus; docs\HANDOFF_windows_resync.md step 10)
+$usbOk = Test-Path "usb_export\PIONEER\rekordbox\export.pdb"
+Step "usb_export\ (rekordbox USB export copy)" $usbOk "robocopy the stick into usb_export\ (see the resync handoff); the nightly agent will not start without it"
+if ($usbOk) { & .\.venv\Scripts\python.exe tools\harness\import_usb.py --root usb_export --summary 2>&1 | Select-Object -Last 3 }
 
 # --- 5. harness + scorer + params tests
 & $py -m pytest -q tests\test_harness_determinism.py tests\test_scorer.py tests\test_params.py 2>&1 | Select-Object -Last 3

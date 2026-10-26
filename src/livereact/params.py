@@ -73,6 +73,8 @@ def _recompute_derived() -> None:
         fn.__defaults__ = tuple(d)
     r = importlib.import_module("livereact.engines.reactive")
     r.WASH_TRANSITION_WINDOW_S = 3 * r.WASH_CROSSFADE_TAU_S
+    # the metronome imports the planner's regular-drop hit by value at import time
+    m.REGULAR_PLAN_HIT = importlib.import_module("livereact.rekordbox.planner").REGULAR_DROP_HIT
 
 
 def apply(values: dict[str, Any], spec: dict | None = None) -> dict[str, Any]:

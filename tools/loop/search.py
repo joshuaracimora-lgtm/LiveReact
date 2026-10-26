@@ -39,6 +39,9 @@ def main() -> int:
     p.add_argument("--out", default=None)
     p.add_argument("--rig", default="rigs/josh_rig.json")
     p.add_argument("--gestures", default=None)
+    p.add_argument("--usb", default=None, help="rekordbox USB export copy (default: usb_export/ or $LIVEREACT_USB; 'none' = no plans)")
+    p.add_argument("--drive", dest="drive", action="store_true", default=None, help="drive mode (default when a USB export is found)")
+    p.add_argument("--no-drive", dest="drive", action="store_false")
     a = p.parse_args()
     if not Path(a.baseline).exists():
         print(f"no baseline at {a.baseline}; run tools/loop/baseline.py first")
@@ -46,11 +49,14 @@ def main() -> int:
     if not preflight():
         print("PREFLIGHT FAILED: harness is not deterministic; aborting")
         return 3
+    from livereact.loop.evaluate import resolve_usb
     from livereact.loop.search import run_search
+    usb = resolve_usb(a.usb)
+    drive = a.drive if a.drive is not None else usb is not None
     out = a.out or f"results/search/{datetime.now():%Y%m%d-%H%M%S}"
     seed = a.seed if a.seed is not None else int(datetime.now().strftime("%Y%m%d"))
     s = run_search(out, a.baseline, hours=a.hours, max_trials=a.max_trials, patience=a.patience, seed=seed,
-                   rig=a.rig, gestures=a.gestures)
+                   rig=a.rig, gestures=a.gestures, usb=usb, drive=drive)
     print(f"\n{s['stopped'].splitlines()[0]} | {s['trials']} trials, {s['accepted']} accepted | tuning {s['baseline']['tuning']['compliance']} -> {s['best']['tuning']['compliance']} | hold-out {s['baseline']['holdout']['compliance']} -> {s['best']['holdout']['compliance']}")
     print(f"-> {out}/summary.md")
     return 0 if not s["stopped"].startswith("crash") else 2

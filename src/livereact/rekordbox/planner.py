@@ -28,6 +28,7 @@ import logging
 from dataclasses import dataclass, field
 
 from . import mapping
+from .look_notes import LookNotes
 from .pssi import PhraseTable, beat_to_seconds
 from .waveform import ColorWaveform
 
@@ -46,7 +47,12 @@ DEFAULT_SCENE_POOL: dict[str, list[str]] = {
 # drop_hit_intensity targets (core/metronome.py DROP_INTENSITY_FLOOR..CEIL = 0.85..1.0;
 # the laser fan needs >= FAN_MIN_HIT 0.95): the big moment gets the fan, the rest don't.
 BIG_MOMENT_HIT = 1.0
-REGULAR_DROP_HIT = 0.92
+REGULAR_DROP_HIT = 0.92      # params.json knob (tunable): must stay under the laser fan threshold 0.95
+# params.json knobs (tunable); PlanRules reads them at construction so params.apply reaches a plan
+PREARM_BEATS = 16            # drop_armed this many beats before a planned drop (core/metronome.py)
+MIN_SECTION_BEATS = 32       # interior break/drop/outro sections shorter than this (8 bars = TIME-11's
+                             # BREAK/DROP dwell) are absorbed into their predecessor
+MIN_BUILD_BEATS = 16         # builds may be 4 bars
 
 # default section energies when no waveform is available (ranking then falls back to length)
 _KIND_ENERGY = {"drop": 0.8, "build": 0.5, "verse": 0.4, "breakdown": 0.2, "intro": 0.15, "outro": 0.2}
@@ -58,15 +64,11 @@ class PlanRules:
     one_big_moment: bool = True
     builds_count_in: bool = True
     quiet_edges: bool = True
-    prearm_beats: int = 16      # drop_armed this many beats before a planned drop (core/metronome.py);
-                                # the strobe count-in length is engines/reactive.py BUILD_COUNTIN_BEATS and the
-                                # laser tension lead is engines/laser_feature.py TENSION_LEAD_BEATS
-    min_section_beats: int = 32 # interior break/drop/outro sections shorter than this (8 bars = TIME-11's
-                                # BREAK/DROP dwell) are absorbed into their predecessor; builds may be 4 bars
-    min_build_beats: int = 16
-
-
-DEFAULT_RULES = PlanRules()
+    # the strobe count-in length is engines/reactive.py BUILD_COUNTIN_BEATS and the laser tension
+    # lead is engines/laser_feature.py TENSION_LEAD_BEATS; these three read the module knobs above
+    prearm_beats: int = field(default_factory=lambda: PREARM_BEATS)
+    min_section_beats: int = field(default_factory=lambda: MIN_SECTION_BEATS)
+    min_build_beats: int = field(default_factory=lambda: MIN_BUILD_BEATS)
 
 
 @dataclass(frozen=True)
@@ -101,8 +103,10 @@ class TrackPlan:
     hook_scene: str
     sections: tuple[PlannedSection, ...]
     big_moment_index: int | None = None
-    rules: PlanRules = field(default=DEFAULT_RULES)
+    rules: PlanRules = field(default_factory=PlanRules)
     source: str = "rekordbox"
+    palette: str = ""                      # look notes hook_palette: one hue for the drop family, else the seed walk
+    mood_words: tuple[str, ...] = ()       # look notes mood, for the tools / report
 
     def at_beat(self, beat: int) -> tuple[PlannedSection | None, PlannedSection | None]:
         if not self.sections:
@@ -134,6 +138,41 @@ class TrackPlan:
                 + " > ".join(parts))
 
 
+def _look_big_moment(look: LookNotes | None, raw: list[dict], runs: list[list[int]], *, grid, bpm: float) -> list[int] | None:
+    """The drop section Josh named in the look notes, as a run; [] for "none"; None = decide automatically."""
+    if look is None:
+        return None
+    if look.no_drop:
+        return []
+    bm = look.big_moment
+    if bm == "auto":
+        return None
+    if bm == "none":
+        return []
+    drops = [r for r in raw if r["kind"] == "drop"]
+    if not drops:
+        return []
+    if "drop" in bm:
+        k = int(bm["drop"])
+        return [drops[min(max(k, 1), len(drops)) - 1]["index"]]
+    beat = None
+    if "beat" in bm:
+        beat = int(bm["beat"])
+    elif "t" in bm:
+        t = float(bm["t"])
+        if grid:
+            beat = max(1, sum(1 for g in grid if g[2] / 1000.0 <= t))
+        elif bpm > 0:
+            beat = int(t * bpm / 60.0) + 1
+    if beat is None:
+        return None
+    inside = [r for r in drops if r["beat"] <= beat < r["end_beat"]]
+    if inside:
+        return [inside[0]["index"]]
+    nearest = min(drops, key=lambda r: abs(r["beat"] - beat))
+    return [nearest["index"]]
+
+
 def _pick(pool: dict[str, list[str]], bucket: str, seed: int) -> str:
     names = pool.get(bucket) or DEFAULT_SCENE_POOL.get(bucket) or []
     if not names:
@@ -143,10 +182,12 @@ def _pick(pool: dict[str, list[str]], bucket: str, seed: int) -> str:
 
 def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float = 0.0,
                grid: list[tuple[int, float, int]] | None = None, waveform: ColorWaveform | None = None,
-               scene_pool: dict[str, list[str]] | None = None, rules: PlanRules = DEFAULT_RULES) -> TrackPlan:
+               scene_pool: dict[str, list[str]] | None = None, rules: PlanRules | None = None,
+               look: LookNotes | None = None) -> TrackPlan:
+    rules = rules or PlanRules()
     pool = scene_pool or DEFAULT_SCENE_POOL
     seed = int(track_id) if track_id else 0
-    hook_scene = _pick(pool, "drop", seed)
+    hook_scene = (look.hook_scene if look is not None and look.hook_scene else None) or _pick(pool, "drop", seed)
     per_bucket_scene = {
         "break": _pick(pool, "break", seed),
         "build": _pick(pool, "build", seed),
@@ -221,7 +262,10 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
     # --- the loudest drop section is the big moment ---
     runs: list[list[int]] = [[r["index"]] for r in raw if r["kind"] == "drop"]
     big_run: list[int] = []
-    if runs:
+    forced = _look_big_moment(look, raw, runs, grid=grid, bpm=bpm)   # None = planner decides
+    if forced is not None:
+        big_run = forced
+    elif runs:
         if rules.one_big_moment:
             def run_score(run: list[int]) -> tuple[float, int, int]:
                 beats = sum(raw[i]["end_beat"] - raw[i]["beat"] for i in run) or 1
@@ -239,17 +283,33 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
         is_drop = kind == "drop"
         big = r["index"] in big_set
         quiet = rules.quiet_edges and kind in ("intro", "outro")
+        strobe_mode = look.strobe if look is not None else "hard"
+        if strobe_mode == "none" or (look is not None and look.no_drop):
+            strobe_allowed = False
+        elif strobe_mode == "soft":
+            strobe_allowed = is_drop and not quiet
+        else:
+            strobe_allowed = (is_drop or kind == "build") and not quiet
+        laser_allowed = not quiet
+        if look is not None and kind in ("intro", "outro"):
+            edge = look.intro if kind == "intro" else look.outro
+            if edge.laser is not None:
+                laser_allowed = edge.laser
+            if edge.strobe is not None:
+                strobe_allowed = edge.strobe
         sections.append(PlannedSection(
             index=r["index"], beat=r["beat"], end_beat=r["end_beat"], label=r["label"], kind=kind, bucket=bucket,
             scene=per_bucket_scene.get(bucket, ""), energy=round(r["energy"], 4),
             hit=(BIG_MOMENT_HIT if big else REGULAR_DROP_HIT) if is_drop else 0.0,
             is_hook=is_drop and rules.repeat_hook, big_moment=big,
-            strobe_allowed=(is_drop or kind == "build") and not quiet,
-            laser_allowed=not quiet,
+            strobe_allowed=strobe_allowed,
+            laser_allowed=laser_allowed,
             fill_beat=r["fill_beat"],
         ))
     plan = TrackPlan(track_id=int(track_id), title=title, bpm=float(bpm), mood=table.mood, palette_seed=seed,
                      hook_scene=hook_scene, sections=tuple(sections),
-                     big_moment_index=big_run[0] if big_run else None, rules=rules)
+                     big_moment_index=big_run[0] if big_run else None, rules=rules,
+                     palette=(look.hook_palette or "") if look is not None else "",
+                     mood_words=tuple(look.mood) if look is not None else ())
     log.debug("%s", plan.summary())
     return plan

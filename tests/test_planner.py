@@ -122,3 +122,19 @@ def test_micro_phrases_are_absorbed():
     plan2 = plan_track(_table(spec2, end=169), track_id=1, bpm=120.0)
     assert [(s.kind, s.beat, s.end_beat) for s in plan2.sections] == [
         ("intro", 1, 9), ("build", 9, 73), ("drop", 73, 137), ("outro", 137, 169)]
+
+
+def test_planner_knobs_reach_plan_rules_through_params():
+    from livereact import params
+    from livereact.core import metronome
+    from livereact.rekordbox import planner
+
+    before = params.apply({"MIN_SECTION_BEATS": 16, "REGULAR_DROP_HIT": 0.9})
+    try:
+        assert planner.PlanRules().min_section_beats == 16
+        assert planner.REGULAR_DROP_HIT == 0.9 and metronome.REGULAR_PLAN_HIT == 0.9
+        plan = plan_track(HIGH, track_id=7, bpm=120.0)
+        assert plan.rules.min_section_beats == 16 and all(d.hit in (0.9, 1.0) for d in plan.drops)
+    finally:
+        params.restore(before)
+    assert planner.PlanRules().min_section_beats == 32 and metronome.REGULAR_PLAN_HIT == 0.92

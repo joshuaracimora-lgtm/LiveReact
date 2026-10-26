@@ -30,23 +30,31 @@ def test_status_family_table_counts_fails_and_picks_next_family():
     rows = status.family_table(ev)
     by_rule = {r["rule"]: r for r in rows}
     assert by_rule["STRUCT-03"]["fail"] == 0 and by_rule["STRUCT-03"]["family"] == 1
-    assert by_rule["TIME-11"] == {"family": 2, "name": "dwell and transitions", "rule": "TIME-11",
-                                  "tuning": 1, "holdout": 1, "fail": 2}
-    assert by_rule["LOOK-05"]["family"] == 0  # not in a family -> "other"
+    assert by_rule["TIME-11"]["family"] == 4 and by_rule["TIME-11"]["fail"] == 2      # marker-free -> generalisation
+    assert by_rule["TIME-11"]["tuning"] == 1 and by_rule["TIME-11"]["holdout"] == 1
+    assert by_rule["LOOK-05"]["family"] == 2   # section shape
     assert status.next_family(rows) == 2       # family 1 clean, family 2 has failures
     text = status.render(ev, None, "x.json")
     assert "NEXT FAMILY: 2  (lowest family with failures)" in text and "TIME-11   FAIL  2" in text
+    # a serious sweep finding wins over everything
+    assert status.next_family(rows, None, {"counts": {"crash": 1}}) == 0
+    assert status.next_family(rows, None, {"counts": {"warning": 3}}) == 2
+    assert "sweep" in status.render(ev, None, "x", {"date": "20261026", "tracks_ran": 5, "tracks_total": 9, "counts": {"crash": 1}}).lower()
 
 
 def test_status_closed_family_is_skipped_unless_state_reopens_it():
     status = _load("status")
     rows = status.family_table(_ev({"a": {"STRUCT-03": "FAIL", "TIME-11": "FAIL"}}))
-    assert 1 in status.CLOSED
-    assert status.next_family(rows) == 2                    # family 1 still fails but is closed
-    assert status.next_family(rows, {"family": 1}) == 1     # state.json may reopen it explicitly
-    assert status.next_family(rows, {"family": 3}) == 3
-    text = status.render(_ev({"a": {"STRUCT-03": "FAIL"}}), {"family": 3}, "x")
-    assert "NEXT FAMILY: 3  (from state.json)" in text and "[CLOSED:" in text
+    assert status.next_family(rows) == 1                    # drop placement is open again in the planner era
+    status.CLOSED[1] = "test closure"
+    try:
+        assert status.next_family(rows) == 4                # family 1 fails but is closed; TIME-11 sits in 4
+        assert status.next_family(rows, {"family": 1}) == 1 # state.json may reopen it explicitly
+        assert status.next_family(rows, {"family": 3}) == 3
+        text = status.render(_ev({"a": {"STRUCT-03": "FAIL"}}), {"family": 3}, "x")
+        assert "NEXT FAMILY: 3  (from state.json)" in text and "[CLOSED:" in text
+    finally:
+        status.CLOSED.pop(1, None)
 
 
 def test_status_next_family_none_when_all_clean():

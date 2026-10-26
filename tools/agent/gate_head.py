@@ -51,9 +51,16 @@ def main() -> int:
     p.add_argument("--out-eval", default=None,
                    help="also write the bare candidate evaluation (same shape as results/baseline/evaluation.json), "
                         "usable as --baseline for tools/loop/search.py")
+    p.add_argument("--usb", default=None, help="rekordbox USB export copy (default: usb_export/ or $LIVEREACT_USB; 'none' = no plans)")
+    p.add_argument("--drive", dest="drive", action="store_true", default=None, help="the track plan runs the sections (default when a USB export is found)")
+    p.add_argument("--no-drive", dest="drive", action="store_false", help="classifier mode even with a USB export")
+    p.add_argument("--sweep-n", type=int, default=None, help="size of the marker-free USB sample (default 20 with a USB export, else 0)")
     a = p.parse_args()
-    from livereact.loop.evaluate import Evaluation, evaluate, labeled_tracks
-    from livereact.loop.gate import compare
+    from livereact.loop.evaluate import Evaluation, evaluate, labeled_tracks, resolve_usb, sweep_sample
+    from livereact.loop.gate import compare, mode_mismatch
+    usb = resolve_usb(a.usb)
+    drive = a.drive if a.drive is not None else usb is not None
+    sweep_n = a.sweep_n if a.sweep_n is not None else (20 if usb is not None else 0)
     if a.baseline_ref:
         import subprocess
         bp = f"{a.baseline_ref}:results/baseline/evaluation.json"
@@ -69,13 +76,19 @@ def main() -> int:
             return 2
         base_json = json.loads(bp.read_text(encoding="utf-8"))
     base = Evaluation.from_json(base_json)
-    tracks = labeled_tracks()
-    print(f"evaluating {len(tracks)} labeled tracks against {bp} ...", flush=True)
+    tracks = labeled_tracks(usb=usb)
+    sweep = sweep_sample(usb, sweep_n, exclude={p.name for p in tracks}) if usb is not None else []
+    print(f"evaluating {len(tracks)} labeled tracks (+{len(sweep)} sweep) in {'drive' if drive else 'classifier'} mode "
+          f"against {bp} ...", flush=True)
     # simulate from the seed the baseline was made with (an older baseline has none -> the pinned default)
-    cand = evaluate(None, tracks, rig=a.rig, seed_range=base.seed_range,
+    cand = evaluate(None, tracks, rig=a.rig, seed_range=base.seed_range, usb=usb, drive=drive, sweep_tracks=sweep,
                     on_track=lambda t: print(f"  {'holdout' if t.holdout else 'tuning '} {t.status:7} {t.compliance}  {t.track[:50]}", flush=True))
     if base.rules != cand.rules:
         print(f"RULE SET CHANGED ({base.rules} -> {cand.rules}): the baseline is from another scorer; regenerate it first")
+        return 2
+    mm = mode_mismatch(base, cand)
+    if mm:
+        print(f"MODE/USB CHANGED: {mm}")
         return 2
     verdict = compare(base, cand)
     cj = cand.to_json()
@@ -83,12 +96,21 @@ def main() -> int:
     bs, cs = base.summary(), cand.summary()
     print(f"\ntuning  compliance {bs['tuning']['compliance']} -> {cs['tuning']['compliance']}   critical fails {bs['tuning']['critical_fails']} -> {cs['tuning']['critical_fails']}")
     print(f"holdout compliance {bs['holdout']['compliance']} -> {cs['holdout']['compliance']}   critical fails {bs['holdout']['critical_fails']} -> {cs['holdout']['critical_fails']}")
+    if cs.get("mode") == "drive":
+        print(f"drop placement (bars from the ear drops): tuning {bs['tuning'].get('drop_offset_bars_mean')} -> {cs['tuning'].get('drop_offset_bars_mean')}"
+              f"  holdout {bs['holdout'].get('drop_offset_bars_mean')} -> {cs['holdout'].get('drop_offset_bars_mean')}"
+              f"  missed {bs['tuning'].get('drops_missed', 0) + bs['holdout'].get('drops_missed', 0)} -> "
+              f"{cs['tuning'].get('drops_missed', 0) + cs['holdout'].get('drops_missed', 0)}")
+    if cs.get("sweep", {}).get("n"):
+        print(f"sweep (marker-free rules, {cs['sweep']['n']} USB tracks): compliance {bs.get('sweep', {}).get('compliance')} -> {cs['sweep']['compliance']}")
     print("flips:" if fl else "flips: none")
     for f in fl:
         print(f"  {f['track'][:40]:40} {f['rule']:9} {f['from']} -> {f['to']}")
     print(f"\nGATE: {'ACCEPT' if verdict['accept'] else 'REJECT'}")
     for r in verdict["reasons"]:
         print(f"  - {r}")
+    for n_ in verdict.get("notes", []):
+        print(f"  note: {n_}")
     if a.out:
         op = Path(a.out)
         op.parent.mkdir(parents=True, exist_ok=True)

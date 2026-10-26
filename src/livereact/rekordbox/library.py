@@ -35,6 +35,9 @@ class TrackInfo:
     bpm: float            # rekordbox analyzed tempo (bpm_100 / 100)
     duration_s: int
     analyze_path: str     # e.g. /PIONEER/USBANLZ/P06C/000175F8/ANLZ0000.DAT
+    path: str = ""        # the audio file on the stick, absolute from the USB root: /Contents/<artist>/<album>/<file>
+    filename: str = ""    # its file name alone
+    file_size: int = 0
 
     @property
     def ext_path(self) -> str:
@@ -96,6 +99,9 @@ class RekordboxLibrary:
                     bpm=float(t.bpm_100) / 100.0,
                     duration_s=int(t.duration),
                     analyze_path=str(t.analyze_path or ""),
+                    path=str(t.path or ""),
+                    filename=str(t.filename or ""),
+                    file_size=int(getattr(t, "file_size", 0) or 0),
                 )
             except Exception as exc:  # noqa: BLE001 - one bad row must not sink the index
                 log.debug("skipping unparsable track row: %s", exc)

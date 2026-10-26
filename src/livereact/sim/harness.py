@@ -155,6 +155,9 @@ def run_sim(
     drive: bool = False,
     plan: "object | None" = None,
     grid: "list | None" = None,
+    waveform: "object | None" = None,
+    track_id: int = 1,
+    look: "object | None" = None,
 ) -> RunResult:
     """Simulate one track end to end and return the full frame log.
 
@@ -171,14 +174,15 @@ def run_sim(
     previous = knobs.apply(params) if params else {}
     try:
         return _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np,
-                        phrases=phrases, drive=drive, plan=plan, grid=grid)
+                        phrases=phrases, drive=drive, plan=plan, grid=grid, waveform=waveform, track_id=track_id,
+                        look=look)
     finally:
         if previous:
             knobs.restore(previous)
 
 
 def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np,
-             phrases=None, drive=False, plan=None, grid=None):
+             phrases=None, drive=False, plan=None, grid=None, waveform=None, track_id=1, look=None):
 
     if audio is None:
         audio = decode_audio(track, duration)
@@ -233,11 +237,13 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
     grid_pos = 0
     if phrases is not None:
         if plan is None:
+            # built HERE, after params.apply ran (run_sim's `params`), so planner knobs reach every trial
             from ..rekordbox.planner import plan_track
-            plan = plan_track(phrases, track_id=1, title=str(track), bpm=timeline.bpm)
+            plan = plan_track(phrases, track_id=track_id, title=str(track), bpm=timeline.bpm, grid=grid,
+                              waveform=waveform, look=look)
         if drive:
             metronome.phrases_mode = "drive"
-        shared_queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=1, title=str(track),
+        shared_queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=track_id, title=str(track),
                                             bpm=timeline.bpm, table=phrases, plan=plan, slot="sd"))
 
     frames = np.zeros((n_blocks, 512), dtype=np.uint8)
@@ -264,7 +270,7 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
                 beat_count = beats_emitted if beats_emitted else None
                 status_bib = (beat_in_bar - 2) % timeline.beats_per_bar + 1
             shared_queue.put(DeckStatusMessage(
-                timestamp=now, player=1, track_id=1, loaded_player=1, slot="sd", analyze_type="rekordbox",
+                timestamp=now, player=1, track_id=track_id, loaded_player=1, slot="sd", analyze_type="rekordbox",
                 play_state="playing", playing=True, on_air=True, master=True, sync=False,
                 bpm=timeline.bpm, pitch=1.0, beat_count=beat_count,
                 beat_in_bar=status_bib, source_ip="sim"))
@@ -304,6 +310,9 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
             row["track_beat"] = snap.track_beat
             row["planned_scene"] = snap.planned_scene
             row["plan_active"] = snap.plan_active
+            row["laser_allowed"] = snap.planned_laser_allowed
+            row["strobe_allowed"] = snap.planned_strobe_allowed
+            row["beats_to_drop"] = snap.beats_to_drop
         for slot, fx in zip(slots, rig.fixtures):
             vs = fx.visual_state(frame)
             row[f"{slot}_brightness"] = round(vs.brightness, 3)

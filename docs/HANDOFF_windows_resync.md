@@ -55,3 +55,18 @@ cmdlets must be wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'Li
    continue with `docs/HANDOFF_windows_agent_setup.md` (it re-registers the task itself).
 
 Do not push. Do not run the search in the foreground. If a step needs Josh's input, ask instead of guessing.
+
+10. **(2026-10-25, planner era) Copy the rekordbox USB export.** Plug Josh's stick into the desktop (say drive `E:`)
+    and run, from the repo root:
+    ```
+    robocopy E:\ "usb_export" /E /R:1 /W:1 /XD "System Volume Information" "$RECYCLE.BIN"
+    .\.venv\Scripts\python.exe tools\harness\import_usb.py --root usb_export --verify
+    ```
+    (On the Mac: `rsync -a --exclude '.Spotlight-V100' --exclude '.fseventsd' --exclude '.Trashes' /Volumes/<USB>/ usb_export/`.)
+    The folder is gitignored. `import_usb.py` must report every track with audio + analysis, the 10 ear-labelled
+    tracks as `EAR`, and no `GRID/EAR downbeat off` lines (a different encode of a labelled track). The nightly
+    agent's preflight refuses to start without `usb_export\PIONEER\rekordbox\export.pdb`; the sweep then runs over
+    every track for `-SweepMinutes` (default 40) before the agent, and the gate/search run in drive mode
+    (`--usb usb_export --drive`). After the first copy, regenerate the baseline on the Mac in drive mode
+    (`python tools/loop/baseline.py`, commit with `git add -f results/baseline/evaluation.json`) and pull here.
+

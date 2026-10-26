@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "track": "<copy me to tracks/<song>.look.json and remove _todo>",
+  "hook_scene": null,
+  "hook_palette": null,
+  "big_moment": "auto",
+  "intro": {
+    "laser": false,
+    "strobe": false
+  },
+  "outro": {
+    "laser": false,
+    "strobe": false
+  },
+  "strobe": "hard",
+  "mood": [],
+  "notes": "",
+  "_todo": true
+}
