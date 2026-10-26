@@ -62,8 +62,8 @@ class AppConfig:
         # persisted range (config.py energy_norm, 2026-09-17); `--no-norm-seed` for a
         # cold start (new venue, re-gained mixer). Demo mode never reads or writes it.
     phrases: str = "shadow"  # rekordbox phrase data via XDJ-XZ status packets + NFS (2026-10-25):
-        # "off" | "shadow" (fields recorded + shown, lights unaffected) | "drive" (Stage 3, not built:
-        # treated as shadow with a warning). See docs/13 D-21.
+        # "off" | "shadow" (fields recorded + shown, lights unaffected) | "drive" (the track plan
+        # built from the phrase table decides the sections; audio classifier = fallback). docs/13 D-21.
     rekordbox_cache: str = "cache/rekordbox"  # where fetched export.pdb copies live (gitignored)
 
 
@@ -260,17 +260,18 @@ class App:
                 cc_map = CcMap.load(self.config.midi_map_path)
             except Exception:  # noqa: BLE001
                 log.warning("Could not load MIDI map %s; using defaults", self.config.midi_map_path)
-        phrases = self.config.phrases
+        phrases = self.config.phrases if self.config.phrases in ("off", "shadow", "drive") else "shadow"
+        self.metronome.phrases_mode = phrases
         if phrases == "drive":
-            log.warning("--phrases drive is Stage 3 and not built yet; running in shadow mode")
-            phrases = "shadow"
+            log.info("rekordbox phrases DRIVE the sections (track plan); the loudness classifier is the fallback")
         self.phrase_service = None
         if phrases != "off":
             try:
                 from .rekordbox.service import PhraseService
 
+                pool = SceneCatalog(full=self.config.full_catalog).names_by_bucket()
                 self.phrase_service = PhraseService(self.input_queue, self.clock, stop_event=self.stop_event,
-                                                    cache_dir=self.config.rekordbox_cache)
+                                                    cache_dir=self.config.rekordbox_cache, scene_pool=pool)
             except Exception:  # noqa: BLE001 - phrase data is optional
                 log.exception("rekordbox phrase service unavailable; continuing without it")
         sources: list = []

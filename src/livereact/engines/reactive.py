@@ -249,6 +249,10 @@ STROBE_PHRASE_TAIL_BEATS = 2  # beats 3+4 of the phrase's last bar -- "strobe
 # know which 1.5s of a build is the last. If the top still reads weak, the
 # lever is flash brightness (STROBE_FLASH_DMX), Josh's own cap.
 BUILD_STROBE_START = 0.5          # 2 Hz where the rise starts -- a pulse, not yet a strobe
+BUILD_COUNTIN_BEATS = 8           # planned drop within this many beats (2 bars): the strobe counts in
+                                  # (drive mode). Short on purpose: LIGHTING_BIBLE.md LOOK-05 wants the strobe held
+                                  # back through the build; Josh's 'builds count in' rule (2026-10-25) takes the
+                                  # last two bars. The scorer's LOOK-05/TIME-05 will flag those bars by design.
 # THE RISE DRIVES THE STROBE (2026-09-17, run 10 -- recordings/session-
 # 20260917-154312): the bar-count ramp from BUILD entry ran for 42 s before
 # the first drop, because the loudness classifier's BUILD is a plateau
@@ -741,9 +745,19 @@ class ReactiveLayerEngine:
         on (see BUILD_STROBE_START's comment), at a rate from the rise's
         intensity -- BUILD_STROBE_START at rise_index RISE_ON, the ceiling
         at RISE_FULL. Not burst-gated: a sustained rate under the 4 Hz line."""
-        if not (snap.drop_armed and snap.rising) or self._breath:
+        # Planned count-in (rekordbox/planner.py "builds count in"): with a drop planned
+        # within BUILD_COUNTIN_BEATS the rate follows the countdown even when the audio
+        # rise detector is quiet -- the plan knows the downbeat, the ear-rule is the same.
+        countdown = 0.0
+        if (snap.plan_active and snap.planned_strobe_allowed and snap.drop_armed
+                and 0 < snap.beats_to_drop <= BUILD_COUNTIN_BEATS):
+            countdown = 1.0 - (snap.beats_to_drop - 1) / float(BUILD_COUNTIN_BEATS)
+        if countdown <= 0.0 and (not (snap.drop_armed and snap.rising) or self._breath):
             return 0.0
-        p = max(0.0, min(1.0, (snap.rise_index - RISE_ON) / (RISE_FULL - RISE_ON)))
+        p = 0.0
+        if snap.rising:
+            p = max(0.0, min(1.0, (snap.rise_index - RISE_ON) / (RISE_FULL - RISE_ON)))
+        p = max(p, countdown)
         rate01 = BUILD_STROBE_START + (1.0 - BUILD_STROBE_START) * p
         self.strobe_flash_dmx = round(STROBE_FLASH_START_DMX + (STROBE_FLASH_DMX - STROBE_FLASH_START_DMX) * p)
         return STROBE_MAX * rate01

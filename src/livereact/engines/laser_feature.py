@@ -90,6 +90,7 @@ GROOVE_BASE = 0.2                    # a softer drop: medium sweep ...
 GROOVE_WUB_GAIN = 0.4                # ... that still breathes with the wub (tops out at 0.6)
 TENSION_MAX = 0.4                    # a full rise reaches this; the fan starts at 0.5, so the
                                      # drop is still a step up
+TENSION_LEAD_BEATS = 32              # a planned drop within this many beats ramps TENSION (drive mode)
 TENSION_ARMED_FLOOR = 0.15           # armed (D key / roll) but not yet rising still reads
 CALM_SWEEP = 0.0                     # CH7 128, the slowest confirmed sweep
 SWEEP_EASE_S = 0.5                   # the CH7 target's time constant
@@ -123,12 +124,21 @@ def laser_mood(snap: ShowSnapshot, cued: bool = False) -> str:
         return MOOD_OFF
     if cued:
         return MOOD_FAN
+    if snap.plan_active and not snap.planned_laser_allowed:
+        return MOOD_OFF   # the track plan's quiet edges (intro / outro): no laser
     bucket = EnergyBucket(snap.bucket)
     if bucket in (EnergyBucket.DROP, EnergyBucket.PEAK):
         return MOOD_FAN if float(snap.drop_hit_intensity) >= FAN_MIN_HIT else MOOD_GROOVE
-    if bucket == EnergyBucket.BUILD and (snap.rising or snap.drop_armed):
+    if bucket == EnergyBucket.BUILD and (snap.rising or snap.drop_armed or _plan_countdown(snap) > 0.0):
         return MOOD_TENSION
     return MOOD_CALM
+
+
+def _plan_countdown(snap: ShowSnapshot) -> float:
+    """0..1 progress of the planned count-in to the next drop (0 when no plan / too far)."""
+    if snap.plan_active and 0 < snap.beats_to_drop <= TENSION_LEAD_BEATS:
+        return 1.0 - (snap.beats_to_drop - 1) / float(TENSION_LEAD_BEATS)
+    return 0.0
 
 
 def tension_sweep(snap: ShowSnapshot) -> float:
@@ -140,7 +150,7 @@ def tension_sweep(snap: ShowSnapshot) -> float:
         rise = (float(snap.rise_index) - RISE_ON) / (RISE_FULL - RISE_ON)
         rise = max(0.0, min(1.0, rise))
     floor = TENSION_ARMED_FLOOR if snap.drop_armed else 0.0
-    return max(floor, rise * TENSION_MAX)
+    return max(floor, rise * TENSION_MAX, _plan_countdown(snap) * TENSION_MAX)
 
 
 class LaserFeatureEngine:

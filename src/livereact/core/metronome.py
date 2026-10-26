@@ -48,6 +48,12 @@ AUDIO_STALE_AFTER = 1.0  # seconds without an AudioLevelMessage -> not fresh
 # --- song structure from CDJ status packets + rekordbox phrase tables (2026-10-25, shadow mode) ---
 DECK_STATUS_STALE_AFTER = 1.0  # seconds without a CDJ status packet for the active deck -> section fields cleared
 ACTIVE_DECK_SWITCH_S = 2.0     # a challenger deck must be playing + on-air (while the current one is not) this long
+REGULAR_PLAN_HIT = 0.92        # drop_hit_intensity for a planned drop that is NOT the track's big moment
+PLAN_ROLL_WINDOW_BEATS = 32    # a snare-roll start this close before a planned drop commits the drop early.
+                               # Measured 2026-10-25 on the 10 ear-labelled tracks: rekordbox's "chorus" boundary
+                               # is where the bass comes back (the waveform agrees), but Josh marks the drop at
+                               # the roll that leads into it, 4-8 bars earlier -- so the plan fixes the hit and
+                               # the live roll detector (core/roll_period.py) is allowed to pull the look forward.
 PSSI_BEAT_OFFSET = 0           # status beat_count -> phrase-table beat index correction; a Gate-1 hardware
                                # measurement (plan: lets-start-building-this-shimmering-knuth.md). ear-tuned.
 
@@ -65,6 +71,16 @@ class SectionState:
     kind: str = ""
     next_kind: str = ""
     beats_to_next: int = -1
+    # from the track plan (rekordbox/planner.py); plan_active only in drive mode
+    plan_active: bool = False
+    section_index: int = -1
+    planned_bucket: str = ""
+    planned_scene: str = ""
+    big_moment: bool = False
+    strobe_allowed: bool = True
+    laser_allowed: bool = True
+    beats_to_drop: int = -1
+    planned_hit: float = 0.0
 
 
 _NO_SECTION = SectionState()
@@ -619,6 +635,10 @@ class Metronome(threading.Thread):
         self._challenger: tuple[int, float] | None = None  # (deck, since) for the switch hysteresis
         self._section: SectionState = _NO_SECTION
         self._section_log_key: tuple | None = None
+        self.phrases_mode: str = "shadow"   # "off" | "shadow" | "drive" (set by App / the harness)
+        self._plans: dict[int, object] = {}   # track_id -> rekordbox.planner.TrackPlan
+        self._plan_section_key: tuple | None = None   # (track_id, section index) last applied in drive mode
+        self._plan_early_drop_at: int | None = None   # planned drop beat already committed early (roll start)
         self.section_agree = 0
         self.section_disagree = 0
         self._last_section_report = clock.monotonic()
@@ -763,12 +783,15 @@ class Metronome(threading.Thread):
         self._advance_clock(now)
         self._derive_energy(now)
         self._derive_energy_norm(now)
+        if self.phrases_mode == "drive":
+            self._derive_section(now)   # the plan must be current before the bucket is decided
         self._derive_bucket(now)
         self._derive_build_rule(now)
         self._derive_rise(now)
         self._derive_drop_marker(now)
         self._derive_palette()
-        self._derive_section(now)   # after the bucket on purpose: shadow mode cannot influence it
+        if self.phrases_mode != "drive":
+            self._derive_section(now)   # after the bucket on purpose: shadow mode cannot influence it
         snap = self._build_snapshot(now)
         self.show_state.publish(snap)
         self._maybe_log(now, snap)
@@ -1198,6 +1221,12 @@ class Metronome(threading.Thread):
         if self._manual_bucket_override is not None:
             self._apply_manual_override(self._manual_bucket_override, now)
             self._manual_bucket_override = None
+            return
+
+        # DRIVE MODE (2026-10-25, docs/13 D-21): the track plan built from rekordbox's
+        # phrase table decides the section; the loudness classifier below is bypassed
+        # while the plan has authority and resumes from its committed state otherwise.
+        if self._section.plan_active and self._drive_from_plan(now):
             return
 
         # ROLL START (see ROLL_START_COMMITS / core/roll_period.py): the snare
@@ -1727,6 +1756,15 @@ class Metronome(threading.Thread):
         return self._build_cue_until is not None
 
     def _derive_palette(self) -> None:
+        """Phrase-frozen palette (see _derive_palette_auto); in drive mode with a plan the
+        track's own palette_seed pins one hue per family for the whole track (repeat the hook)."""
+        self._derive_palette_auto()
+        sec = self._section
+        if sec.plan_active and sec.track_id in self._plans:
+            plan = self._plans[sec.track_id]
+            self.palette, self.palette_spot = palette_mod.pick(self.look_bucket.value, plan.palette_seed, 0, 0)
+
+    def _derive_palette_auto(self) -> None:
         """Re-pick the phrase-frozen palette entries ONLY when a new
         PALETTE_PHRASE_BARS phrase starts or the bucket FAMILY changes
         (break/outro, build, drop/peak -- a family change is already
@@ -1774,6 +1812,9 @@ class Metronome(threading.Thread):
         self._phrase_tables[msg.track_id] = msg.table
         if msg.title:
             self._track_titles[msg.track_id] = msg.title
+        if getattr(msg, "plan", None) is not None:
+            self._plans[msg.track_id] = msg.plan
+            log.info("rekordbox: %s", msg.plan.summary())
         if msg.table is None:
             log.info("rekordbox: no phrase table for track %d %r (%s)", msg.track_id, msg.title, msg.error or "-")
         else:
@@ -1836,14 +1877,127 @@ class Metronome(threading.Thread):
                                          track_beat=track_beat)
             return
         cur, nxt = table.at_beat(track_beat)
+        plan = self._plans.get(msg.track_id)
+        ps = plan.at_beat(track_beat)[0] if plan is not None else None
         self._section = SectionState(
             deck=deck, fresh=True, track_id=msg.track_id, title=title, track_beat=track_beat, source="rekordbox",
             label=cur.label if cur is not None else "",
             kind=_rb_mapping.section_for(table.mood, cur.label) if cur is not None else "",
             next_kind=_rb_mapping.section_for(table.mood, nxt.label) if nxt is not None else "",
             beats_to_next=table.beats_to_next(track_beat),
+            plan_active=self.phrases_mode == "drive" and ps is not None,
+            section_index=ps.index if ps is not None else -1,
+            planned_bucket=ps.bucket if ps is not None else "",
+            planned_scene=ps.scene if ps is not None else "",
+            big_moment=ps.big_moment if ps is not None else False,
+            strobe_allowed=ps.strobe_allowed if ps is not None else True,
+            laser_allowed=ps.laser_allowed if ps is not None else True,
+            beats_to_drop=plan.beats_to_drop(track_beat) if plan is not None else -1,
+            planned_hit=ps.hit if ps is not None else 0.0,
         )
-        self._shadow_compare(now)
+        if self.phrases_mode != "drive":
+            self._shadow_compare(now)
+
+    def _drive_from_plan(self, now: float) -> bool:
+        """Execute the track plan for this tick. Returns True when the plan decided the
+        bucket (the classifier is skipped), False to hand back to the classifier.
+
+        Boundary: when the planned section changes, the bucket is committed through the
+        same seams the DJ's keys use -- DROP via _commit_drop with the planned hit (the
+        big moment at 1.0 gets the laser fan / PEAK; regular drops sit under FAN_MIN_HIT),
+        BUILD via a held build cue (source "rekordbox") so look_bucket shows it, BREAK /
+        OUTRO via the manual-override path. Between boundaries the section holds.
+        Count-in (TIME-01/TIME-04): the drop is armed `prearm_beats` ahead so the strobe
+        and laser tension run, and `drop_pending` (the pre-drop blackout bridge) is set on
+        the last beat; the boundary itself lands the cut. PEAK is only allowed in the
+        big moment (restraint)."""
+        sec = self._section
+        plan = self._plans.get(sec.track_id)
+        if plan is None or not sec.plan_active or sec.section_index < 0:
+            return False
+        rules = plan.rules
+        key = (sec.track_id, sec.section_index)
+        # Early drop on the roll (see PLAN_ROLL_WINDOW_BEATS): the plan's next drop is close,
+        # the reactive layer's roll detector just confirmed a snare-roll start -> that is
+        # where Josh's drop begins. Commit now with the planned hit; the boundary then only
+        # confirms. The pre-drop blackout bridge is skipped (the roll IS the lead-in).
+        early_target = sec.track_beat + sec.beats_to_drop if sec.beats_to_drop > 0 else None
+        if (self._roll_start_pending and ROLL_START_COMMITS and early_target is not None
+                and sec.beats_to_drop <= PLAN_ROLL_WINDOW_BEATS and self._base_committed != EnergyBucket.DROP
+                and self._is_audio_fresh(now)):
+            self._roll_start_pending = False
+            nxt = plan.at_beat(early_target)[0]
+            hit = nxt.hit if nxt is not None and nxt.kind == "drop" else REGULAR_PLAN_HIT
+            self._plan_commit_drop(now, hit)
+            self._plan_early_drop_at = early_target
+            self._pending_drop_release = False
+            log.info("rekordbox plan: roll start %d beats before the planned drop -> DROP now (hit %.2f)",
+                     sec.beats_to_drop, hit)
+        self._roll_start_pending = False   # consumed either way while the plan drives
+        if key != self._plan_section_key:
+            self._plan_section_key = key
+            self._pending_drop_release = False
+            self._bucket_candidate = None
+            self._bucket_candidate_since = None
+            bucket = sec.planned_bucket
+            if bucket == "drop" and self._plan_early_drop_at is not None and self._base_committed == EnergyBucket.DROP:
+                self._plan_early_drop_at = None   # the roll already landed this drop: hold, don't re-commit
+                self._apply_bucket_overlay(now)
+            elif bucket == "drop":
+                self._plan_early_drop_at = None
+                self._bucket_candidate_bar = self._bar
+                self._plan_commit_drop(now, sec.planned_hit or REGULAR_PLAN_HIT)
+            elif bucket == "build":
+                self._base_committed = EnergyBucket.BUILD
+                self._base_committed_since = now
+                beats_left = max(4, sec.beats_to_next if sec.beats_to_next > 0 else 16)
+                self._build_cue_until = now + beats_left * (60.0 / (self._bpm if self._bpm > 0 else NOMINAL_BPM))
+                self._build_cue_source = "rekordbox"
+                self._apply_bucket_overlay(now)
+            elif bucket == "outro":
+                self._apply_manual_override(EnergyBucket.OUTRO, now)
+            else:  # break (intro / breakdown / verse)
+                self._apply_manual_override(EnergyBucket.BREAK, now)
+            log.info("rekordbox plan: %s(%s) -> %s%s | scene %s", sec.label, sec.kind, bucket,
+                     " BIG MOMENT" if sec.big_moment else "", sec.planned_scene)
+        else:
+            self._apply_bucket_overlay(now)
+
+        # keep a build cue alive for the whole planned build (look_bucket shows BUILD)
+        if sec.planned_bucket == "build" and self._build_cue_source == "rekordbox":
+            self._build_cue_until = max(self._build_cue_until or 0.0, now + self._bar_s())
+
+        # count-in to the next planned drop
+        if (rules.builds_count_in and 0 < sec.beats_to_drop <= rules.prearm_beats
+                and self._base_committed != EnergyBucket.DROP and self._plan_early_drop_at is None):
+            if self._drop_arm_source != "dj":
+                self._drop_armed_until = now + 2 * self._bar_s()
+                self._drop_arm_source = "rekordbox"
+            self._pending_drop_release = sec.beats_to_drop <= 1   # the pre-drop blackout bridge
+        elif self._drop_arm_source == "rekordbox" and not (0 < sec.beats_to_drop <= rules.prearm_beats):
+            self._drop_armed_until = None
+            self._drop_arm_source = ""
+            self._pending_drop_release = False
+
+        # restraint: PEAK only in the big moment; OUTRO only when the plan says outro (the
+        # overlay's "break after a drop = outro" inference is for the classifier, not a plan)
+        if self._bucket_committed == EnergyBucket.PEAK and not sec.big_moment:
+            self._bucket_committed = EnergyBucket.DROP
+            self._exposed_since = now
+        if self._bucket_committed == EnergyBucket.OUTRO and sec.planned_bucket != "outro":
+            self._bucket_committed = EnergyBucket.BREAK
+            self._exposed_since = now
+        return True
+
+    def _plan_commit_drop(self, now: float, hit: float) -> None:
+        """_commit_drop with the plan's target hit intensity (DROP_INTENSITY_FLOOR..CEIL)."""
+        span = 1.0 - BUILD_MAX
+        hit = max(DROP_INTENSITY_FLOOR, min(DROP_INTENSITY_CEIL, hit))
+        progress = (hit - DROP_INTENSITY_FLOOR) / (DROP_INTENSITY_CEIL - DROP_INTENSITY_FLOOR)
+        self._commit_drop(now, level=BUILD_MAX + span * progress,
+                          raw_energy=max(self._energy_smooth, self._energy_norm))
+        self._drop_cut_pending = False
+        self._apply_bucket_overlay(now)   # expose DROP this tick (not one tick of BREAK via look_bucket)
 
     def _shadow_compare(self, now: float) -> None:
         """Log, once per rekordbox section, what the audio classifier thought at that moment."""
@@ -1939,6 +2093,12 @@ class Metronome(threading.Thread):
             section_kind=self._section.kind,
             next_section_kind=self._section.next_kind,
             beats_to_next_section=self._section.beats_to_next,
+            plan_active=self._section.plan_active,
+            planned_scene=self._section.planned_scene,
+            planned_big_moment=self._section.big_moment,
+            planned_strobe_allowed=self._section.strobe_allowed,
+            planned_laser_allowed=self._section.laser_allowed,
+            beats_to_drop=self._section.beats_to_drop,
             in_transition=now < self._transition_until,
             free_running=not self._is_pdl_fresh(now),
             pdl_fresh=self._is_pdl_fresh(now),

@@ -141,6 +141,21 @@ class SceneCatalog:
     def bucket(self, bucket: EnergyBucket) -> list[Scene]:
         return self._by_bucket[bucket]
 
+    def find(self, name: str) -> Scene | None:
+        """The catalog's scene with this exact name (the track plan names looks)."""
+        for scenes in self._by_bucket.values():
+            for s in scenes:
+                if s.name == name:
+                    return s
+        return None
+
+    def names_by_bucket(self) -> dict[str, list[str]]:
+        """{bucket value: [scene names]} -- the pool rekordbox/planner.py picks from."""
+        return {b.value: [s.name for s in scenes] for b, scenes in self._by_bucket.items()}
+
+    def eligible(self, scene: Scene, rig: Rig | None) -> bool:
+        return rig is None or bool(self._capability_filter([scene], rig))
+
     def default(self) -> Scene:
         """A calm starting scene."""
         for bucket in (EnergyBucket.BREAK, EnergyBucket.BUILD, EnergyBucket.DROP, EnergyBucket.PEAK, EnergyBucket.OUTRO):

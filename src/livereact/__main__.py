@@ -50,7 +50,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--pdl-interface", default=None, help="Explicit network interface/IP for Pro DJ Link.")
     p.add_argument("--phrases", choices=("off", "shadow", "drive"), default="shadow",
                    help="rekordbox phrase data from the XDJ-XZ (status packets + USB phrase tables over NFS): "
-                        "off | shadow (default: recorded + shown, lights unaffected) | drive (Stage 3, not yet built).")
+                        "off | shadow (default: recorded + shown, lights unaffected) | drive (the track plan built from "
+                        "the phrase table runs the sections: repeat the hook, one big moment, builds count in, quiet edges).")
     p.add_argument("--rig", default=None, help="Path to a custom rig JSON (default: the packaged 8-fixture default_rig.json).")
     p.add_argument("--full-catalog", action="store_true",
                    help="Rotate the full scene catalog instead of the default one-look-per-bucket core set.")

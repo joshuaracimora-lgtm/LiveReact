@@ -89,6 +89,7 @@ class TrackPhraseMessage:
     table: object | None     # rekordbox.pssi.PhraseTable (typed loosely to keep this module dependency-free)
     source: str = "rekordbox"
     error: str = ""
+    plan: object | None = None   # rekordbox.planner.TrackPlan: the whole-track lighting plan (drive mode)
 
 
 @dataclass(frozen=True)

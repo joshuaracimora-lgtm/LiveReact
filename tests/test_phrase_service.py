@@ -84,13 +84,15 @@ def test_real_pdb_plus_synthetic_ext_yields_one_table_per_track(tmp_path):
         assert m.track_id == 4 and m.player == 1 and m.title == "Lift Me Up (Extended)" and m.bpm == 132.0
         assert m.table is not None and [p.label for p in m.table.phrases] == ["intro", "chorus"]
         assert m.source == "rekordbox" and m.error == ""
-        assert [c[0] for c in nfs.calls] == ["pdb", "file"]
+        assert [c[0] for c in nfs.calls] == ["pdb", "file", "file"]      # export.pdb, .EXT, .DAT (beat grid)
         assert nfs.calls[1][3] == "/PIONEER/USBANLZ/P06C/000175F8/ANLZ0000.EXT"
+        assert nfs.calls[2][3] == "/PIONEER/USBANLZ/P06C/000175F8/ANLZ0000.DAT"
+        assert m.plan is not None and m.plan.track_id == 4 and [s.kind for s in m.plan.sections] == ["intro", "drop"]
         # a second deck loading the same track gets the cached table without another fetch
         svc.request("169.254.20.137", "sd", 2, 4)
         again = _drain(q, 1)
-        assert len(again) == 1 and again[0].player == 2 and again[0].table is m.table
-        assert len(nfs.calls) == 2
+        assert len(again) == 1 and again[0].player == 2 and again[0].table is m.table and again[0].plan is m.plan
+        assert len(nfs.calls) == 3
         # unknown id: the pdb is refetched once (stale export?) then answered with an error
         svc.request("169.254.20.137", "sd", 1, 999999)
         miss = _drain(q, 1)

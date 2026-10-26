@@ -53,6 +53,13 @@ class ShowSnapshot:
     section_kind: str = ""               # mapped: intro/build/breakdown/drop/verse/outro (rekordbox/mapping.py)
     next_section_kind: str = ""          # "" = end of analyzed structure / unknown
     beats_to_next_section: int = -1      # -1 = unknown
+    # --- the track plan (rekordbox/planner.py), executed only in --phrases drive ---
+    plan_active: bool = False            # the plan decided this tick's bucket (classifier bypassed)
+    planned_scene: str = ""              # the look the plan wants for this section (engines/phrase.py)
+    planned_big_moment: bool = False     # this drop is the track's one big moment (fan / PEAK allowed)
+    planned_strobe_allowed: bool = True  # quiet edges: intro/outro say no
+    planned_laser_allowed: bool = True
+    beats_to_drop: int = -1              # countdown to the next planned drop boundary (-1 = none)
 
     # --- MIDI intent (measured, normalized 0.0-1.0) ---
     crossfader: float = 0.5

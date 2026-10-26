@@ -365,6 +365,17 @@ display)? If it is early/late by a beat, note it: that becomes `PSSI_BEAT_OFFSET
 in `core/metronome.py`. Also note what `beat_count` does on a cue, a hot cue and a
 loop, and whether `ONAIR`/`MASTER` ever show with both decks playing.
 
+**Drive mode (the track plan runs the lights).** Once the probe passes, launch with
+`--phrases drive`: at load the plan is logged (`rekordbox plan: ... hook=...`), each
+section boundary logs `rekordbox plan: chorus(drop) -> drop BIG MOMENT | scene ...`,
+and `state.jsonl` has `plan_active`, `planned_scene`, `big_moment`, `beats_to_drop`.
+Expect: every chorus the same look + colour; only the loudest chorus gets the fan /
+PEAK; the strobe counts in over the last 16 beats and the rig goes black on the last
+beat before the drop; intro/outro dim with no laser. Pull the Ethernet cable
+mid-track: within 1 s `plan_active` drops and the loudness classifier carries on.
+Offline first: `python tools/harness/run_sim.py tracks/<x>.mp3 --pssi <ANLZ0000.EXT> --drive`
+then `tools/harness/score.py` on the result -- the same scorer as the nightly agent.
+
 **If no status after 15 s** the probe prints the checklist (routes, NIC, firewall,
 Link). **Record:** the probe's summary + the `--pdl-dump` folder (small; commit
 the PSSI slices as fixtures). Then a normal `--hardware --record` run: `state.jsonl`

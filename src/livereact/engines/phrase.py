@@ -119,6 +119,13 @@ class PhraseEngine:
                 self._bucket_rotation_requested = True
         self._last_bucket_seen = snap.bucket
 
+        # The track plan names the look for this section (TIME-20, repeat the hook):
+        # a planned look that is not showing yet rotates in like a bucket change.
+        if (snap.plan_active and snap.planned_scene and self._next is None
+                and self._current.name != snap.planned_scene and not self._bucket_rotation_requested
+                and self._planned_scene(snap, rig) is not None):
+            self._bucket_rotation_requested = True
+
         # Only act on a *new* bar so a boundary fires once, not every tick --
         # except a hard cut, which lands the moment it's asked for.
         if snap.bar == self._last_bar_seen and not self._hard_cut_requested:
@@ -162,6 +169,10 @@ class PhraseEngine:
             return  # enforce the minimum hold
 
         if not (self._skip_requested or self._bucket_rotation_requested):
+            # A planned look holds for its whole section: the plan, not the
+            # scheduler, decides when the look changes (TIME-20).
+            if snap.plan_active and snap.planned_scene and self._current.name == snap.planned_scene:
+                return
             # Scheduled cadence only: while a higher-ranked look of the same
             # family is showing (Peak Full Rig after PEAK fell back to plain
             # DROP), keep it -- see the PEAK -> DROP rule above; the scheduler
@@ -191,6 +202,18 @@ class PhraseEngine:
             self._hard_cut_requested = False
             self._begin_rotation(snap, rig, crossfade_bars=crossfade)
 
+    def _planned_scene(self, snap: ShowSnapshot, rig: Rig | None) -> Scene | None:
+        """The track plan's look for this section, when it exists in the catalog, is
+        eligible on this rig and belongs to the family the bucket is showing."""
+        if not snap.plan_active or not snap.planned_scene:
+            return None
+        scene = self.catalog.find(snap.planned_scene)
+        if scene is None or not self.catalog.eligible(scene, rig):
+            return None
+        if _FAMILY.get(scene.bucket.value, "break") != _FAMILY.get(snap.bucket, "break"):
+            return None
+        return scene
+
     def _begin_rotation(self, snap: ShowSnapshot, rig: Rig, crossfade_bars: float = float(CROSSFADE_BARS)) -> None:
         # snap.bucket -- an ALREADY-DEBOUNCED, already-adaptively-rescaled
         # bucket_for_energy(energy_norm), computed once in metronome.py (see
@@ -205,7 +228,7 @@ class PhraseEngine:
         # no-op for all 8 pre-Phase-1 scenes (empty requires, 0.0 atm
         # requirement, always satisfied), real once Phase 5 adds looks that
         # actually declare requires{}.
-        candidate = self.catalog.pick(bucket, rig, exclude=self._current)
+        candidate = self._planned_scene(snap, rig) or self.catalog.pick(bucket, rig, exclude=self._current)
         self._skip_requested = False
         if candidate is self._current:
             # The only eligible look for this bucket is the one already

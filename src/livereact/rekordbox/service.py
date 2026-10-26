@@ -23,7 +23,9 @@ from pathlib import Path
 from ..core.messages import TrackPhraseMessage
 from .fetch import XdjNfs, slot_name
 from .library import RekordboxLibrary, RekordboxLibraryError
-from .pssi import parse_pssi
+from .planner import plan_track
+from .pssi import parse_pqtz, parse_pssi
+from .waveform import parse_pwv5
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +35,8 @@ DEFAULT_CACHE_DIR = "cache/rekordbox"
 class PhraseService:
     def __init__(self, output_queue, clock, library: RekordboxLibrary | None = None,
                  nfs: XdjNfs | None = None, stop_event: threading.Event | None = None, *,
-                 cache_dir: str | Path | None = DEFAULT_CACHE_DIR) -> None:
+                 cache_dir: str | Path | None = DEFAULT_CACHE_DIR,
+                 scene_pool: dict[str, list[str]] | None = None) -> None:
         self.queue = output_queue
         self.clock = clock
         self.cache_dir = Path(cache_dir) if cache_dir else None
@@ -43,6 +46,8 @@ class PhraseService:
         self._requests: queue.Queue = queue.Queue()
         self._requested: set[tuple[str, str, int]] = set()
         self._pdb_loaded: dict[tuple[str, str], bool] = {}   # (ip, slot) -> loaded ok?
+        self.scene_pool = scene_pool          # bucket -> scene names, from the app's catalog (planner)
+        self._plans: dict[int, object] = {}   # track_id -> TrackPlan
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self.stats = {"requests": 0, "fetched": 0, "no_table": 0, "errors": 0}
@@ -85,7 +90,8 @@ class PhraseService:
                 # re-loads a known track still gets its table attached to the right player
                 table = self.library.phrases(track_id) if self.library.has_phrases(track_id) else None
                 if self.library.has_phrases(track_id):
-                    self._emit(player, track_id, table, error="" if table is not None else "no phrase table")
+                    self._emit(player, track_id, table, error="" if table is not None else "no phrase table",
+                               plan=self._plans.get(track_id))
                 return
             self._requested.add(key)
         self.stats["requests"] += 1
@@ -153,6 +159,17 @@ class PhraseService:
         ext = self.nfs.fetch(ip, slot, track.ext_path) if self.nfs is not None else None
         table = parse_pssi(ext) if ext else None
         self.library.put_phrases(track_id, table)
+        plan = None
+        if table is not None:
+            dat = self.nfs.fetch(ip, slot, track.analyze_path) if self.nfs is not None else None
+            grid = parse_pqtz(dat) if dat else None
+            wave = parse_pwv5(ext) if ext else None
+            try:
+                plan = plan_track(table, track_id=track_id, title=track.title, bpm=track.bpm, grid=grid,
+                                  waveform=wave, scene_pool=self.scene_pool)
+            except Exception:  # noqa: BLE001 - a plan is a bonus; the table alone is still useful
+                log.exception("phrase service: planning failed for track %d", track_id)
+            self._plans[track_id] = plan
         if table is None:
             self.stats["no_table"] += 1
             self._emit(player, track_id, None, title=track.title, bpm=track.bpm,
@@ -161,13 +178,14 @@ class PhraseService:
             self.stats["fetched"] += 1
             log.info("phrase service: track %d %r -> %d phrases (%s mood)", track_id, track.title,
                      len(table.phrases), table.mood_name)
-            self._emit(player, track_id, table, title=track.title, bpm=track.bpm)
+            self._emit(player, track_id, table, title=track.title, bpm=track.bpm, plan=plan)
 
-    def _emit(self, player: int, track_id: int, table, *, title: str = "", bpm: float = 0.0, error: str = "") -> None:
+    def _emit(self, player: int, track_id: int, table, *, title: str = "", bpm: float = 0.0, error: str = "",
+              plan=None) -> None:
         if not title:
             t = self.library.track(track_id)
             if t is not None:
                 title, bpm = t.title, t.bpm
         self.queue.put(TrackPhraseMessage(timestamp=self.clock.monotonic(), player=int(player), track_id=int(track_id),
                                           title=title, bpm=float(bpm), table=table,
-                                          source="rekordbox" if table is not None else "", error=error))
+                                          source="rekordbox" if table is not None else "", error=error, plan=plan))

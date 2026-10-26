@@ -30,11 +30,29 @@ def main() -> int:
     p.add_argument("--gain", type=float, default=None)
     p.add_argument("--out", default=None)
     p.add_argument("--cold-start", action="store_true", help="Cold-start the energy normalizer (live --no-norm-seed); default seeds from config.json")
+    p.add_argument("--pssi", default=None, help="rekordbox ANLZ .EXT for this track: feed its phrase table (+ .DAT grid, waveform) as the XDJ would")
+    p.add_argument("--drive", action="store_true", help="with --pssi: the track plan drives the sections (--phrases drive); default = shadow")
+    p.add_argument("--track-id", type=int, default=1, help="with --pssi: rekordbox id used for the plan's palette/hook seed")
     a = p.parse_args()
 
     tl = Timeline(bpm=a.bpm) if a.bpm else Timeline.load(timeline_path_for(a.track))
+    phrases = plan = grid = None
+    if a.pssi:
+        from livereact.rekordbox.planner import plan_track
+        from livereact.rekordbox.pssi import parse_pqtz, parse_pssi
+        from livereact.rekordbox.waveform import parse_pwv5
+        ext = Path(a.pssi).read_bytes()
+        phrases = parse_pssi(ext)
+        if phrases is None:
+            print(f"{a.pssi}: no PSSI phrase table"); return 2
+        dat_path = Path(a.pssi).with_suffix(".DAT")
+        grid = parse_pqtz(dat_path.read_bytes()) if dat_path.exists() else None
+        plan = plan_track(phrases, track_id=a.track_id, title=Path(a.track).stem, bpm=tl.bpm, grid=grid,
+                          waveform=parse_pwv5(ext))
+        print(plan.summary())
     r = run_sim(a.track, tl, a.rig, gestures=a.gestures, duration=a.duration, gain=a.gain,
-                seed_range=None if a.cold_start else default_seed_range())
+                seed_range=None if a.cold_start else default_seed_range(),
+                phrases=phrases, drive=a.drive, plan=plan, grid=grid if a.pssi else None)
     out = a.out or f"results/{datetime.now():%Y%m%d-%H%M%S}/{Path(a.track).stem}"
     r.summary["track"] = a.track
     r.summary["frames_digest"] = r.frames_digest()

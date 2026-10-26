@@ -80,6 +80,9 @@ class Phrase:
     k2: int = 0
     k3: int = 0
     b: int = 0
+    beat2: int = 0    # high-mood "Up 3" phrases: extra beat markers inside the phrase
+    beat3: int = 0
+    beat4: int = 0
 
     @property
     def length(self) -> int:
@@ -198,7 +201,7 @@ def parse_pssi_payload(payload: bytes) -> PhraseTable | None:
         nxt_beat = raw[i + 1][1] if i + 1 < len(raw) else end_beat
         phrases.append(Phrase(index=index, beat=beat, end_beat=max(beat, nxt_beat), kind=kind,
                               label=kind_label(mood, kind), fill=fill, beat_fill=beat_fill,
-                              k1=k1, k2=k2, k3=k3, b=b))
+                              k1=k1, k2=k2, k3=k3, b=b, beat2=beat2, beat3=beat3, beat4=beat4))
     return PhraseTable(mood=mood, end_beat=end_beat, bank=raw_bank, phrases=tuple(phrases))
 
 

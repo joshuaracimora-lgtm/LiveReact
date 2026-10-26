@@ -152,6 +152,9 @@ def run_sim(
     seed_range: "tuple[float, float] | None" = None,
     params: "dict | None" = None,
     phrases: "object | None" = None,
+    drive: bool = False,
+    plan: "object | None" = None,
+    grid: "list | None" = None,
 ) -> RunResult:
     """Simulate one track end to end and return the full frame log.
 
@@ -168,14 +171,14 @@ def run_sim(
     previous = knobs.apply(params) if params else {}
     try:
         return _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np,
-                        phrases=phrases)
+                        phrases=phrases, drive=drive, plan=plan, grid=grid)
     finally:
         if previous:
             knobs.restore(previous)
 
 
 def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np,
-             phrases=None):
+             phrases=None, drive=False, plan=None, grid=None):
 
     if audio is None:
         audio = decode_audio(track, duration)
@@ -222,9 +225,20 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
     # so the metronome's section fields run through the identical code path as live.
     beats_emitted = 0
     next_status_time = 0.0
+    # The XDJ's beat_count walks REKORDBOX's beat grid (PQTZ, ms per beat), which need not
+    # start where Josh's ear timeline does -- so when the grid is known, the synthetic
+    # status stream counts beats off it, exactly as the deck would; otherwise off the
+    # timeline grid.
+    grid_times = [g[2] / 1000.0 for g in grid] if grid else None
+    grid_pos = 0
     if phrases is not None:
+        if plan is None:
+            from ..rekordbox.planner import plan_track
+            plan = plan_track(phrases, track_id=1, title=str(track), bpm=timeline.bpm)
+        if drive:
+            metronome.phrases_mode = "drive"
         shared_queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=1, title=str(track),
-                                            bpm=timeline.bpm, table=phrases))
+                                            bpm=timeline.bpm, table=phrases, plan=plan))
 
     frames = np.zeros((n_blocks, 512), dtype=np.uint8)
     times = np.zeros(n_blocks, dtype=np.float64)
@@ -241,11 +255,19 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
             next_beat_time += beat_dur
             beats_emitted += 1
         if phrases is not None and now >= next_status_time:
+            if grid_times is not None:
+                while grid_pos < len(grid_times) and grid_times[grid_pos] <= now:
+                    grid_pos += 1
+                beat_count = grid_pos if grid_pos else None          # 1-based index of the last grid beat passed
+                status_bib = grid[grid_pos - 1][0] if grid_pos else 1
+            else:
+                beat_count = beats_emitted if beats_emitted else None
+                status_bib = (beat_in_bar - 2) % timeline.beats_per_bar + 1
             shared_queue.put(DeckStatusMessage(
                 timestamp=now, player=1, track_id=1, loaded_player=1, slot="sd", analyze_type="rekordbox",
                 play_state="playing", playing=True, on_air=True, master=True, sync=False,
-                bpm=timeline.bpm, pitch=1.0, beat_count=beats_emitted if beats_emitted else None,
-                beat_in_bar=(beat_in_bar - 2) % timeline.beats_per_bar + 1, source_ip="sim"))
+                bpm=timeline.bpm, pitch=1.0, beat_count=beat_count,
+                beat_in_bar=status_bib, source_ip="sim"))
             next_status_time = now + 0.2
         for msg in script.messages_at(now):
             shared_queue.put(msg)
@@ -280,6 +302,8 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
             row["phrase"] = snap.phrase_label
             row["beats_to_next"] = snap.beats_to_next_section
             row["track_beat"] = snap.track_beat
+            row["planned_scene"] = snap.planned_scene
+            row["plan_active"] = snap.plan_active
         for slot, fx in zip(slots, rig.fixtures):
             vs = fx.visual_state(frame)
             row[f"{slot}_brightness"] = round(vs.brightness, 3)
