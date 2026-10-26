@@ -59,7 +59,30 @@ def _pdblib():
             "python-prodj-link (prodj.pdblib) is not importable; it is needed to read export.pdb "
             "(see inputs/prodj.py's docstring for the install note)."
         ) from exc
+    _fix_utf16_strings()
     return PDBDatabase
+
+
+def _fix_utf16_strings() -> None:
+    """Patch pdblib's DeviceSQL long-string decoder (kind 0x90) in place.
+
+    Upstream (b08921e) reads the text right after the 2-byte length as UTF-16-BE;
+    rekordbox writes a pad byte there and then UTF-16-LE. Every non-ASCII path
+    came out shifted by one byte ('Łaszewo' -> 'Ašszewo', '’ ' -> '\\x19†'), so
+    those tracks never matched their files. ASCII strings use other kinds and are
+    unaffected. The Switch's cases dict is shared by every struct that embeds
+    PioString, so mutating it fixes all of them; idempotent."""
+    from construct import ExprAdapter, FocusedSeq, Int16ul, Padding, PaddedString, this  # type: ignore
+    from prodj.pdblib import piostring  # type: ignore
+    cases = piostring.PioString.subcons[1].subcon.cases
+    if getattr(cases.get(0x90), "_livereact_fixed", False):
+        return
+    fixed = FocusedSeq("text",
+        "actual_length" / ExprAdapter(Int16ul, lambda o, c: o - 4, lambda o, c: o + 4),
+        Padding(1),
+        "text" / PaddedString(this.actual_length, "utf-16-le"))
+    fixed._livereact_fixed = True
+    cases[0x90] = fixed
 
 
 class RekordboxLibrary:
