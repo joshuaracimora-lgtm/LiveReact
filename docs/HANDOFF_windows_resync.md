@@ -67,6 +67,9 @@ Do not push. Do not run the search in the foreground. If a step needs Josh's inp
     tracks as `EAR`, and no `GRID/EAR downbeat off` lines (a different encode of a labelled track). The nightly
     agent's preflight refuses to start without `usb_export\PIONEER\rekordbox\export.pdb`; the sweep then runs over
     every track for `-SweepMinutes` (default 40) before the agent, and the gate/search run in drive mode
-    (`--usb usb_export --drive`). After the first copy, regenerate the baseline on the Mac in drive mode
-    (`python tools/loop/baseline.py`, commit with `git add -f results/baseline/evaluation.json`) and pull here.
+    (`--usb usb_export --drive`). After the first copy, generate the drive-mode baseline HERE
+    (`.\.venv\Scripts\python.exe tools\loop\baseline.py`): it is a local, gitignored file -- the repo is public
+    and nothing but the app lives in it. Timelines, look notes, the review file, the baseline and the nights'
+    reports move between machines with `python tools/private_bundle.py --pack LiveReact-private.zip` /
+    `--unpack` (never by git).
 

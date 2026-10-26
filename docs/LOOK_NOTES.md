@@ -1,6 +1,7 @@
 # Look notes — telling LiveReact how ONE track should look
 
-`tracks/<song>.look.json` sits beside the song's `.timeline.json` and is committed like it.
+`tracks/<song>.look.json` sits beside the song's `.timeline.json` and, like it, stays OUT of the public repo
+(gitignored); `tools/private_bundle.py --pack/--unpack` moves both between the Mac and the desktop.
 The planner (`--phrases drive`) honours it exactly for that track; the nightly agent reads the
 notes you wrote for your labelled tracks to shape the DEFAULTS for every other track on the USB.
 

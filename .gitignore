@@ -30,14 +30,16 @@ Thumbs.db
 .vscode/
 .idea/
 logs/
-# Owned audio for offline simulation -- never committed
+# Josh's song data (audio, ear timelines, look notes, review notes) -- never in the public repo;
+# it travels between machines with tools/private_bundle.py
 tracks/*
 !tracks/.gitkeep
-!tracks/*.timeline.json
-!tracks/*.look.json
+!tracks/LOOK_NOTES_TEMPLATE.look.json
 # a copy of the rekordbox USB export (audio + PIONEER/ analysis): the harness/agent corpus, never committed
 usb_export/
 results/
+# nightly reports carry track names and scores: private, copied by hand (tools/private_bundle.py)
+docs/agent_nights/
 
 # Claude Code per-machine permission grants (written by interactive sessions on any machine)
 .claude/settings.local.json

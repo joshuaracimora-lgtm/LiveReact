@@ -1,7 +1,8 @@
 # Running the loop on the Windows desktop
 
 1. `git clone https://github.com/joshuaracimora-lgtm/LiveReact.git %USERPROFILE%\LiveReact`, then `git checkout harness`.
-2. Copy the Mac's `~/LiveReact/tracks/` folder (audio + `*.timeline.json`) into the clone. Audio is gitignored on purpose.
+2. Copy the Mac's `~/LiveReact/tracks/` folder (audio + `*.timeline.json` + `*.look.json`) into the clone. All of
+   `tracks/` is gitignored on purpose (public repo); `tools/private_bundle.py` zips the small private files.
 3. `powershell -ExecutionPolicy Bypass -File tools\windows\setup.ps1` — installs Git/Python 3.12/ffmpeg, builds the venv, runs the tests and a smoke run. Re-run until every line says PASS.
 4. Power: Settings > System > Power > sleep "Never" when plugged in.
 5. `powershell -ExecutionPolicy Bypass -File tools\windows\register_task.ps1` — registers the 1 AM nightly job (wakes the PC, 6 h search).

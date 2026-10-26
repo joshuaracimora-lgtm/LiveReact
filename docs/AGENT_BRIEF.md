@@ -118,10 +118,13 @@ its own; it cannot invent a placement rule, a section merge rule, or a look. Kno
    evaluates the working tree in drive mode on the scored set plus the 20-track sweep sample and gates it:
    tuning compliance up (+0.005), hold-out not worse, no rule regressing on any track, drop placement not
    worse than +0.25 bar, sweep compliance not lower, quality metrics not collapsing. It prints every flip.
-   On ACCEPT it rewrites `results/baseline/evaluation.json`. **Only an ACCEPT may be committed.**
-4. On ACCEPT: one commit per accepted change, including `git add -f results/baseline/evaluation.json`, with a
-   message that says what the music does, what rule or mechanism you added, which tracks flipped with the
-   gate's numbers (including drop placement and the sweep), what got worse, what you could not fix and why.
+   On ACCEPT it rewrites `results/baseline/evaluation.json` -- a LOCAL, gitignored file (the repo is public;
+   the orchestrator snapshotted tonight's starting baseline and verifies against that snapshot, not your
+   rewrite). **Only an ACCEPT may be committed.**
+4. On ACCEPT: one commit per accepted change -- code and tests only, never `tracks/`, never the baseline
+   file, never anything under `results/` -- with a message that says what the music does, what rule or
+   mechanism you added, which tracks flipped with the gate's numbers (including drop placement and the
+   sweep), what got worse, what you could not fix and why.
 5. On REJECT: fix the regression or revert (`git restore .` plus deleting files you created). At most three
    attempts per night; after that, stop building and write up what you learned.
 6. Re-run the full pytest after your final commit. `git status --porcelain` must print nothing when you finish.
@@ -130,7 +133,7 @@ its own; it cannot invent a placement rule, a section merge rule, or a look. Kno
 
 - Never push. Never change branch. Never merge or rebase. Never touch `main` or `harness`.
 - Never edit anything outside the list in "Build, test, gate" step 1. In particular not `tracks/`
-  (timelines, look notes), `spec/`, `src/livereact/sim/score.py`, `src/livereact/loop/`, `src/livereact/engines/`,
+  (timelines, look notes -- Josh's private data, kept out of the public repo), `results/`, `spec/`, `src/livereact/sim/score.py`, `src/livereact/loop/`, `src/livereact/engines/`,
   `src/livereact/scenes/`, `src/livereact/merge/`, `src/livereact/ui/`, `tools/`, `.claude/`, the pytest
   configuration, or existing knobs' tags or ranges. Never delete a test file. If a tool is broken, work
   around it and report it; do not fix it.
