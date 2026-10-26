@@ -14,8 +14,9 @@ Track position: the XDJ-XZ's CDJ *status* packets (unicast to us once we announc
 inputs/pdl_announce.py — corrected 2026-10-25, docs/04 §4.1) carry an absolute
 beat counter and the loaded rekordbox track id. Those feed the ``track_*`` /
 ``phrase_*`` / ``section_*`` fields below (measured; "" / -1 when no deck status
-or no phrase table). Until Stage 3 (docs/13 D-21) nothing in the engines acts on
-them; they are recorded and shown so the data can be judged against the ear first.
+or no phrase table). In ``--phrases shadow`` (the default) they are only recorded
+and shown; in ``--phrases drive`` the ``plan_*`` fields below carry the track plan
+(rekordbox/planner.py) the metronome and engines execute (docs/13 D-21).
 """
 
 from __future__ import annotations

@@ -13,14 +13,17 @@ Reproduce: `tools/harness/run_sim.py <mp3> --pssi <ANLZ0000.EXT> --drive`, then
 | Thriller (BVRNOUT) | 0.333 | 0.500 | STRUCT-02 F→P, TIME-11 F→P |
 | Namerakana 2.0 | 0.471 | 1.000 | STRUCT-01, TIME-02, TIME-11 F→P |
 | One More Time | 0.500 | 0.500 | STRUCT-03 F→P, TIME-05 P→F |
-| SWEETER | 0.552 | 0.414 | TIME-05 F→P; TIME-02, TIME-11 P→F |
+| SWEETER | 0.552 | 0.483 | STRUCT-04, TIME-05 F→P; TIME-02, TIME-11 P→F |
 | Latch | 0.286 | 0.536 | LOOK-05, STRUCT-03, TIME-11 F→P |
 | Somebody To Love | 0.343 | 0.229 | LOOK-05, STRUCT-02 P→F |
 | Sweet Nothing | 0.333 | 0.500 | LOOK-05, TIME-02, TIME-11 F→P; STRUCT-09 P→F |
 | Talk To You | 0.517 | 0.448 | STRUCT-03 P→F |
 | Beautiful Now | 0.375 | 0.469 | TIME-11 F→P |
 | messy (laszewo edit) | 0.517 | 0.448 | STRUCT-02 P→F |
-| **mean** | **0.423** | **0.504** | |
+| **mean** | **0.423** | **0.511** | |
+
+Numbers are after the 2026-10-25 review pass (PEAK/OUTRO restraint moved into the
+overlay, the planned PEAK look reachable, the roll "breath" respected by the count-in).
 
 ## What the comparison taught (measured, not assumed)
 

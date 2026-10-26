@@ -77,8 +77,6 @@ class ProDjLinkListener(InputSource):
         clock: Clock,
         stop_event: threading.Event,
         interface: str | None = None,
-        player_number: int = 5,
-        poll_hz: float = 50.0,
         *,
         announce: bool = True,
         status_callback: StatusCallback | None = None,
@@ -89,12 +87,10 @@ class ProDjLinkListener(InputSource):
         self.clock = clock
         self.stop_event = stop_event
         self.interface = interface          # NIC name or IP to announce on (default: the 169.254 one)
-        self.player_number = player_number  # legacy; the announcer uses the rekordbox number (17)
-        self.poll_hz = poll_hz              # unused now (receive is select()-driven, not polled)
         self.announce = announce
         self.status_callback = status_callback
         self.emit_status = emit_status
-        self.phrase_service = phrase_service  # Stage 2: asked for a phrase table on track change
+        self.phrase_service = phrase_service  # rekordbox/service.py: asked for a phrase table + plan on track change
         self._packets = None
         self._socks: list[socket.socket] = []
         self._thread: threading.Thread | None = None
@@ -108,6 +104,9 @@ class ProDjLinkListener(InputSource):
         self.hello_count = 0
         self.first_status_at: float | None = None
         self._last_track_key: dict[int, tuple] = {}
+        self._prefetched: set[tuple[str, str]] = set()   # (ip, slot) whose export.pdb we asked for
+        self.status_parse_errors = 0
+        self._last_parse_error = ""
 
     @property
     def name(self) -> str:
@@ -144,10 +143,9 @@ class ProDjLinkListener(InputSource):
     def _bind(port: int) -> socket.socket:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)  # a probe + the app may overlap briefly
-        except (AttributeError, OSError):
-            pass
+        # Deliberately NO SO_REUSEPORT: on macOS it load-balances unicast UDP between the
+        # sharing sockets, so a probe running beside the app would steal half the status
+        # packets from both. A second binder fails loudly (EADDRINUSE) instead.
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         s.bind(("0.0.0.0", port))
         return s
@@ -159,7 +157,16 @@ class ProDjLinkListener(InputSource):
             from .pdl_announce import RekordboxAnnouncer, interface_identity, pin_to_interface
 
             self.identity = interface_identity(self.interface)
-            pinned = [pin_to_interface(s, self.identity.ifindex) for s in self._socks]
+            # IP_BOUND_IF also filters INBOUND datagrams on macOS: pinning the listening
+            # sockets to the wrong NIC would silently kill the beat path the show runs on.
+            # Pin only when the choice is unambiguous (named by the operator, or exactly one
+            # link-local NIC); otherwise rely on routing and say so.
+            safe_to_pin = self.identity.explicit or (self.identity.link_local and self.identity.candidates == 1)
+            pinned = [pin_to_interface(s, self.identity.ifindex) for s in self._socks] if safe_to_pin else []
+            if not safe_to_pin:
+                log.warning("Pro DJ Link: %d candidate NICs (%s chosen); not pinning sockets -- pass "
+                            "--pdl-interface <nic> to pin, and check --net-check for a second 169.254 route.",
+                            self.identity.candidates, self.identity.name)
             self._announcer = RekordboxAnnouncer(
                 self._packets, self._socks[0], self._socks[2], self.identity, self.clock, self.stop_event)
             self._announcer.start()
@@ -255,7 +262,16 @@ class ProDjLinkListener(InputSource):
 
     # ------------------------------------------------------------------ status (port 50002)
     def _handle_status(self, data: bytes, addr: tuple[str, int]) -> None:
-        packet = self._packets.StatusPacket.parse(data)
+        try:
+            packet = self._packets.StatusPacket.parse(data)
+        except Exception as exc:  # noqa: BLE001 - construct raises many types; unknown 50002 traffic is normal
+            self.status_parse_errors += 1
+            text = f"{type(exc).__name__}: {str(exc).splitlines()[0][:120]}"
+            if text != self._last_parse_error:
+                self._last_parse_error = text
+                log.info("Pro DJ Link: unparsed status packet (%d bytes from %s): %s (identical errors suppressed)",
+                         len(data), addr[0], text)
+            return
         ptype = str(packet.type)
         if ptype == "rekordbox_hello":
             self._seen_device = True
@@ -295,6 +311,13 @@ class ProDjLinkListener(InputSource):
         self.last_status[msg.player] = msg
         if self._announcer is not None and addr[0]:
             self._announcer.note_peer(addr[0])
+        if self.phrase_service is not None and msg.slot in ("sd", "usb") and (msg.source_ip, msg.slot) not in self._prefetched:
+            # warm export.pdb for this stick before the first track is asked about (seconds over NFS)
+            self._prefetched.add((msg.source_ip, msg.slot))
+            try:
+                self.phrase_service.prefetch_pdb(msg.source_ip, msg.slot)
+            except Exception:  # noqa: BLE001
+                log.exception("phrase service prefetch failed")
         key = (msg.source_ip, msg.slot, msg.track_id)
         if self.phrase_service is not None and msg.track_id and key != self._last_track_key.get(msg.player):
             self._last_track_key[msg.player] = key

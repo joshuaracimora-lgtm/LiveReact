@@ -64,6 +64,8 @@ class IfaceIdentity:
     mac: str          # "aa:bb:cc:dd:ee:ff" (what the library's MacAddrAdapter wants)
     broadcast: str
     ifindex: int | None
+    candidates: int = 1       # how many NICs could have been meant (1 = unambiguous; pinning is only safe then)
+    explicit: bool = False    # the operator named this NIC (--pdl-interface)
 
     @property
     def link_local(self) -> bool:
@@ -116,6 +118,7 @@ def interface_identity(interface: str | None = None) -> IfaceIdentity:
     if not addrs:
         raise AnnounceError("no IPv4 interface found to announce on")
     chosen: tuple[str, str] | None = None
+    candidates = 1
     if interface:
         for n, ip in addrs:
             if interface in (n, ip):
@@ -125,14 +128,16 @@ def interface_identity(interface: str | None = None) -> IfaceIdentity:
             raise AnnounceError(f"interface {interface!r} has no IPv4 address (have: {addrs})")
     else:
         link_local = [a for a in addrs if a[1].startswith(LINK_LOCAL_PREFIX)]
-        chosen = link_local[0] if link_local else addrs[0]
+        pool = link_local if link_local else addrs
+        chosen = pool[0]
+        candidates = len(pool)
     name, ip = chosen
     try:
         ifindex: int | None = socket.if_nametoindex(name)
     except (OSError, AttributeError, ValueError):
         ifindex = None
     return IfaceIdentity(name=name, ip=ip, mac=_mac_for(name, ip), broadcast=_broadcast_for(name, ip),
-                         ifindex=ifindex)
+                         ifindex=ifindex, candidates=candidates, explicit=bool(interface))
 
 
 def pin_to_interface(sock: socket.socket, ifindex: int | None) -> bool:

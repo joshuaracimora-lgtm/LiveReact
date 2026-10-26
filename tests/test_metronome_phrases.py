@@ -35,7 +35,7 @@ def _status(t, *, player=1, track_id=7, beat_count=1, playing=True, on_air=True,
 
 
 def _phrases(t, track_id=7, table=None):
-    return TrackPhraseMessage(timestamp=t, player=1, track_id=track_id, title="Song", bpm=120.0, table=table)
+    return TrackPhraseMessage(timestamp=t, player=1, track_id=track_id, title="Song", bpm=120.0, table=table, slot="sd")
 
 
 def test_defaults_without_any_deck_status():

@@ -147,6 +147,7 @@ def test_garbage_on_status_port_is_logged_not_raised():
     src._handle_packet(socks[50002], b"\x00\x01\x02 not a packet", XZ)
     src._handle_packet(socks[50002], b"", XZ)
     assert not seen and q.empty()
+    assert src.status_parse_errors == 2       # counted, logged once per distinct error, never raised
     src._handle_packet(socks[50002], cdj_status(), XZ)  # still alive afterwards
     assert len(seen) == 1
 
@@ -154,9 +155,14 @@ def test_garbage_on_status_port_is_logged_not_raised():
 def test_phrase_service_is_asked_once_per_track_change():
     calls = []
 
+    prefetches = []
+
     class Svc:
         def request(self, ip, slot, player, track_id):
             calls.append((ip, slot, player, track_id))
+
+        def prefetch_pdb(self, ip, slot):
+            prefetches.append((ip, slot))
 
     src, q, socks, _ = make_listener()
     src.phrase_service = Svc()
@@ -166,3 +172,4 @@ def test_phrase_service_is_asked_once_per_track_change():
     src._handle_packet(socks[50002], cdj_status(player=2, track_id=175), XZ)
     src._handle_packet(socks[50002], cdj_status(player=2, track_id=0), XZ)   # nothing loaded: no request
     assert calls == [(XZ[0], "sd", 1, 175), (XZ[0], "sd", 1, 176), (XZ[0], "sd", 2, 175)]
+    assert prefetches == [(XZ[0], "sd")]          # export.pdb warmed once per (ip, slot), on the first status

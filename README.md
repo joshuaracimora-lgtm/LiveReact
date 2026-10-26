@@ -60,6 +60,8 @@ nohup tools/run_show.sh --hardware --visualize --record --rig rigs/junior_crib.j
 python -m livereact --fixture-test           # drive raw DMX channels
 python -m livereact --midi-monitor           # discover the XDJ's MIDI CCs
 python -m livereact --net-check              # Pro DJ Link network readiness
+python -m livereact --pdl-probe --pdl-fetch  # XDJ-XZ status packets + the loaded track's rekordbox phrase table
+python -m livereact --hardware --phrases drive   # the per-track plan runs the sections (default: shadow)
 python -m livereact --doctor                 # environment + detected-devices report
 ```
 

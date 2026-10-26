@@ -98,6 +98,7 @@ class App:
                                    seed_range=self._energy_norm_seed(),
                                    range_callback=self._persist_energy_norm_range,
                                    control_callback=self._on_operator_control)
+        self.scene_catalog = SceneCatalog(full=self.config.full_catalog)   # shared by PhraseEngine + the planner
         self.sources = self._build_sources()
 
         # --- show pipeline (Phases 3-4): snapshot -> engines -> merge -> frame buffer ---
@@ -110,7 +111,7 @@ class App:
         # real/hardware mode leaves them disarmed until the operator arms (safety).
         if self.config.demo:
             self.manual.laser_enable = True
-        self.phrase_engine = PhraseEngine(SceneCatalog(full=self.config.full_catalog))
+        self.phrase_engine = PhraseEngine(self.scene_catalog)
         self.reactive_engine = ReactiveLayerEngine(self.clock, manual=self.manual,  # manual: Synth Sync toggle
                                                    roll_sink=self.metronome.note_roll)  # a roll arms the drop
         # Which laser engine: the rig file's `laser_profile` (fixtures/rig.py).
@@ -269,7 +270,7 @@ class App:
             try:
                 from .rekordbox.service import PhraseService
 
-                pool = SceneCatalog(full=self.config.full_catalog).names_by_bucket()
+                pool = self.scene_catalog.names_by_bucket()
                 self.phrase_service = PhraseService(self.input_queue, self.clock, stop_event=self.stop_event,
                                                     cache_dir=self.config.rekordbox_cache, scene_pool=pool)
             except Exception:  # noqa: BLE001 - phrase data is optional
@@ -280,6 +281,7 @@ class App:
         return sources + [
             ProDjLinkListener(self.input_queue, self.clock, self.stop_event,
                               interface=self.config.pdl_interface,
+                              announce=phrases != "off",   # off = fully passive, the pre-2026-10-25 listener
                               emit_status=phrases != "off", phrase_service=self.phrase_service),
             MidiListener(self.input_queue, self.clock, cc_map),
             AudioAnalyzer(self.input_queue, self.clock, self.stop_event,

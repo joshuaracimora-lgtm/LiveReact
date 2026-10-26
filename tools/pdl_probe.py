@@ -16,7 +16,7 @@ OFFLINE (no hardware; works today on this Mac):
   python tools/pdl_probe.py --pdb databases/player-1-sd.pdb --track-id 4
   python tools/pdl_probe.py --corpus ~/Library/Pioneer/rekordbox/share/PIONEER/USBANLZ   # parse every .EXT, report
 
-LIVE (Stage 1; needs the XDJ on the USB-Ethernet NIC with a 169.254.x.x address):
+LIVE (needs the XDJ on the USB-Ethernet NIC with a 169.254.x.x address):
   python tools/pdl_probe.py --live [--interface en5] [--no-announce] [--seconds 120] [--fetch] [--dump DIR]
 
 Exit codes: 0 ok, 2 parse/lookup failed, 3 live mode unavailable.
@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--track-id", type=int, default=None, help="with --pdb: resolve one rekordbox track id")
     p.add_argument("--corpus", help="offline: parse every .EXT under this directory and report")
     p.add_argument("--limit", type=int, default=None, help="with --corpus: only the first N files")
-    p.add_argument("--live", action="store_true", help="listen to the XDJ-XZ on the wire (Stage 1)")
+    p.add_argument("--live", action="store_true", help="listen to the XDJ-XZ on the wire (same as python -m livereact --pdl-probe)")
     p.add_argument("--interface", default=None, help="live: NIC name or IP to pin to (default: the 169.254 one)")
     p.add_argument("--no-announce", action="store_true", help="live: passive only (A/B against announcing)")
     p.add_argument("--seconds", type=float, default=None, help="live: stop after N seconds")
@@ -140,9 +140,9 @@ def main(argv: list[str] | None = None) -> int:
         return _pdb_lookup(args.pdb, args.track_id)
     if args.live:
         try:
-            from livereact.inputs.pdl_probe_live import run_live  # Stage 1
-        except ImportError:
-            print("live mode is not built yet (Stage 1); offline modes: --ext / --pdb / --corpus")
+            from livereact.inputs.pdl_probe_live import run_live
+        except ImportError as exc:
+            print(f"live mode unavailable ({exc}); offline modes: --ext / --pdb / --corpus")
             return 3
         return run_live(interface=args.interface, announce=not args.no_announce, seconds=args.seconds,
                         fetch=args.fetch, dump_dir=args.dump)

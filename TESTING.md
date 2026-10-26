@@ -372,7 +372,9 @@ and `state.jsonl` has `plan_active`, `planned_scene`, `big_moment`, `beats_to_dr
 Expect: every chorus the same look + colour; only the loudest chorus gets the fan /
 PEAK; the strobe counts in over the last 16 beats and the rig goes black on the last
 beat before the drop; intro/outro dim with no laser. Pull the Ethernet cable
-mid-track: within 1 s `plan_active` drops and the loudness classifier carries on.
+mid-track: after ~3 s (a 1 s status gap is ridden out) `plan_active` drops and the
+loudness classifier carries on; plug it back and the plan re-applies its section.
+The probe cannot run beside the app: only one process may own UDP 50000-50002.
 Offline first: `python tools/harness/run_sim.py tracks/<x>.mp3 --pssi <ANLZ0000.EXT> --drive`
 then `tools/harness/score.py` on the result -- the same scorer as the nightly agent.
 

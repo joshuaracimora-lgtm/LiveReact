@@ -210,8 +210,8 @@ class PhraseEngine:
         scene = self.catalog.find(snap.planned_scene)
         if scene is None or not self.catalog.eligible(scene, rig):
             return None
-        if _FAMILY.get(scene.bucket.value, "break") != _FAMILY.get(snap.bucket, "break"):
-            return None
+        if scene.bucket.value != snap.bucket:
+            return None   # e.g. PEAK showing: the catalog's PEAK look, not the drop hook (the big moment looks bigger)
         return scene
 
     def _begin_rotation(self, snap: ShowSnapshot, rig: Rig, crossfade_bars: float = float(CROSSFADE_BARS)) -> None:

@@ -71,8 +71,6 @@ def test_quiet_edges_and_count_in_targets():
     assert not outro.strobe_allowed and not outro.laser_allowed and outro.bucket == "outro"
     assert plan.sections[1].strobe_allowed and plan.sections[1].laser_allowed
     assert not plan.sections[3].strobe_allowed                  # a breakdown never strobes
-    assert plan.sections[1].drop_at_beat == 49 and plan.sections[3].drop_at_beat == 145
-    assert plan.sections[2].drop_at_beat == 145 and plan.sections[5].drop_at_beat is None and plan.sections[6].drop_at_beat is None
     assert plan.beats_to_drop(40) == 9 and plan.beats_to_drop(150) == -1 and plan.beats_to_drop(144) == 1
     cur, nxt = plan.at_beat(100)
     assert cur.kind == "breakdown" and nxt.kind == "build"
@@ -83,7 +81,6 @@ def test_rules_can_be_relaxed():
     rules = PlanRules(one_big_moment=False, quiet_edges=False, builds_count_in=False)
     plan = plan_track(HIGH, track_id=7, bpm=120.0, rules=rules)
     assert all(s.big_moment for s in plan.drops) and plan.sections[0].laser_allowed
-    assert all(s.drop_at_beat is None for s in plan.sections)
 
 
 def test_mid_mood_verses_and_scene_pool_choice():

@@ -58,8 +58,9 @@ class PlanRules:
     one_big_moment: bool = True
     builds_count_in: bool = True
     quiet_edges: bool = True
-    prearm_beats: int = 16      # drop_armed this many beats before a planned drop
-    tension_beats: int = 32     # laser tension ramps over this countdown
+    prearm_beats: int = 16      # drop_armed this many beats before a planned drop (core/metronome.py);
+                                # the strobe count-in length is engines/reactive.py BUILD_COUNTIN_BEATS and the
+                                # laser tension lead is engines/laser_feature.py TENSION_LEAD_BEATS
     min_section_beats: int = 32 # interior break/drop/outro sections shorter than this (8 bars = TIME-11's
                                 # BREAK/DROP dwell) are absorbed into their predecessor; builds may be 4 bars
     min_build_beats: int = 16
@@ -83,8 +84,7 @@ class PlannedSection:
     big_moment: bool = False
     strobe_allowed: bool = True
     laser_allowed: bool = True
-    drop_at_beat: int | None = None   # the next planned drop boundary ahead of this section
-    fill_beat: int | None = None
+    fill_beat: int | None = None      # rekordbox's fill-in flag (unused yet; the scorer's STRUCT-01 vocabulary)
 
     @property
     def length(self) -> int:
@@ -117,7 +117,7 @@ class TrackPlan:
     def beats_to_drop(self, beat: int) -> int:
         """Beats until the next planned drop boundary strictly ahead of ``beat``; -1 if none."""
         for s in self.sections:
-            if s.kind == "drop" and s.beat > beat and (s.index == 0 or self.sections[s.index - 1].kind != "drop"):
+            if s.kind == "drop" and s.beat > beat:   # consecutive drops were merged, so each one is a boundary
                 return s.beat - beat
         return -1
 
@@ -239,11 +239,6 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
         is_drop = kind == "drop"
         big = r["index"] in big_set
         quiet = rules.quiet_edges and kind in ("intro", "outro")
-        next_drop = None
-        for run in runs:
-            if raw[run[0]]["beat"] > r["beat"]:
-                next_drop = raw[run[0]]["beat"]
-                break
         sections.append(PlannedSection(
             index=r["index"], beat=r["beat"], end_beat=r["end_beat"], label=r["label"], kind=kind, bucket=bucket,
             scene=per_bucket_scene.get(bucket, ""), energy=round(r["energy"], 4),
@@ -251,11 +246,10 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
             is_hook=is_drop and rules.repeat_hook, big_moment=big,
             strobe_allowed=(is_drop or kind == "build") and not quiet,
             laser_allowed=not quiet,
-            drop_at_beat=next_drop if rules.builds_count_in else None,
             fill_beat=r["fill_beat"],
         ))
     plan = TrackPlan(track_id=int(track_id), title=title, bpm=float(bpm), mood=table.mood, palette_seed=seed,
                      hook_scene=hook_scene, sections=tuple(sections),
                      big_moment_index=big_run[0] if big_run else None, rules=rules)
-    log.info("%s", plan.summary())
+    log.debug("%s", plan.summary())
     return plan

@@ -748,11 +748,13 @@ class ReactiveLayerEngine:
         # Planned count-in (rekordbox/planner.py "builds count in"): with a drop planned
         # within BUILD_COUNTIN_BEATS the rate follows the countdown even when the audio
         # rise detector is quiet -- the plan knows the downbeat, the ear-rule is the same.
+        if self._breath:
+            return 0.0   # the roll just ended: silence until the hit, whatever armed it
         countdown = 0.0
         if (snap.plan_active and snap.planned_strobe_allowed and snap.drop_armed
                 and 0 < snap.beats_to_drop <= BUILD_COUNTIN_BEATS):
             countdown = 1.0 - (snap.beats_to_drop - 1) / float(BUILD_COUNTIN_BEATS)
-        if countdown <= 0.0 and (not (snap.drop_armed and snap.rising) or self._breath):
+        if countdown <= 0.0 and not (snap.drop_armed and snap.rising):
             return 0.0
         p = 0.0
         if snap.rising:

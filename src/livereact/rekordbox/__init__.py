@@ -12,9 +12,13 @@ lookup (see the plan in docs/13_DECISION_LOG.md D-21 once landed).
 
 Modules:
 - ``pssi``     -- pure-``struct`` parser for the ANLZ container, PSSI and PQTZ tags.
+- ``waveform`` -- the .EXT colour waveform (PWV5): loudness + low/mid/high per 1/150 s.
 - ``mapping``  -- PSSI phrase kinds -> LiveReact section / bucket / timeline kinds (data).
 - ``library``  -- track index over export.pdb (via the vendored ``prodj.pdblib``) + phrase cache.
-- ``fetch``    -- (Stage 1) NFS fetch of export.pdb / ANLZ files from the player.
+- ``fetch``    -- NFS fetch of export.pdb / ANLZ files from the player (vendored NFS client).
+- ``service``  -- worker thread: status "track T loaded" -> TrackPhraseMessage (table + plan).
+- ``planner``  -- the whole-track lighting plan (hook look, big moment, count-in, quiet edges).
 
-Nothing here touches the engines; it is read-only data plumbing.
+Nothing here touches the engines directly; the metronome executes the plan
+(core/metronome.py ``_drive_from_plan``) and the engines read the snapshot.
 """

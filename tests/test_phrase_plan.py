@@ -53,3 +53,13 @@ def test_unknown_planned_name_falls_back_to_the_catalog():
     for bar in range(0, ROTATION_BARS + 4):           # the scheduler still runs when the plan names nothing usable
         eng.tick(_snap(bar, "drop", "No Such Look"), rig)
     assert eng._current.name == "Drop Strobe Stab"
+
+
+def test_peak_shows_the_catalog_peak_look_not_the_hook():
+    eng, rig = _engine()
+    for bar in range(0, 10):
+        eng.tick(_snap(bar, "drop", "Drop Strobe Stab"), rig)
+    assert eng._current.name == "Drop Strobe Stab"
+    for bar in range(10, 14):
+        eng.tick(_snap(bar, "peak", "Drop Strobe Stab"), rig)   # the plan names the hook; PEAK must look bigger
+    assert eng._current.name == "Peak Full Rig" or (eng._next and eng._next.name == "Peak Full Rig")

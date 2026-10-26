@@ -8,7 +8,7 @@ import threading
 
 from livereact.clock import FakeClock
 from livereact.core.messages import AudioLevelMessage, BeatMessage, DeckStatusMessage, TrackPhraseMessage
-from livereact.core.metronome import DECK_STATUS_STALE_AFTER, Metronome
+from livereact.core.metronome import DECK_STATUS_STALE_AFTER, PLAN_HOLD_AFTER_STALE_S, Metronome
 from livereact.core.show_state import ShowState
 from livereact.engines import palette as palette_mod
 from livereact.rekordbox.planner import plan_track
@@ -40,7 +40,7 @@ class Sim:
         self.table = _table()
         self.plan = plan_track(self.table, track_id=track_id, bpm=BPM) if plan else None
         self.m.queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=track_id, title="T", bpm=BPM,
-                                            table=self.table, plan=self.plan))
+                                            table=self.table, plan=self.plan, slot="sd"))
         self.track_id = track_id
         self.beat = 0
         self.beat_in_bar = 0
@@ -133,7 +133,12 @@ def test_losing_status_hands_back_to_the_classifier():
     sim = Sim()
     snap = sim.run_to(60, level=0.1)
     assert snap.bucket == "drop" and snap.plan_active
-    for _ in range(int(DECK_STATUS_STALE_AFTER / (BEAT_S / 5)) + 2):
+    # a short gap (under the grace period) keeps the plan's authority and the pinned palette
+    for _ in range(3):
+        sim.step_beat(level=0.1, send_status=False)
+    snap = sim.snaps[-1]
+    assert snap.plan_active and not snap.deck_status_fresh and snap.bucket == "drop"
+    for _ in range(int((DECK_STATUS_STALE_AFTER + PLAN_HOLD_AFTER_STALE_S) / BEAT_S) + 2):
         sim.step_beat(level=0.1, send_status=False)
     snap = sim.snaps[-1]
     assert not snap.plan_active and not snap.deck_status_fresh
@@ -167,3 +172,63 @@ def test_dj_arm_is_not_overridden_by_the_plan():
     snap = sim.run_to(49, level=0.1)
     assert snap.bucket == "drop"
     assert EnergyBucket(snap.classifier_bucket) == EnergyBucket.DROP
+
+
+def test_plan_reapplies_its_section_when_status_returns():
+    sim = Sim()
+    snap = sim.run_to(60, level=0.1)
+    assert snap.bucket == "drop"
+    # status drops out inside the first chorus (49-81): authority is lost and the plan forgets
+    # which section it applied, so it re-commits instead of waiting for the next boundary
+    for _ in range(10):                                   # 5 s: past the grace period
+        sim.step_beat(level=0.05, send_status=False)
+    assert not sim.snaps[-1].plan_active and sim.m._plan_section_key is None
+    sim.m._base_committed = EnergyBucket.BREAK            # pretend the classifier moved the bucket meanwhile
+    sim.m._bucket_committed = EnergyBucket.BREAK
+    snap = sim.run_to(sim.beat + 2, level=0.05)
+    assert snap.plan_active and snap.bucket == "drop" and snap.section_kind == "drop" and snap.track_beat < 81
+
+
+def test_cued_decks_do_not_flap_the_active_deck():
+    sim = Sim()
+    t = sim.clock.monotonic()
+    for i in range(20):
+        sim.m.queue.put(DeckStatusMessage(timestamp=t, player=1 + i % 2, track_id=7 + i % 2, loaded_player=1, slot="sd",
+                                          analyze_type="rekordbox", play_state="cued", playing=False, on_air=False,
+                                          master=False, sync=False, bpm=BPM, pitch=1.0, beat_count=1, beat_in_bar=1,
+                                          source_ip="x"))
+        sim.m.tick()
+        sim.clock.advance(0.1)
+        t = sim.clock.monotonic()
+    decks = {s.active_deck for s in [sim.m.show_state.snapshot()]}
+    assert decks == {1}            # deterministic: lowest player when nobody plays, and it stays put
+    assert sim.m._active_deck == 1
+
+
+def test_early_roll_drop_survives_an_intermediate_build_section():
+    # plan: ... down(break) 81-113, up(build) 113-145, chorus 145: a roll start at beat 120 (25 beats before
+    # the chorus) lands the drop; the build boundary must not take it away
+    sim = Sim()
+    sim.run_to(118, level=0.1)
+    assert sim.snaps[-1].bucket == "build"
+    n0 = len(sim.snaps)                       # the first chorus (beat 49) already happened; count from here
+    sim.m._roll_start_pending = True          # what core/roll_period.py's detector raises
+    snap = sim.run_to(121, level=0.1)
+    assert snap.bucket == "drop" and snap.classifier_bucket == "drop"
+    snap = sim.run_to(144, level=0.1)          # still inside the planned build: the drop look holds
+    assert snap.bucket == "drop" and not snap.drop_pending
+    snap = sim.run_to(150, level=0.1)          # the chorus boundary confirms, no second cut
+    assert snap.bucket == "drop" and snap.planned_big_moment
+    commits = [i for i in range(n0, len(sim.snaps)) if sim.snaps[i].bucket == "drop" and sim.snaps[i - 1].bucket != "drop"]
+    assert len(commits) == 1
+
+
+def test_regular_drop_never_peaks_and_overlay_bookkeeping_is_untouched():
+    sim = Sim()
+    sim.run_to(48, level=0.1)
+    exposed_since = []
+    for _ in range(31):
+        sim.step_beat(level=0.99)
+        exposed_since.append(sim.m._exposed_since)
+    assert all(s.bucket == "drop" for s in sim.snaps[-150:])
+    assert len(set(exposed_since)) == 1       # no PEAK->DROP demotions resetting the exposure clock

@@ -93,7 +93,7 @@ This is the single most important thing to internalize about the handover.
 | 5 | **"bass=red because the brain says so"** | Overstated science; the hue mapping is convention, not neuroscience. Keep the rule, fix the rationale | [08](08_LIGHTING_DESIGN_AND_SAFETY.md) |
 | 6 | **`python-prodj-link` treated as turnkey** | Lightly maintained, git-only, weak interface auto-detection, fragile deps on new Python | [04](04_HARDWARE_AND_PROTOCOLS.md), [06](06_TECH_STACK_EVALUATION.md) |
 | 7 | **MIDI map presented with confidence** | XDJ-XZ MIDI is under-documented and firmware/mode-dependent; some controls may be HID | [04](04_HARDWARE_AND_PROTOCOLS.md), [10](10_OPEN_QUESTIONS_AND_ASSUMPTIONS.md) |
-| 8 | **Absolute `track_position_seconds` in ShowState** | Not available on the XDJ-XZ; don't design features that depend on it | [04](04_HARDWARE_AND_PROTOCOLS.md) |
+| 8 | **Absolute `track_position_seconds` in ShowState** | Not available on the XDJ-XZ; don't design features that depend on it | [04](04_HARDWARE_AND_PROTOCOLS.md) **Revised 2026-10-25:** beat-resolution position IS available -- the CDJ status packet's `beat_count` (unicast once we announce, `inputs/pdl_announce.py`) -> `ShowSnapshot.track_beat`; sub-beat seconds still not something to build on. |
 | 9 | **No persistence at all** | Defensible for v1, but losing scene tuning between runs will hurt during iteration; consider a tiny config/preset file | [05](05_ARCHITECTURE_REVIEW.md), [10](10_OPEN_QUESTIONS_AND_ASSUMPTIONS.md) |
 
 ---

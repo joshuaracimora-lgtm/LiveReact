@@ -238,7 +238,7 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
         if drive:
             metronome.phrases_mode = "drive"
         shared_queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=1, title=str(track),
-                                            bpm=timeline.bpm, table=phrases, plan=plan))
+                                            bpm=timeline.bpm, table=phrases, plan=plan, slot="sd"))
 
     frames = np.zeros((n_blocks, 512), dtype=np.uint8)
     times = np.zeros(n_blocks, dtype=np.float64)

@@ -87,6 +87,7 @@ class TrackPhraseMessage:
     title: str
     bpm: float
     table: object | None     # rekordbox.pssi.PhraseTable (typed loosely to keep this module dependency-free)
+    slot: str = ""           # the media slot the id belongs to: rekordbox ids are per export, so two sticks collide without it
     source: str = "rekordbox"
     error: str = ""
     plan: object | None = None   # rekordbox.planner.TrackPlan: the whole-track lighting plan (drive mode)
