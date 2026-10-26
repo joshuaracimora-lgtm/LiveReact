@@ -83,7 +83,7 @@ without that merge, and each night starts from `harness`, so an unmerged night's
 
 Do not push `harness`. Do not run the search in the foreground. If a step needs Josh's input, ask.
 
-## Power: the PC must stay up from 1:00 to 8:30 (added 2026-10-24; two agents since 2026-10-26, ~7.2 h)
+## Power: the PC must stay up for the whole run (added 2026-10-24; the task starts 4:00 PM since 10-25 and runs ~7.2 h with two agents since 10-26)
 
 Two nights in a row were lost to sleep (10-23 the 1 AM run was killed after 25 trials; 10-24 the PC slept
 03:22-11:29 in the middle of the agent's run, power events 42/107/1, and the agent got 15 minutes of work).
