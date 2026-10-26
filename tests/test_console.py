@@ -235,6 +235,7 @@ def test_jog_live_pins_the_head_and_unticking_clears_them(qapp):
     app = _app()
     win = ConsoleWindow(app)
     tab = win.venue_tab
+    win.tabs.setCurrentWidget(tab)   # pins only while the Venue tab is on screen
     tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
     mh = app.rig.fixture("mh_l")
     tab.cb_jog.setChecked(True)
@@ -292,6 +293,7 @@ def test_laser_probe_pins_a_static_line_only_within_ch7s_static_half(qapp):
     app = _app()
     win = ConsoleWindow(app)
     tab = win.venue_tab
+    win.tabs.setCurrentWidget(tab)   # pins only while the Venue tab is on screen
     tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("laser_l"))
     laser = app.rig.fixture("laser_l")
     tab.cb_probe.setChecked(True)
@@ -424,6 +426,7 @@ def test_venue_tab_selecting_a_head_lights_it_and_jog_adds_pan_tilt(qapp):
     app = _app()
     win = ConsoleWindow(app)
     tab = win.venue_tab
+    win.tabs.setCurrentWidget(tab)   # pins only while the Venue tab is on screen
     mh = app.rig.fixture("mh_l")
     a = mh.address
     tab._load_fixture("mh_l")
@@ -456,3 +459,26 @@ def test_laser_hit_button_and_j_key_count_moments(qapp):
     win.b_laser_hit.click()
     win.b_laser_hit.click()
     assert app.manual.laser_hit == 2
+
+
+def test_console_launch_pins_nothing_until_the_venue_tab_is_opened(qapp):
+    """2026-10-26: building the console selected the first fixture inside the
+    hidden Venue tab; on a rig whose first fixture is a moving head that lit it
+    full white and held off the no-music auto-blackout from launch."""
+    from livereact.fixtures.profiles import MovingHead
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    assert isinstance(app.rig.fixtures[0], MovingHead)     # the case that triggered it
+    win = ConsoleWindow(app)
+    assert app.manual.calibration is None
+    tab = win.venue_tab
+    tab.cb_jog.setChecked(True)                            # jog on a hidden tab pins nothing either
+    assert app.manual.calibration is None
+    tab.cb_jog.setChecked(False)
+    win.tabs.setCurrentWidget(tab)                         # opening the tab lights the selected head
+    assert app.manual.calibration is not None
+    win.tabs.setCurrentIndex(0)                            # leaving clears it ...
+    assert app.manual.calibration is None
+    win.tabs.setCurrentWidget(tab)                         # ... and coming back re-lights it
+    assert app.manual.calibration is not None

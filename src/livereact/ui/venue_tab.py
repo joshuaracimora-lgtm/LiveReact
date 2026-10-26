@@ -105,7 +105,7 @@ class VenueTab(QtWidgets.QWidget):
 
     def __init__(self, rig: Rig, rig_path: str | None,
                  on_pins: Callable[[CalibrationPins | None], None] | None = None,
-                 is_frozen: Callable[[], bool] | None = None) -> None:
+                 is_frozen: Callable[[], bool] | None = None, active: bool = True) -> None:
         super().__init__()
         self.rig = rig
         self.rig_path = rig_path
@@ -113,6 +113,11 @@ class VenueTab(QtWidgets.QWidget):
         self.is_frozen = is_frozen or (lambda: False)
         self._selected: str = ""
         self._loading = False
+        # 2026-10-26: pins (full-white beam, jog, laser probe) only while this tab is
+        # on screen. Built hidden inside the console, selecting the first fixture at
+        # construction used to light a moving head and hold off the auto-blackout
+        # from launch; the console now passes active=False and calls activate().
+        self._active = active
         if self.rig.venue is None:
             w, l, h = (ft_to_m(v) for v in DEFAULT_VENUE_FT)
             self.rig.venue = Venue(w, l, h, Venue.default_targets(w, l, h))
@@ -476,7 +481,7 @@ class VenueTab(QtWidgets.QWidget):
         ticked, and even then the no-music auto-blackout -- core/show_engine.py
         -- blacked it out; now the pins hold that failsafe off.)"""
         fx = self._fx()
-        if not isinstance(fx, MovingHead) or self.on_pins is None:
+        if not isinstance(fx, MovingHead) or self.on_pins is None or not self._active:
             return
         light = self.cb_light.isChecked()
         jog = self.cb_jog.isChecked()
@@ -678,7 +683,7 @@ class VenueTab(QtWidgets.QWidget):
 
     def _push_laser_pins(self) -> None:
         fx = self._fx()
-        if not isinstance(fx, Laser) or self.on_pins is None:
+        if not isinstance(fx, Laser) or self.on_pins is None or not self._active:
             return
         from ..merge.merge import Contribution
         c = Contribution()
@@ -705,6 +710,16 @@ class VenueTab(QtWidgets.QWidget):
         self.status.setText(f"Saved to {path}. Positions/calibration are already live; fixture patching needs a restart.")
         self.status.setStyleSheet("color:#3c6;")
 
+    def activate(self) -> None:
+        """Called by the console when the operator opens this tab: re-light the
+        selected head (its pins were cleared on leaving) and re-highlight it."""
+        self._active = True
+        if self._selected:
+            self.plan.select(self._selected)
+            if isinstance(self._fx(), MovingHead) and self.cb_light.isChecked():
+                self._push_head_pins()
+
     def deactivate(self) -> None:
         """Called by the console when the operator leaves this tab."""
+        self._active = False
         self._clear_pins()
