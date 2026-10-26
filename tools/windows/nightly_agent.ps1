@@ -206,7 +206,9 @@ $SweepNote
     Step "$Role agent: full pytest"
     $pt = @(& $py -m pytest -o addopts="" -q 2>&1)
     $ptExit = $LASTEXITCODE
-    $summary = ($pt | Select-Object -Last 1)
+    # the LAST "N passed / N failed" line, not the last line: Qt prints errors from callbacks to stderr,
+    # which can land after pytest's summary (stress test 2026-10-26: a green run read as FAIL)
+    $summary = "$(@($pt | Where-Object { "$_" -match '^\s*=*\s*\d+ (passed|failed)|^\s*=*\s*no tests ran' }) | Select-Object -Last 1)"
     Write-Host "pytest (exit $ptExit): $summary"
     $failed = 0; if ($summary -match '(\d+) failed') { $failed = [int]$Matches[1] }
     $unknown = @($pt | Where-Object { $_ -match '^(FAILED|ERROR)' } | Where-Object { $_ -notmatch 'test_spec_conformance_gaps' })
