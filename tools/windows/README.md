@@ -17,6 +17,9 @@ run; set the AC sleep *and* unattended-sleep timeouts to never as well (same doc
 Both nightly scripts dot-source `common.ps1`: UTF-8 python environment (Windows console is not UTF-8;
 `status.py` died on an accented track name), the wake request, and a kill-on-close job object so a
 stopped task (`Stop-ScheduledTask`, the 8 h limit) kills the agent's `claude.exe` tree too, not just the script.
+Before that they dot-source `self_update.ps1`: it pulls harness first and, if it moved, re-runs the script
+from the pulled tree (log line `self-update: pulled harness <old> -> <new>`), so a fix pushed from the Mac
+runs the same night instead of the next one.
 
 ## Two nightly modes
 

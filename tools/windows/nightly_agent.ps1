@@ -11,16 +11,21 @@ param(
   [int]$Patience = 300,
   [string]$Model = "",           # e.g. "opus"; empty = Claude Code's default
   [double]$MaxBudgetUsd = 0,     # 0 = no cap
-  [switch]$Push                  # commit the night's reports into docs\agent_nights\ and push the branch
+  [switch]$Push,                 # commit the night's reports into docs\agent_nights\ and push the branch
+  [string]$PulledFrom = ""       # set by self_update.ps1 on the re-run: the harness commit it pulled from
 )
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $root
+. "$PSScriptRoot\self_update.ps1"
+$rerun = Invoke-PulledSelf $PSCommandPath $PSBoundParameters
+if ($rerun -ne $null) { exit $rerun }
 $date = Get-Date -Format yyyyMMdd
 New-Item -ItemType Directory -Force -Path results\nightly, "results\agent\$date" | Out-Null
 $night = Join-Path $root "results\agent\$date"
 $log = "results\nightly\$(Get-Date -Format yyyyMMdd-HHmm)-agent.log"
 Start-Transcript -Path $log | Out-Null
+if ($PulledFrom) { Write-Host "self-update: pulled harness $PulledFrom -> $("$(git rev-parse --short harness 2>$null)".Trim()) and re-ran this script from the new code" }
 $py = ".\.venv\Scripts\python.exe"
 $utf8 = New-Object System.Text.UTF8Encoding($false)   # no BOM: these files are read by python/claude
 $exit = 0

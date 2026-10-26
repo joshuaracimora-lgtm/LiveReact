@@ -4,13 +4,17 @@
    The run ABORTS if the pull fails - searching stale code looked like progress once (Oct 2026)
    and wasted nights. It also holds a system-required power request so a wake-to-run start is not
    put back to sleep by the unattended idle timeout. #>
-param([double]$Hours = 6, [int]$Patience = 300)
+param([double]$Hours = 6, [int]$Patience = 300, [string]$PulledFrom = "")   # PulledFrom: set by self_update.ps1
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $root
+. "$PSScriptRoot\self_update.ps1"
+$rerun = Invoke-PulledSelf $PSCommandPath $PSBoundParameters
+if ($rerun -ne $null) { exit $rerun }
 New-Item -ItemType Directory -Force -Path results\nightly | Out-Null
 $log = "results\nightly\$(Get-Date -Format yyyyMMdd-HHmm).log"
 Start-Transcript -Path $log | Out-Null
+if ($PulledFrom) { Write-Host "self-update: pulled harness $PulledFrom -> $("$(git rev-parse --short harness 2>$null)".Trim()) and re-ran this script from the new code" }
 
 . "$PSScriptRoot\common.ps1"      # UTF-8 python env, Hold-Wake/Release-Wake, Join-KillOnCloseJob
 Join-KillOnCloseJob
