@@ -140,3 +140,24 @@ def test_zero_track_id_is_ignored(tmp_path):
         assert isinstance(svc.library, RekordboxLibrary) and svc.name == "rekordbox-phrases"
     finally:
         svc.stop()
+
+
+def test_live_plans_read_josh_s_look_notes_like_the_simulator(tmp_path):
+    """2026-10-26: only the simulator passed look notes to the planner, so the gate scored looks the
+    live show never planned. The service now loads tracks/<stem>.look.json; a bad file is not fatal."""
+    from livereact.rekordbox.library import TrackInfo
+    (tmp_path / "Song A.look.json").write_text(
+        '{"schema": 1, "track": "Song A", "strobe": "soft"}', encoding="utf-8")
+    (tmp_path / "Song B.look.json").write_text('{"schema": 1, "strobe": "loud"}', encoding="utf-8")
+    (tmp_path / "Song C.look.json").write_text('{"schema": 1, "_todo": true}', encoding="utf-8")
+    svc = PhraseService(queue.Queue(), FakeClock(), stop_event=threading.Event(), cache_dir=tmp_path,
+                        tracks_dir=tmp_path)
+
+    def info(name):
+        return TrackInfo(id=1, title=name, artist="", bpm=120.0, duration_s=200, analyze_path="",
+                         path=f"/Contents/x/{name}.mp3", filename=f"{name}.mp3")
+    assert svc._look(info("Song A")).strobe == "soft"
+    assert svc._look(info("Song B")) is None            # invalid: logged, planned without it
+    assert svc._look(info("Song C")) is None            # still a _todo scaffold
+    assert svc._look(info("Song D")) is None            # none written
+    assert PhraseService(queue.Queue(), FakeClock(), tracks_dir=None)._look(info("Song A")) is None

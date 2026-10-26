@@ -37,7 +37,7 @@ class PhraseService:
                  nfs: XdjNfs | None = None, stop_event: threading.Event | None = None, *,
                  cache_dir: str | Path | None = DEFAULT_CACHE_DIR,
                  scene_pool: dict[str, list[str]] | None = None,
-                 raw_sink=None) -> None:
+                 raw_sink=None, classes=None, tracks_dir: str | Path | None = "tracks") -> None:
         self.queue = output_queue
         self.clock = clock
         self.cache_dir = Path(cache_dir) if cache_dir else None
@@ -52,6 +52,10 @@ class PhraseService:
         self._requested: set[tuple[str, str, int]] = set()
         self._pdb_loaded: dict[tuple[str, str], bool] = {}   # (ip, slot) -> loaded ok?
         self.scene_pool = scene_pool          # bucket -> scene names, from the app's catalog (planner)
+        self.classes = classes                # rekordbox/section_classes.ClassBook (the app's)
+        # Josh's look notes (tracks/<stem>.look.json): until 2026-10-26 only the simulator read them,
+        # so the gate scored looks the live show never planned
+        self.tracks_dir = Path(tracks_dir) if tracks_dir else None
         self._plans: dict[tuple[str, int], object] = {}   # (slot, track_id) -> TrackPlan
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -168,6 +172,20 @@ class PhraseService:
         except Exception:  # noqa: BLE001 - a dump failure must not stop the fetch
             log.exception("phrase service raw sink failed")
 
+    def _look(self, track):
+        """The track's look notes, or None (missing, a _todo scaffold, or invalid: never fatal live)."""
+        if self.tracks_dir is None:
+            return None
+        from .look_notes import load_look_notes, look_notes_path_for
+        name = track.filename or Path(track.path or "").name
+        if not name:
+            return None
+        try:
+            return load_look_notes(look_notes_path_for(Path(name).stem, self.tracks_dir))
+        except (OSError, ValueError) as exc:
+            log.warning("phrase service: look notes for %r ignored (%s)", name, exc)
+            return None
+
     def _handle(self, ip: str, slot: str, player: int, track_id: int) -> None:
         if not self._ensure_pdb(ip, slot):
             if track_id:
@@ -199,7 +217,8 @@ class PhraseService:
             wave = parse_pwv5(ext) if ext else None
             try:
                 plan = plan_track(table, track_id=track_id, title=track.title, bpm=track.bpm, grid=grid,
-                                  waveform=wave, scene_pool=self.scene_pool)
+                                  waveform=wave, scene_pool=self.scene_pool, look=self._look(track),
+                                  classes=self.classes)
                 log.info("phrase service: %s", plan.summary())
             except Exception:  # noqa: BLE001 - a plan is a bonus; the table alone is still useful
                 log.exception("phrase service: planning failed for track %d", track_id)

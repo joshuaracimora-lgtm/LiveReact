@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "_doc": "Section classes (src/livereact/rekordbox/section_classes.py). The Track Classifier agent refines the rules; only Josh sets approved/scene. A rule of null names a class that is not defined yet. Nothing here changes the show until a class is approved.",
+  "classes": [
+    {"name": "drop_snare_roll", "kind": "drop", "rule": {"bars": [0, 7.75]}, "scene": null, "approved": false,
+     "notes": "Josh 2026-10-26: snare rolls are a class of drop (3-7 bars on his labels). The planner absorbs drops under MIN_SECTION_BEATS today, so this matches nothing until rolls are planned as their own sections."},
+    {"name": "drop_full", "kind": "drop", "rule": {"bars": [7.75, 10000]}, "scene": null, "approved": false,
+     "notes": "the groove/bass hit; at least 8 bars (Josh 2026-10-26)"},
+    {"name": "drop_clap", "kind": "drop", "rule": null, "scene": null, "approved": false,
+     "notes": "claps/crashes carry it, no real roll: soft strobe at most"},
+    {"name": "drop_atmospheric", "kind": "drop", "rule": null, "scene": null, "approved": false,
+     "notes": "brightens and pulses, no strobe"}
+  ],
+  "palette_by_profile": {
+    "approved": false,
+    "high": ["acid_yellow", "warm_white", "deep_amber", "toxic_green"],
+    "mid": ["deep_blue", "cyan_ice", "cold_steel"],
+    "low": ["blood_red", "uv_violet", "hot_magenta"]
+  }
+}

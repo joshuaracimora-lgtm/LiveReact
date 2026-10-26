@@ -29,7 +29,7 @@ from .engines.laser_trigger import LaserTriggerEngine
 from .engines.phrase import PhraseEngine
 from .engines.reactive import ReactiveLayerEngine
 from .engines.transition import TransitionEngine
-from .scenes.catalog import SceneCatalog
+from .scenes.catalog import show_catalog
 from .fixtures.rig import Rig, load_rig
 from .inputs.demo import DemoDataSource
 from .merge.merge import ManualParams
@@ -98,7 +98,10 @@ class App:
                                    seed_range=self._energy_norm_seed(),
                                    range_callback=self._persist_energy_norm_range,
                                    control_callback=self._on_operator_control)
-        self.scene_catalog = SceneCatalog(full=self.config.full_catalog)   # shared by PhraseEngine + the planner
+        # shared by PhraseEngine + the planner; sim/harness.py builds the identical one (2026-10-26)
+        from .rekordbox import section_classes
+        self.section_classes = section_classes.load()
+        self.scene_catalog = show_catalog(full=self.config.full_catalog, extra=self.section_classes.approved_scenes())
         self.sources = self._build_sources()
 
         # --- show pipeline (Phases 3-4): snapshot -> engines -> merge -> frame buffer ---
@@ -272,7 +275,8 @@ class App:
 
                 pool = self.scene_catalog.names_by_bucket()
                 self.phrase_service = PhraseService(self.input_queue, self.clock, stop_event=self.stop_event,
-                                                    cache_dir=self.config.rekordbox_cache, scene_pool=pool)
+                                                    cache_dir=self.config.rekordbox_cache, scene_pool=pool,
+                                                    classes=self.section_classes)
             except Exception:  # noqa: BLE001 - phrase data is optional
                 log.exception("rekordbox phrase service unavailable; continuing without it")
         sources: list = []

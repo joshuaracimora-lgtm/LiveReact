@@ -66,6 +66,15 @@ class ColorWaveform:
         tot = r + sum(self.greens[i0:i1]) + sum(self.blues[i0:i1])
         return r / tot if tot else 0.0
 
+    def band_shares(self, t0_s: float, t1_s: float) -> tuple[float, float, float]:
+        """(low, mid, high) = red, green, blue over their sum in the window; zeros for an empty or silent one."""
+        i0, i1 = self.window(t0_s, t1_s)
+        if i1 <= i0:
+            return 0.0, 0.0, 0.0
+        r, g, b = sum(self.reds[i0:i1]), sum(self.greens[i0:i1]), sum(self.blues[i0:i1])
+        tot = r + g + b
+        return (r / tot, g / tot, b / tot) if tot else (0.0, 0.0, 0.0)
+
 
 def parse_pwv5(ext_bytes: bytes) -> ColorWaveform | None:
     """The colour waveform detail from a whole ``.EXT`` file, or None."""
