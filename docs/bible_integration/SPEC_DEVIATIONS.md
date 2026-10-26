@@ -48,6 +48,14 @@ and the same-track `drop_cycle` count — as soft leading indicators that a
 transition is statistically likely soon. Scoped into Phase 3 as a
 `transition_likely` signal, verified via simulation before use.
 
+**Update 2026-10-25 — that input source exists (docs/13 D-21).** The XDJ-XZ's
+CDJ status packets (unicast to peers that announce themselves — our 2026-08-31
+announce had failed, hence "never sends status") carry the rekordbox track id and
+an absolute beat counter, and rekordbox's own phrase analysis sits on the USB in
+the player, readable over NFS. `src/livereact/rekordbox/` + `inputs/pdl_announce.py`
+bring it in; shadow mode first, engine use after hardware verification. The
+prediction this section describes is then a table lookup, not inference.
+
 **What would change this answer.** A different input source that actually
 carries song-structure metadata (e.g. if a future DJ platform exposes phrase
 or cue-point data over its own protocol), or a deliberately separate,

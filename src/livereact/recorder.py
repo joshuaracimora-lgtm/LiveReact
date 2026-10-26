@@ -142,6 +142,17 @@ class SessionRecorder(threading.Thread):
             "midi_fresh": snap.midi_fresh,
             "on_air": list(snap.on_air),
             "master_deck": snap.master_deck,
+            # 2026-10-25 rekordbox phrase data via CDJ status packets (shadow mode:
+            # recorded + shown, not yet acted on). "" / -1 / 0 = no status or no table.
+            "active_deck": snap.active_deck,
+            "deck_status_fresh": snap.deck_status_fresh,
+            "track_id": snap.track_id,
+            "track_beat": snap.track_beat,
+            "phrase_source": snap.phrase_source,
+            "phrase_label": snap.phrase_label,
+            "section_kind": snap.section_kind,
+            "next_section": snap.next_section_kind,
+            "beats_to_next": snap.beats_to_next_section,
             "crossfader": round(snap.crossfader, 3),
             "fader_a": round(snap.fader_a, 3),
             "fader_b": round(snap.fader_b, 3),

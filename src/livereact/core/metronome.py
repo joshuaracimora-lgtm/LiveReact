@@ -25,6 +25,7 @@ import math
 import queue
 import threading
 from collections import deque
+from dataclasses import dataclass
 
 from ..clock import Clock, LoopTimer
 from ..engines import palette as palette_mod
@@ -34,7 +35,9 @@ from .rise import RiseDetector
 from .roll_period import RollPeriodDetector
 from ..scenes import catalog as _catalog
 from ..scenes.catalog import _BUCKET_ORDER, BUILD_MAX, LEGAL_TRANSITIONS, bucket_for_energy_with_hysteresis
-from .messages import AudioLevelMessage, BeatMessage, MidiControlMessage, StatusMessage, TransitionMessage
+from .messages import (AudioLevelMessage, BeatMessage, DeckStatusMessage, MidiControlMessage, StatusMessage,
+                       TrackPhraseMessage, TransitionMessage)
+from ..rekordbox import mapping as _rb_mapping
 from .show_state import ShowSnapshot, ShowState
 
 log = logging.getLogger(__name__)
@@ -42,6 +45,29 @@ log = logging.getLogger(__name__)
 PDL_STALE_AFTER = 1.0    # seconds without a PDL message -> not fresh
 MIDI_STALE_AFTER = 1.0   # seconds without a MIDI message -> not fresh
 AUDIO_STALE_AFTER = 1.0  # seconds without an AudioLevelMessage -> not fresh
+# --- song structure from CDJ status packets + rekordbox phrase tables (2026-10-25, shadow mode) ---
+DECK_STATUS_STALE_AFTER = 1.0  # seconds without a CDJ status packet for the active deck -> section fields cleared
+ACTIVE_DECK_SWITCH_S = 2.0     # a challenger deck must be playing + on-air (while the current one is not) this long
+PSSI_BEAT_OFFSET = 0           # status beat_count -> phrase-table beat index correction; a Gate-1 hardware
+                               # measurement (plan: lets-start-building-this-shimmering-knuth.md). ear-tuned.
+
+
+@dataclass(frozen=True)
+class SectionState:
+    """Where the active deck is in its track, per rekordbox (see ShowSnapshot's song-structure fields)."""
+    deck: int | None = None
+    fresh: bool = False
+    track_id: int = 0
+    title: str = ""
+    track_beat: int = 0
+    source: str = ""
+    label: str = ""
+    kind: str = ""
+    next_kind: str = ""
+    beats_to_next: int = -1
+
+
+_NO_SECTION = SectionState()
 ENERGY_SMOOTHING = 0.05  # EMA factor per tick (~0.2 s time constant at 100 Hz) —
                          # MIDI-proxy fallback only; real audio bypasses this,
                          # see _derive_energy
@@ -584,6 +610,19 @@ class Metronome(threading.Thread):
         self._transition_until = 0.0
         self._prev_master: int | None = None
 
+        # song structure from CDJ status packets + rekordbox phrase tables (shadow mode,
+        # 2026-10-25): recorded + shown, never consulted by _derive_bucket until Stage 3.
+        self._decks: dict[int, DeckStatusMessage] = {}
+        self._phrase_tables: dict[int, object] = {}   # track_id -> PhraseTable | None (None = asked, none)
+        self._track_titles: dict[int, str] = {}
+        self._active_deck: int | None = None
+        self._challenger: tuple[int, float] | None = None  # (deck, since) for the switch hysteresis
+        self._section: SectionState = _NO_SECTION
+        self._section_log_key: tuple | None = None
+        self.section_agree = 0
+        self.section_disagree = 0
+        self._last_section_report = clock.monotonic()
+
         # MIDI intent
         self._midi = {
             "crossfader": 0.5, "fader_a": 0.0, "fader_b": 0.0,
@@ -729,6 +768,7 @@ class Metronome(threading.Thread):
         self._derive_rise(now)
         self._derive_drop_marker(now)
         self._derive_palette()
+        self._derive_section(now)   # after the bucket on purpose: shadow mode cannot influence it
         snap = self._build_snapshot(now)
         self.show_state.publish(snap)
         self._maybe_log(now, snap)
@@ -752,6 +792,10 @@ class Metronome(threading.Thread):
             self._on_midi(msg)
         elif isinstance(msg, AudioLevelMessage):
             self._on_audio(msg)
+        elif isinstance(msg, DeckStatusMessage):
+            self._on_deck_status(msg)
+        elif isinstance(msg, TrackPhraseMessage):
+            self._on_track_phrases(msg)
         elif isinstance(msg, TransitionMessage):
             # An explicit transition signal (demo/manual). Detection is the main
             # path; this just nudges the same timer so both sources agree.
@@ -1714,6 +1758,114 @@ class Metronome(threading.Thread):
         self._palette_pick_bar = self._bar
         self.palette, self.palette_spot = palette_mod.pick(bucket, phrase, self.drop_cycle, self._track_seed)
 
+    # ------------------------------------------------------------------ song structure (shadow mode)
+    def _on_deck_status(self, msg: DeckStatusMessage) -> None:
+        prev = self._decks.get(msg.player)
+        self._decks[msg.player] = msg
+        if (msg.player == self._active_deck and prev is not None and msg.track_id
+                and msg.track_id != prev.track_id):
+            # A new track on the deck we follow: the player told us, no fader heuristic
+            # needed (see _derive_drop_marker's in_transition path, which stays as is).
+            self.drop_cycle = 0
+            self._track_seed += 1
+            log.info("rekordbox: deck %d loaded track %d", msg.player, msg.track_id)
+
+    def _on_track_phrases(self, msg: TrackPhraseMessage) -> None:
+        self._phrase_tables[msg.track_id] = msg.table
+        if msg.title:
+            self._track_titles[msg.track_id] = msg.title
+        if msg.table is None:
+            log.info("rekordbox: no phrase table for track %d %r (%s)", msg.track_id, msg.title, msg.error or "-")
+        else:
+            log.info("rekordbox: phrase table for track %d %r: %d phrases, %s mood",
+                     msg.track_id, msg.title, len(msg.table.phrases), msg.table.mood_name)
+
+    def _select_active_deck(self, now: float) -> None:
+        """Which deck's status/phrases the section fields describe. Rank: playing+on-air >
+        playing+master > playing; hold the current deck while it still plays (a crossfade
+        must not flap the lights); a challenger only takes over after ACTIVE_DECK_SWITCH_S
+        of being on air while the current deck is not, or the moment the current deck stops."""
+        fresh = {p: m for p, m in self._decks.items() if now - m.timestamp < DECK_STATUS_STALE_AFTER}
+        if not fresh:
+            self._challenger = None
+            return
+
+        def rank(m: DeckStatusMessage):
+            return (m.playing and m.on_air, m.playing and m.master, m.playing, m.timestamp)
+
+        best = max(fresh, key=lambda p: rank(fresh[p]))
+        cur = fresh.get(self._active_deck) if self._active_deck is not None else None
+        if cur is None or not cur.playing:
+            if self._active_deck != best:
+                log.info("rekordbox: following deck %d", best)
+            self._active_deck = best
+            self._challenger = None
+            return
+        if best == self._active_deck or not fresh[best].playing:
+            self._challenger = None
+            return
+        if fresh[best].on_air and not cur.on_air:
+            if self._challenger is None or self._challenger[0] != best:
+                self._challenger = (best, now)
+            elif now - self._challenger[1] >= ACTIVE_DECK_SWITCH_S:
+                log.info("rekordbox: following deck %d (on air %.0fs while deck %d is not)",
+                         best, ACTIVE_DECK_SWITCH_S, self._active_deck)
+                self._active_deck = best
+                self._challenger = None
+        else:
+            self._challenger = None
+
+    def _derive_section(self, now: float) -> None:
+        self._select_active_deck(now)
+        deck = self._active_deck
+        msg = self._decks.get(deck) if deck is not None else None
+        if msg is None or now - msg.timestamp >= DECK_STATUS_STALE_AFTER:
+            self._section = SectionState(deck=deck)
+            return
+        track_beat = 0
+        if msg.beat_count is not None:
+            track_beat = msg.beat_count
+            if msg.playing and msg.bpm > 0:
+                live_bpm = msg.bpm * (msg.pitch if msg.pitch > 0 else 1.0)
+                track_beat += int((now - msg.timestamp) * live_bpm / 60.0)  # extrapolate between packets
+            track_beat += PSSI_BEAT_OFFSET
+        table = self._phrase_tables.get(msg.track_id) if msg.track_id else None
+        title = self._track_titles.get(msg.track_id, "")
+        if table is None or track_beat <= 0:
+            self._section = SectionState(deck=deck, fresh=True, track_id=msg.track_id, title=title,
+                                         track_beat=track_beat)
+            return
+        cur, nxt = table.at_beat(track_beat)
+        self._section = SectionState(
+            deck=deck, fresh=True, track_id=msg.track_id, title=title, track_beat=track_beat, source="rekordbox",
+            label=cur.label if cur is not None else "",
+            kind=_rb_mapping.section_for(table.mood, cur.label) if cur is not None else "",
+            next_kind=_rb_mapping.section_for(table.mood, nxt.label) if nxt is not None else "",
+            beats_to_next=table.beats_to_next(track_beat),
+        )
+        self._shadow_compare(now)
+
+    def _shadow_compare(self, now: float) -> None:
+        """Log, once per rekordbox section, what the audio classifier thought at that moment."""
+        s = self._section
+        key = (s.track_id, s.label, s.kind)
+        if key != self._section_log_key:
+            self._section_log_key = key
+            expected = _rb_mapping.bucket_for_section(s.kind) if s.kind else ""
+            actual = self.look_bucket.value
+            agree = expected == actual or (expected, actual) in (("drop", "peak"), ("break", "outro"))
+            if expected:
+                if agree:
+                    self.section_agree += 1
+                else:
+                    self.section_disagree += 1
+            log.info("rekordbox: %s(%s) -> %s in %d beats | classifier %s | energy_norm %.2f | %s",
+                     s.label or "-", s.kind or "-", s.next_kind or "end", s.beats_to_next, actual,
+                     self._energy_norm, "agree" if agree else "DISAGREE")
+        if now - self._last_section_report >= 60.0 and (self.section_agree or self.section_disagree):
+            self._last_section_report = now
+            log.info("rekordbox shadow: sections agree=%d disagree=%d", self.section_agree, self.section_disagree)
+
     # ------------------------------------------------------------------ health
     def _is_pdl_fresh(self, now: float) -> bool:
         return self._last_beat_time is not None and (now - self._last_beat_time) < PDL_STALE_AFTER
@@ -1777,6 +1929,16 @@ class Metronome(threading.Thread):
             transition_likely=self.transition_likely,
             drop_pending=self._pending_drop_release,
             drop_marker=self._drop_marker_pulse,
+            active_deck=self._section.deck,
+            deck_status_fresh=self._section.fresh,
+            track_id=self._section.track_id,
+            track_title=self._section.title,
+            track_beat=self._section.track_beat,
+            phrase_source=self._section.source,
+            phrase_label=self._section.label,
+            section_kind=self._section.kind,
+            next_section_kind=self._section.next_kind,
+            beats_to_next_section=self._section.beats_to_next,
             in_transition=now < self._transition_until,
             free_running=not self._is_pdl_fresh(now),
             pdl_fresh=self._is_pdl_fresh(now),

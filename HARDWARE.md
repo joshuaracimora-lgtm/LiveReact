@@ -110,10 +110,30 @@ What the bench session taught us (all in `inputs/prodj.py`):
   clients by IP, folds them into one record, and silently drops the beat
   packets. LiveReact therefore binds its own sockets on the three PDL ports and
   uses only the library's packet parsers.
-- The unit **never sends status packets** (port 50002), only keepalive (50000)
-  and beat (50001). So there is no on-air/master data: whichever deck is
-  sending beats is treated as master, and "beats are arriving" doubles as
-  "a deck is playing". No virtual-CDJ announcement is needed.
+- **Status packets (port 50002) — corrected 2026-10-25.** The bench session saw
+  none and recorded "the unit never sends them". Wrong inference: CDJ status
+  packets are never broadcast; a player *unicasts* them only to peers that have
+  announced themselves on port 50000, and our announce had failed that day
+  ("No route to host"). Status carries the loaded rekordbox track id, slot, play
+  state, on-air/master bits and an **absolute beat counter** — which, with the
+  phrase tables rekordbox already writes onto the USB, gives real song-structure
+  awareness (`src/livereact/rekordbox/`). `inputs/pdl_announce.py` now announces
+  as a **rekordbox-class peer (player 17)** and answers the XZ's hello handshake
+  (recipe from a working XDJ-XZ rig: houseworthe/Pabst-DJ-Lighting). The beat
+  path is unchanged and still drives the clock; a failed announce degrades to
+  exactly the old behaviour. **UNVERIFIED on this unit until the probe below
+  has run** — the per-item checklist is TESTING.md Test 2b.
+- **"No route to host" on macOS** = two `169.254/16` routes (Wi-Fi `en0` plus
+  the USB-Ethernet adapter) so broadcasts leave via Wi-Fi. `--net-check` lists
+  the owners; fix: `sudo route delete 169.254.0.0/16 -ifscope en0`.
+- **Probe:** `python -m livereact --pdl-probe [--pdl-interface <nic>] [--pdl-fetch] [--pdl-dump DIR]`
+  (or `tools/pdl_probe.py --live`) prints every status packet, answers hellos,
+  and with `--pdl-fetch` pulls `export.pdb` + the loaded track's phrase table off
+  the USB over NFS and shows a live "chorus → down in 12 beats" countdown.
+  `--pdl-no-announce` is the A/B control.
+- **Slot naming quirk** (Deep Symmetry, matches `databases/player-1-sd.pdb`
+  fetched from this unit in June 2026): both USB slots report under player 1 and
+  USB1 shows up as the **"sd"** slot (NFS export `/B/`).
 
 ## 4. MIDI (the XDJ mixer controls)
 

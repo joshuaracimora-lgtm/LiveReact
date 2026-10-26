@@ -329,6 +329,52 @@ that Link is on, and the firewall (UDP 50000–50002) — see `HARDWARE.md`.
 
 ---
 
+## Test 2b — Pro DJ Link status packets + rekordbox phrases (2026-10-25)
+
+Why: LiveReact has only ever read *beat* packets from the XZ. Its CDJ *status*
+packets (which deck has which rekordbox track loaded, playing/on-air/master, and
+the **beat counter from the start of the track**) are unicast only to peers that
+announce themselves — the earlier "the XZ never sends status" note came from a
+day our announce failed. With status + the phrase tables rekordbox already puts
+on the USB, the lights can know "chorus in 12 beats" instead of guessing from
+loudness. Nothing acts on it yet (shadow mode); this test is the proof.
+
+```
+python -m livereact --net-check                 # if it lists 169.254/16 routes on TWO interfaces:
+sudo route delete 169.254.0.0/16 -ifscope en0   #   ...delete the Wi-Fi one (en0), then re-check
+python -m livereact --pdl-probe --pdl-interface <nic>              # step 1: status packets
+python -m livereact --pdl-probe --pdl-no-announce --duration 30    # step 2: the A/B control
+python -m livereact --pdl-probe --pdl-fetch --pdl-dump tests/fixtures/pdl_dump   # step 3: phrase table
+```
+
+Load and play a track that rekordbox analyzed **with Phrase on** (rekordbox:
+Preferences → Analysis → Phrase; the waveform shows Intro/Up/Chorus bars).
+
+**Expected, step 1:** within ~5 s `hellos` climbs and `hellos_answered` ≥ 1 in the
+summary; within ~10 s lines like
+`P1 sd  track=175  playing  ONAIR  bpm=125.00 pitch=+1.55% beat_count=1234 beat=2`
+appear for each deck and **keep coming for 90 s+** (the XZ de-trusts an
+unanswered peer after ~60 s). **Step 2:** with `--pdl-no-announce` they stop —
+that proves the announce is what makes the difference. **Step 3:** `[fetch]
+export.pdb ... N tracks`, then the track's phrase table, and every status line
+ends `| up(build) -> chorus(drop) in 17 beats`.
+
+**The one number this test exists to measure:** play from the top and watch the
+countdown hit 0 — does it land on the downbeat you hear (and the XZ's own phrase
+display)? If it is early/late by a beat, note it: that becomes `PSSI_BEAT_OFFSET`
+in `core/metronome.py`. Also note what `beat_count` does on a cue, a hot cue and a
+loop, and whether `ONAIR`/`MASTER` ever show with both decks playing.
+
+**If no status after 15 s** the probe prints the checklist (routes, NIC, firewall,
+Link). **Record:** the probe's summary + the `--pdl-dump` folder (small; commit
+the PSSI slices as fixtures). Then a normal `--hardware --record` run: `state.jsonl`
+now has `track_id`, `track_beat`, `phrase_label`, `section_kind`, `beats_to_next`,
+and `session.log` has one `rekordbox: ... | classifier ... | agree/DISAGREE` line
+per section — that log is what decides whether Stage 3 (phrases drive the look)
+is worth building.
+
+---
+
 ## Test 3 — MIDI (the XDJ mixer)
 
 The default CC map is a guess and almost certainly needs remapping for your unit.

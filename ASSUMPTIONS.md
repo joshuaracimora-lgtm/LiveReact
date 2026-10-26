@@ -39,7 +39,7 @@ Confirm by: 🔧 hardware test · 🎚️ DJ/usage feedback · 🔬 researched (
 | D2 | Roll the Enttec driver (~30 lines) rather than depend on a library | locked |
 | D3 | Add an Art-Net/sACN backend for hardware-free visualizer testing | locked |
 | D4 | Standard GIL CPython for v1; write free-threading-clean (revisit no-GIL in 2027+) | locked |
-| D5 | Vendor / pin a SHA of `python-prodj-link`; wrap behind the InputSource interface | locked |
+| D5 | Vendor / pin a SHA of `python-prodj-link`; wrap behind the InputSource interface | locked (2026-10-25: the copy in this Mac's `.venv` is the reference — no dist-info, SHA unknown; we now also use its `pdblib` (export.pdb) and `network.nfsclient` (NFS fetch from the player), both behind `rekordbox/`) |
 | D6 | Test real-time logic via injected `Clock` + `FakeClock`; fake serial sink; synthetic messages | locked (in use) |
 
 ## Deviations from the original spec (see docs/13 for the full log)

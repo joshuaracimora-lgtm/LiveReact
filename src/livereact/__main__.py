@@ -48,6 +48,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--duration", type=float, default=None, help="Run for N seconds then exit (default: until Ctrl-C).")
     p.add_argument("--visualize", action="store_true", help="Open the operator console + virtual rig (PySide6).")
     p.add_argument("--pdl-interface", default=None, help="Explicit network interface/IP for Pro DJ Link.")
+    p.add_argument("--phrases", choices=("off", "shadow", "drive"), default="shadow",
+                   help="rekordbox phrase data from the XDJ-XZ (status packets + USB phrase tables over NFS): "
+                        "off | shadow (default: recorded + shown, lights unaffected) | drive (Stage 3, not yet built).")
     p.add_argument("--rig", default=None, help="Path to a custom rig JSON (default: the packaged 8-fixture default_rig.json).")
     p.add_argument("--full-catalog", action="store_true",
                    help="Rotate the full scene catalog instead of the default one-look-per-bucket core set.")
@@ -189,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
                        norm_seed=not args.no_norm_seed,
                        bible_failsafe_enabled=args.bible_failsafe,
                        full_catalog=args.full_catalog,
+                       phrases=args.phrases,
                        record=bool(session_dir), session_dir=session_dir)
     app = App(config)
 

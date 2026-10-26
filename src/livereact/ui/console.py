@@ -478,7 +478,14 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         trans = "  TRANSITION" if snap.in_transition else ""
         pdl = "fresh" if snap.pdl_fresh else "STALE"
         midi = "fresh" if snap.midi_fresh else "stale"
-        self.l_health.setText(f"clock {clock}\nPDL {pdl} · MIDI {midi}{trans}")
+        if snap.phrase_source:
+            nxt = f" → {snap.next_section_kind} in {snap.beats_to_next_section}" if snap.beats_to_next_section >= 0 else ""
+            rb = f"\nrb: {snap.phrase_label} ({snap.section_kind}){nxt}"
+        elif snap.deck_status_fresh:
+            rb = f"\nrb: track {snap.track_id} beat {snap.track_beat} (no phrase table)"
+        else:
+            rb = ""
+        self.l_health.setText(f"clock {clock}\nPDL {pdl} · MIDI {midi}{trans}{rb}")
 
         # connection dots: PDL/MIDI green only once real beat data is flowing (not
         # just a device seen on the wire); DMX green only once a real hardware

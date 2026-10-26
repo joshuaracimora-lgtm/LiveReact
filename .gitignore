@@ -38,3 +38,6 @@ results/
 
 # Claude Code per-machine permission grants (written by interactive sessions on any machine)
 .claude/settings.local.json
+
+# rekordbox export.pdb copies fetched from the player over NFS (rekordbox/service.py)
+cache/

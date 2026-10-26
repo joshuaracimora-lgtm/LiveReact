@@ -732,6 +732,17 @@
       "default": 0.5,
       "type": "float",
       "tag": "safety-frozen"
+    },
+    "PSSI_BEAT_OFFSET": {
+      "module": "livereact.core.metronome",
+      "default": 0,
+      "type": "int",
+      "tag": "ear-tuned",
+      "range": [
+        -2,
+        2
+      ],
+      "note": "status beat_count -> rekordbox phrase-table beat index; measured on hardware (TESTING.md Test 2b), never searched"
     }
   },
   "_approved": "Tags and ranges approved by Josh 2026-10-22. HOLD_BARS floor raised 2->4 (bible: looks hold 8, 16 in BREAK)."

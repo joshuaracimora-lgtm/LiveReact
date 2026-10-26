@@ -61,6 +61,10 @@ class AppConfig:
     norm_seed: bool = True  # seed the energy normalizer from the last real session's
         # persisted range (config.py energy_norm, 2026-09-17); `--no-norm-seed` for a
         # cold start (new venue, re-gained mixer). Demo mode never reads or writes it.
+    phrases: str = "shadow"  # rekordbox phrase data via XDJ-XZ status packets + NFS (2026-10-25):
+        # "off" | "shadow" (fields recorded + shown, lights unaffected) | "drive" (Stage 3, not built:
+        # treated as shadow with a warning). See docs/13 D-21.
+    rekordbox_cache: str = "cache/rekordbox"  # where fetched export.pdb copies live (gitignored)
 
 
 class App:
@@ -211,6 +215,7 @@ class App:
             "pdl_interface": self.config.pdl_interface,
             "rig_path": self.config.rig_path,
             "full_catalog": self.config.full_catalog,
+            "phrases": self.config.phrases,
         })
         self.recorder = SessionRecorder(
             self.show_state, self.frame_buffer, self.clock, self.stop_event, session_dir,
@@ -255,9 +260,26 @@ class App:
                 cc_map = CcMap.load(self.config.midi_map_path)
             except Exception:  # noqa: BLE001
                 log.warning("Could not load MIDI map %s; using defaults", self.config.midi_map_path)
-        return [
+        phrases = self.config.phrases
+        if phrases == "drive":
+            log.warning("--phrases drive is Stage 3 and not built yet; running in shadow mode")
+            phrases = "shadow"
+        self.phrase_service = None
+        if phrases != "off":
+            try:
+                from .rekordbox.service import PhraseService
+
+                self.phrase_service = PhraseService(self.input_queue, self.clock, stop_event=self.stop_event,
+                                                    cache_dir=self.config.rekordbox_cache)
+            except Exception:  # noqa: BLE001 - phrase data is optional
+                log.exception("rekordbox phrase service unavailable; continuing without it")
+        sources: list = []
+        if self.phrase_service is not None:
+            sources.append(self.phrase_service)   # an InputSource: started/stopped with the rest
+        return sources + [
             ProDjLinkListener(self.input_queue, self.clock, self.stop_event,
-                              interface=self.config.pdl_interface),
+                              interface=self.config.pdl_interface,
+                              emit_status=phrases != "off", phrase_service=self.phrase_service),
             MidiListener(self.input_queue, self.clock, cc_map),
             AudioAnalyzer(self.input_queue, self.clock, self.stop_event,
                           device=self.config.audio_device),

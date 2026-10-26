@@ -10,8 +10,12 @@ Field provenance (docs/04 §4.3) is documented per field below:
   measured      = comes straight off PDL/MIDI
   interpolated  = computed locally between events (beat_phase)
   inferred      = derived heuristically (bar, energy, in_transition)
-Note: absolute track position is intentionally absent — the XDJ-XZ does not
-transmit it (docs/04 §4.1), so no feature may depend on it.
+Track position: the XDJ-XZ's CDJ *status* packets (unicast to us once we announce,
+inputs/pdl_announce.py — corrected 2026-10-25, docs/04 §4.1) carry an absolute
+beat counter and the loaded rekordbox track id. Those feed the ``track_*`` /
+``phrase_*`` / ``section_*`` fields below (measured; "" / -1 when no deck status
+or no phrase table). Until Stage 3 (docs/13 D-21) nothing in the engines acts on
+them; they are recorded and shown so the data can be judged against the ear first.
 """
 
 from __future__ import annotations
@@ -37,6 +41,18 @@ class ShowSnapshot:
     loop_active: bool = False            # measured
     on_air: tuple[int, ...] = ()         # measured
     master_deck: int | None = None       # measured
+
+    # --- song structure (measured: CDJ status beat counter + rekordbox phrase table) ---
+    active_deck: int | None = None       # deck whose status/phrases the fields below describe
+    deck_status_fresh: bool = False      # a DeckStatusMessage for the active deck arrived recently
+    track_id: int = 0                    # rekordbox id of the active deck's track (0 = none)
+    track_title: str = ""
+    track_beat: int = 0                  # beat-grid index, extrapolated between status packets (0 = unknown)
+    phrase_source: str = ""              # "rekordbox" when a phrase table is loaded for this track, else ""
+    phrase_label: str = ""               # rekordbox's own label: intro/up/down/chorus/outro/verseN/bridge
+    section_kind: str = ""               # mapped: intro/build/breakdown/drop/verse/outro (rekordbox/mapping.py)
+    next_section_kind: str = ""          # "" = end of analyzed structure / unknown
+    beats_to_next_section: int = -1      # -1 = unknown
 
     # --- MIDI intent (measured, normalized 0.0-1.0) ---
     crossfader: float = 0.5

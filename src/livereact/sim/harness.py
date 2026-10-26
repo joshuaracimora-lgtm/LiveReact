@@ -37,7 +37,7 @@ from typing import Any, Iterable
 
 from ..clock import FakeClock
 from ..core.frame_buffer import DmxFrameBuffer
-from ..core.messages import BeatMessage
+from ..core.messages import BeatMessage, DeckStatusMessage, TrackPhraseMessage
 from ..core.metronome import Metronome
 from ..core.show_engine import ShowEngine
 from ..core.show_state import ShowState
@@ -151,6 +151,7 @@ def run_sim(
     audio: "np.ndarray | None" = None,
     seed_range: "tuple[float, float] | None" = None,
     params: "dict | None" = None,
+    phrases: "object | None" = None,
 ) -> RunResult:
     """Simulate one track end to end and return the full frame log.
 
@@ -166,13 +167,15 @@ def run_sim(
     from .. import params as knobs
     previous = knobs.apply(params) if params else {}
     try:
-        return _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np)
+        return _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np,
+                        phrases=phrases)
     finally:
         if previous:
             knobs.restore(previous)
 
 
-def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np):
+def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio, seed_range, params, np,
+             phrases=None):
 
     if audio is None:
         audio = decode_audio(track, duration)
@@ -214,6 +217,14 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
 
     beat_dur = timeline.beat_dur
     next_beat_time, beat_in_bar = timeline.grid_start()
+    # Optional rekordbox phrase table (rekordbox/pssi.py PhraseTable): the sim then also
+    # synthesizes the XDJ-XZ's CDJ status stream (5/s, beat_count on the timeline grid)
+    # so the metronome's section fields run through the identical code path as live.
+    beats_emitted = 0
+    next_status_time = 0.0
+    if phrases is not None:
+        shared_queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=1, title=str(track),
+                                            bpm=timeline.bpm, table=phrases))
 
     frames = np.zeros((n_blocks, 512), dtype=np.uint8)
     times = np.zeros(n_blocks, dtype=np.float64)
@@ -228,6 +239,14 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
                                          bpm=timeline.bpm, is_master=True, player=1))
             beat_in_bar = beat_in_bar % timeline.beats_per_bar + 1
             next_beat_time += beat_dur
+            beats_emitted += 1
+        if phrases is not None and now >= next_status_time:
+            shared_queue.put(DeckStatusMessage(
+                timestamp=now, player=1, track_id=1, loaded_player=1, slot="sd", analyze_type="rekordbox",
+                play_state="playing", playing=True, on_air=True, master=True, sync=False,
+                bpm=timeline.bpm, pitch=1.0, beat_count=beats_emitted if beats_emitted else None,
+                beat_in_bar=(beat_in_bar - 2) % timeline.beats_per_bar + 1, source_ip="sim"))
+            next_status_time = now + 0.2
         for msg in script.messages_at(now):
             shared_queue.put(msg)
 
@@ -256,6 +275,11 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
             "laser_on": laser_engine.active, "silence_active": show_engine.silence.active,
             "crossfader": round(snap.crossfader, 3), "fader_a": round(snap.fader_a, 3),
         }
+        if phrases is not None:   # only when asked, so signals.csv's schema is unchanged otherwise
+            row["section"] = snap.section_kind
+            row["phrase"] = snap.phrase_label
+            row["beats_to_next"] = snap.beats_to_next_section
+            row["track_beat"] = snap.track_beat
         for slot, fx in zip(slots, rig.fixtures):
             vs = fx.visual_state(frame)
             row[f"{slot}_brightness"] = round(vs.brightness, 3)

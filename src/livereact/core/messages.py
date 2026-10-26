@@ -72,6 +72,26 @@ class DeckStatusMessage:
 
 
 @dataclass(frozen=True)
+class TrackPhraseMessage:
+    """The rekordbox phrase table for one loaded track, fetched off the USB in the
+    player (``rekordbox/service.py``) after a ``DeckStatusMessage`` named it.
+
+    ``table`` is None when the track has no phrase analysis or the fetch failed
+    (``error`` says why); the metronome then simply has no section data for that
+    track and the audio classifier carries on as before.
+    """
+
+    timestamp: float
+    player: int
+    track_id: int
+    title: str
+    bpm: float
+    table: object | None     # rekordbox.pssi.PhraseTable (typed loosely to keep this module dependency-free)
+    source: str = "rekordbox"
+    error: str = ""
+
+
+@dataclass(frozen=True)
 class MidiControlMessage:
     """One normalized mixer control. ``control`` is a semantic name (e.g.
     ``"crossfader"``, ``"fader_a"``, ``"eq_low_b"``); ``value`` is 0.0-1.0.
