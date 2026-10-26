@@ -34,6 +34,10 @@ def mode_mismatch(baseline: Evaluation, candidate: Evaluation) -> str | None:
             and baseline.analysis_fingerprint != candidate.analysis_fingerprint):
         return (f"rekordbox analysis of the scored tracks changed ({baseline.analysis_fingerprint} -> "
                 f"{candidate.analysis_fingerprint}); regenerate the baseline")
+    if (baseline.labels_fingerprint and candidate.labels_fingerprint
+            and baseline.labels_fingerprint != candidate.labels_fingerprint):
+        return (f"Josh's labels on the scored tracks changed (markers / drop classes / look notes: "
+                f"{baseline.labels_fingerprint} -> {candidate.labels_fingerprint}); regenerate the baseline")
     return None
 
 

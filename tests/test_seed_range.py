@@ -78,7 +78,11 @@ def test_rules_fingerprint_tracks_the_scorer_source(tmp_path, monkeypatch):
     from pathlib import Path
     from livereact.loop import evaluate
     from livereact.sim.score import RULES
-    src = (Path(evaluate.__file__).resolve().parents[1] / "sim" / "score.py").read_bytes()
+    sim = Path(evaluate.__file__).resolve().parents[1] / "sim"
+    score_src = (sim / "score.py").read_bytes()
+    # 2026-10-26: the drop-class rules are part of what is measured too
+    src = score_src + b"\n" + (sim / "drop_class.py").read_bytes()
     ids = "|".join(f"{r}:{s}" for r, s, _ in RULES)
     assert evaluate.rules_fingerprint() == hashlib.sha256(ids.encode() + b"\n" + src).hexdigest()[:12]
+    assert evaluate.rules_fingerprint() != hashlib.sha256(ids.encode() + b"\n" + score_src).hexdigest()[:12]
     assert evaluate.rules_fingerprint() != hashlib.sha256(ids.encode()).hexdigest()[:12]

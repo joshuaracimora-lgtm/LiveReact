@@ -25,10 +25,13 @@ PATTERNS = (
     "tracks/*.timeline.json",
     "tracks/*.look.json",
     "tracks/MARKERS_TO_REVIEW.md",
+    "tracks/DROP_CLASSES_TO_REVIEW.md",
     "results/baseline/evaluation.json",
+    "results/agent/state.json",            # the agents' memory: sub-goals, Josh's answers, open questions
     "results/agent/*/NIGHT.md",
     "results/agent/*/REPORT.md",
     "results/agent/*/SWEEP.md",
+    "results/agent/*/*/*.md",               # per-agent reports (results/agent/<date>/<role>/, 2026-10-26)
     "results/search/*/best_params.json",
     "results/search/*/summary.md",
 )
@@ -48,6 +51,10 @@ def main() -> int:
     g.add_argument("--unpack", metavar="ZIP")
     g.add_argument("--list", action="store_true")
     a = p.parse_args()
+    # a Windows console is cp1252: printing a song name like "Łaszewo" raised before the zip was written
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     if a.list or a.pack:
         fs = files()
         for f in fs:
