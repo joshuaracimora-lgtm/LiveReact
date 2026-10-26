@@ -36,8 +36,10 @@ def test_status_family_table_counts_fails_and_picks_next_family():
     assert status.next_family(rows) == 2       # family 1 clean, family 2 has failures
     text = status.render(ev, None, "x.json")
     assert "NEXT FAMILY: 2  (lowest family with failures)" in text and "TIME-11   FAIL  2" in text
-    # a serious sweep finding wins over everything
-    assert status.next_family(rows, None, {"counts": {"crash": 1}}) == 0
+    # 2026-10-26: a serious sweep finding is the Bugs & UI agent's (family 0), never the Track Classifier's
+    assert status.next_family(rows, None, {"counts": {"crash": 1}}) == 2
+    assert status.next_family(rows, None, {"counts": {"crash": 1}}, role="ui") == 0
+    assert status.next_family(rows, None, {"counts": {"warning": 3}}, role="ui") is None   # -> the UI bug list
     assert status.next_family(rows, None, {"counts": {"warning": 3}}) == 2
     assert "sweep" in status.render(ev, None, "x", {"date": "20261026", "tracks_ran": 5, "tracks_total": 9, "counts": {"crash": 1}}).lower()
 
@@ -119,3 +121,35 @@ def test_only_ear_verified_tracks_count_and_dump_signals_refuses_the_rest(tmp_pa
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 2, r.stderr
     assert "not ear-verified" in r.stderr
+
+
+def test_record_night_keeps_the_two_agents_apart(tmp_path):
+    """The UI agent's family/subgoal/questions live under roles.ui; the Track Classifier keeps the top level."""
+    rn = _load("record_night")
+    status = _load("status")
+    st = rn.load(tmp_path / "state.json")
+    st = rn.record(st, date="20261027", branch="agent/20261027", role="tracks", commits=1, gate="ACCEPT",
+                   tests="ok", family=2, subgoal="tracks next", note="", questions=["tracks q"])
+    st = rn.record(st, date="20261027", branch="agent/20261027-ui", role="ui", commits=1, gate="ACCEPT",
+                   tests="ok", family=0, subgoal="ui next", note="", questions=["ui q"])
+    assert st["family"] == 2 and st["subgoal"] == "tracks next" and st["open_questions"] == ["tracks q"]
+    assert st["roles"]["ui"] == {"family": 0, "subgoal": "ui next", "open_questions": ["ui q"]}
+    assert [n["role"] for n in st["nights"]] == ["tracks", "ui"]
+    rows = status.family_table(_ev({"a": {"LOOK-05": "FAIL"}}))
+    assert status.next_family(rows, st) == 2                      # the UI agent's family 0 does not leak
+    tracks_view, ui_view = status._role_view(st, "tracks"), status._role_view(st, "ui")
+    assert "roles" not in tracks_view and [n["role"] for n in tracks_view["nights"]] == ["tracks"]
+    assert ui_view["subgoal"] == "ui next" and [n["role"] for n in ui_view["nights"]] == ["ui"]
+    # an older night without a role is the Track Classifier's
+    st["nights"].insert(0, {"date": "20261020", "branch": "agent/20261020", "gate": "ACCEPT"})
+    assert len(status._role_view(st, "tracks")["nights"]) == 2
+
+
+def test_open_ui_bugs_reads_the_numbered_open_list(tmp_path):
+    status = _load("status")
+    f = tmp_path / "UI_BUGS.md"
+    f.write_text("# x\n\n## Open (highest risk first)\n\n1. **First.** a\n   more\n2. **Second.** b\n\n"
+                 "## Fixed\n\n- **Old.** c\n", encoding="utf-8")
+    assert status.open_ui_bugs(f) == ["**First.** a", "**Second.** b"]
+    assert len(status.open_ui_bugs()) >= 1                         # the real list parses too
+
