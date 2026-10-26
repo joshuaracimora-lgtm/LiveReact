@@ -35,6 +35,7 @@ tracks/*
 !tracks/.gitkeep
 !tracks/*.timeline.json
 !tracks/*.look.json
+!tracks/MARKERS_TO_REVIEW.md
 # a copy of the rekordbox USB export (audio + PIONEER/ analysis): the harness/agent corpus, never committed
 usb_export/
 results/
