@@ -22,7 +22,9 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    - captions don't follow a drag until release; tooltips are never refreshed after a drop;
    - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
-   is the only refresh of body positions there).
+   is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
+   room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
+   steps Josh saw it with.
 4. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it:
    exactly at the centre line it is never updated (keeps whatever it was last). The Rig Config tab's
    Side column is built once and can save a stale value back. (Reset positions: fixed below.)
