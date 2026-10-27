@@ -54,6 +54,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Fixed
 
+- **The process died (Windows access violation) when a floor plan with a fixture selected was dropped**
+  (found 2026-10-26 while testing #2: any test that clicked a body crashed pytest at teardown; in the
+  console, replacing a Venue tab). The `QGraphicsScene` had no parent, so it outlived its view and
+  reported the selection change to the deleted view. The scene is now a child of the view. Test:
+  `tests/test_floorplan.py::test_dropping_a_plan_with_a_fixture_selected_does_not_crash` (2026-10-26).
+
 - **Python error ("Internal C++ object (PlanItem) already deleted") printed whenever the plan was torn
   down with a fixture selected** (closing the tab / app, every `venue_check.py` run). Not the position edit
   itself: destroying the scene deletes the items and then fires selection-changed, and

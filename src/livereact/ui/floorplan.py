@@ -246,7 +246,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self.rig = rig
         self.editable = editable
         self.on_changed = on_changed
-        self._scene = QtWidgets.QGraphicsScene()
+        self._scene = QtWidgets.QGraphicsScene(self)
         self.setScene(self._scene)
         self.setBackgroundBrush(QtGui.QColor(12, 12, 16))
         self.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)

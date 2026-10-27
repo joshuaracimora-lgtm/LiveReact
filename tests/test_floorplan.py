@@ -143,3 +143,20 @@ def test_destroying_the_plan_with_a_fixture_selected_raises_nothing(qapp, monkey
     assert seen[-1] == "laser"
     Shiboken.delete(view._scene)
     assert errors == []
+
+
+def test_dropping_a_plan_with_a_fixture_selected_does_not_crash(qapp):
+    """The scene had no parent, so it died after its view and reported the
+    selection change to the already-deleted view: an access violation that
+    killed the process (a crash in pytest after any test that clicked a body)."""
+    import gc
+
+    from livereact.ui.floorplan import FloorPlanView
+
+    def build_and_drop():
+        view = FloorPlanView(_josh_rig_with_venue(), editable=True)
+        view._bodies["mh"].setSelected(True)
+        assert view._scene.parent() is view
+
+    build_and_drop()
+    gc.collect()
