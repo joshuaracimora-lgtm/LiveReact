@@ -116,3 +116,30 @@ def test_legacy_rig_json_without_geometry_draws_from_role_side_rows(qapp):
     ax, _ = view.item_position_m("a")
     bx, _ = view.item_position_m("b")
     assert ax < bx
+
+
+def test_destroying_the_plan_with_a_fixture_selected_raises_nothing(qapp, monkeypatch):
+    """UI_BUGS #1: deleting the scene with a body selected fires selectionChanged
+    while the items are already gone; the slot walked ``_bodies`` (deleted
+    PlanItems) and printed RuntimeError on every venue_check / console close."""
+    import sys
+
+    from shiboken6 import Shiboken
+    from livereact.ui.floorplan import FloorPlanView
+
+    errors = []
+    monkeypatch.setattr(sys, "excepthook", lambda *a: errors.append(a[1]))
+    rig = _josh_rig_with_venue()
+    view = FloorPlanView(rig, editable=True)
+    seen = []
+    view.fixture_selected.connect(seen.append)
+    view._bodies["mh"].setSelected(True)
+    assert seen == ["mh"]
+    view._scene.clearSelection()
+    assert seen[-1] == ""
+    view._targets["dj_booth"].setSelected(True)          # a target is not a fixture
+    assert seen[-1] == ""
+    view._bodies["laser"].setSelected(True)
+    assert seen[-1] == "laser"
+    Shiboken.delete(view._scene)
+    assert errors == []

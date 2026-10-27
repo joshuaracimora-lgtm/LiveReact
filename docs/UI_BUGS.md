@@ -9,10 +9,6 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Open (highest risk first)
 
-1. **Python error on every position edit.** `FloorPlanView.refresh_layout` (`ui/floorplan.py`) clears the
-   scene while selection-changed still fires `_on_selection`, which walks `self._bodies` holding deleted
-   `PlanItem`s: `RuntimeError: Internal C++ object (PlanItem) already deleted`. Seen when the X box moves
-   a head (`venue_check.py`). Block the scene's signals (or clear `_bodies` first) during the rebuild.
 2. **A plain click moves fixtures.** `mouseReleaseEvent` (`floorplan.py` ~545) commits a drop for every
    selected item even with no drag: clicking an unplaced fixture gives it a real position (fallback xy,
    z = 1 m), changing `side`; clicking a placed one snaps it to 0.5 ft. Commit only items that moved.
@@ -57,6 +53,13 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Python error ("Internal C++ object (PlanItem) already deleted") printed whenever the plan was torn
+  down with a fixture selected** (closing the tab / app, every `venue_check.py` run). Not the position edit
+  itself: destroying the scene deletes the items and then fires selection-changed, and
+  `FloorPlanView._on_selection` walked `_bodies`' deleted items. The slot now does nothing while the
+  scene is being destroyed. Test: `tests/test_floorplan.py::test_destroying_the_plan_with_a_fixture_selected_raises_nothing`
+  (2026-10-26).
 
 - **Launching the console lit the first moving head full white and held off the auto-blackout**
   (`VenueTab` built inside the hidden tab selected its first fixture). The tab now pins only while on

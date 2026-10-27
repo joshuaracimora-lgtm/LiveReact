@@ -43,6 +43,7 @@ import math
 from typing import Callable
 
 from PySide6 import QtCore, QtGui, QtWidgets
+from shiboken6 import Shiboken
 
 from ..fixtures.geometry import (
     Point3,
@@ -530,6 +531,10 @@ class FloorPlanView(QtWidgets.QGraphicsView):
 
     # ------------------------------------------------------------ selection / drag
     def _on_selection(self) -> None:
+        # the scene being destroyed (tab closed, app exit) deletes the items
+        # first and then reports the selection change: nothing to select then
+        if not all(Shiboken.isValid(item) for item in self._bodies.values()):
+            return
         for key, item in self._bodies.items():
             if item.isSelected():
                 self.fixture_selected.emit(key)
