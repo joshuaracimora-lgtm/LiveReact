@@ -351,9 +351,25 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         r = self._scene.sceneRect()
         r.setBottom(max(r.bottom(), booth.sceneBoundingRect().bottom() + 2))
         self._scene.setSceneRect(r)
+        # the legend wraps onto as many lines as the scene's width needs (one
+        # line was cropped on rooms under ~33 ft); the top band grows to fit
         legend = self._scene.addSimpleText(_LEGEND)
         legend.setFont(QtGui.QFont("Arial", 7)); legend.setBrush(_TEXT)
-        legend.setPos(0, -_MARGIN - _LEGEND_H + 2)
+        fm = QtGui.QFontMetricsF(legend.font())
+        lines, cur = [], ""
+        for part in _LEGEND.split("    "):
+            cand = cur + "    " + part if cur else part
+            if cur and fm.horizontalAdvance(cand) > r.width() - 4:
+                lines.append(cur)
+                cand = part
+            cur = cand
+        legend.setText("\n".join(lines + [cur]))
+        extra = legend.boundingRect().height() - (_LEGEND_H - 2)
+        if extra > 0:
+            r.setTop(r.top() - extra)
+            self._scene.setSceneRect(r)
+        legend.setPos(r.left() + 2, r.top() + 2)
+        self._legend = legend
 
         movable = (QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsMovable
                    | QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
@@ -462,7 +478,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         reserved = [
             QtCore.QRectF(-_MARGIN, l_px + 1, w_px + 2 * _MARGIN, _MARGIN + 40),     # x axis + "DJ BOOTH WALL"
             QtCore.QRectF(-_MARGIN - 2, -_MARGIN - _LEGEND_H, _MARGIN + 1, l_px + 2 * _MARGIN + _LEGEND_H),  # y axis
-            QtCore.QRectF(-_MARGIN, -_MARGIN - _LEGEND_H, w_px + 2 * _MARGIN, _LEGEND_H - 1),            # legend
+            self._legend.sceneBoundingRect(),                                                            # legend
         ]
         obstacles = [c.item.sceneBoundingRect() for c in self._captions.values()]
         placed: list[QtCore.QRectF] = []

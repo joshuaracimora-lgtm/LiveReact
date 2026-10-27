@@ -223,3 +223,25 @@ def test_booth_wall_title_clears_the_axis_numbers_and_stays_in_the_scene(qapp, r
     rect = booth.sceneBoundingRect()
     assert ticks and not [t.text() for t in ticks if t.sceneBoundingRect().intersects(rect)]
     assert view._scene.sceneRect().contains(rect)
+
+
+@pytest.mark.parametrize("width_ft", [10.0, 15.0, 30.0])
+def test_legend_fits_the_scene_in_a_narrow_room(qapp, width_ft):
+    """UI_BUGS (labels): the one-line glyph legend was wider than a narrow
+    room's scene and was cropped."""
+    from PySide6 import QtWidgets
+    from livereact.ui.floorplan import _LEGEND, FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    w, l, h = ft_to_m(width_ft), ft_to_m(30), ft_to_m(12)
+    rig.venue = Venue(w, l, h, Venue.default_targets(w, l, h))
+    rig.fixture("laser").position = Point3(w * 0.8, ft_to_m(2), ft_to_m(3))
+    rig.refresh_geometry()
+    view = FloorPlanView(rig, editable=True)
+    legend = next(i for i in view._scene.items() if isinstance(i, QtWidgets.QGraphicsSimpleTextItem)
+                  and "head" in i.text() and "target" in i.text())
+    assert legend.text().split() == _LEGEND.split()          # every entry still there
+    assert view._scene.sceneRect().contains(legend.sceneBoundingRect())
+    for key, cap in view._captions.items():
+        for line in cap._lines():
+            assert not line.sceneBoundingRect().intersects(legend.sceneBoundingRect()), key
