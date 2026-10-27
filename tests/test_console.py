@@ -730,3 +730,38 @@ def test_reset_positions_restores_each_fixtures_side(qapp):
     tab._reset_positions()
     assert fx.position is None
     assert {f.slot_id: f.side for f in rig.fixtures} == declared
+
+
+def test_moving_a_calibrated_head_warns_that_its_aim_was_captured_elsewhere(qapp):
+    """UI_BUGS (calibration not tied to what it was solved for): moving or
+    re-facing a head after SET AIM silently kept offsets solved for the old
+    geometry. Whether to re-solve is Josh's call; the tab must at least say so."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    assert "SET AIM" not in tab.status.text()          # not captured yet: nothing to warn about
+    tab.cb_jog.setChecked(True)
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    tab.sb_x.setValue(7.0)
+    assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()
+    tab.sb_facing.setValue(20.0)
+    assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()
+    # a drag on the plan warns too
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+
+    tab._mark_dirty()
+    view = tab.plan
+    view.resize(800, 900); view._fit()
+    p = view.mapFromScene(view._bodies["mh_l"].scenePos())
+    left, none = QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier
+    QTest.mousePress(view.viewport(), left, none, p)
+    for dx in (15, 30, 45, 60):
+        QTest.mouseMove(view.viewport(), QtCore.QPoint(p.x() + dx, p.y()))
+    QTest.mouseRelease(view.viewport(), left, none, QtCore.QPoint(p.x() + 60, p.y()))
+    assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()

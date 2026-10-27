@@ -442,7 +442,18 @@ class VenueTab(QtWidgets.QWidget):
         self.plan.select(self._selected)
         self._update_place_title()
         self._update_laser_readout()
-        self._mark_dirty()
+        self._mark_dirty(self._captured_warning(fx))
+
+    @staticmethod
+    def _captured_warning(fx) -> str:
+        """A SET AIM capture is solved against the position/facing it was
+        taken at (geometry.calibrate_from_capture); after a move it is kept
+        as is -- right if the head was re-hung the same way, wrong if the old
+        numbers were a typo. Say so; don't guess."""
+        if not isinstance(fx, MovingHead) or not fx.calibration.captured:
+            return ""
+        return (f"{fx.label}'s aim was captured at its old position/facing: check it with "
+                "Aim at target, and SET AIM again if the beam misses.")
 
     def _update_place_title(self) -> None:
         fx = self._fx()
@@ -452,10 +463,13 @@ class VenueTab(QtWidgets.QWidget):
     def _plan_changed(self) -> None:
         """A drag on the plan moved a fixture or a target."""
         fx = self._fx()
+        note = ""
         if fx is not None:
             self._loading = True
             try:
                 o = self.plan.fixture_origin(fx)
+                if abs(self.sb_x.value() - m_to_ft(o.x)) > 0.05 or abs(self.sb_y.value() - m_to_ft(o.y)) > 0.05:
+                    note = self._captured_warning(fx)      # the drag moved the selected head
                 self.sb_x.setValue(m_to_ft(o.x)); self.sb_y.setValue(m_to_ft(o.y))
             finally:
                 self._loading = False
@@ -469,7 +483,7 @@ class VenueTab(QtWidgets.QWidget):
         finally:
             self._loading = False
         self._update_laser_readout()
-        self._mark_dirty()
+        self._mark_dirty(note)
 
     def _reset_positions(self) -> None:
         self._clear_pins()

@@ -11,8 +11,10 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 1. **Calibration is not tied to what it was solved for.**
    - Moving a head or changing its facing after SET AIM keeps the old offsets (solved against the old
-     facing, `geometry.calibrate_from_capture`), so every aim silently rotates. Invalidate (or warn and
-     re-solve) on a position/facing change.
+     facing, `geometry.calibrate_from_capture`), so every aim silently rotates. The tab now WARNS
+     (fixed below); whether to re-solve from the stored capture (right if the old numbers were a typo)
+     or keep the offsets (right if the head was re-hung the same way) is Josh's call. Moving a TARGET a
+     capture was taken on is not warned about yet.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
@@ -37,6 +39,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Moving or re-facing a head after SET AIM was silent** (the offsets solved for the old geometry are
+  kept). A box edit or a drag of a captured head now says its aim was captured at the old
+  position/facing: check with Aim at target, SET AIM again if the beam misses. Nothing is re-solved.
+  Test: `tests/test_console.py::test_moving_a_calibrated_head_warns_that_its_aim_was_captured_elsewhere`
+  (2026-10-26).
 
 - **Reset positions left every fixture on the side last derived from its x** (a left head dragged right
   stayed "right" with no position). The Venue tab keeps the sides the rig had when it opened and Reset
