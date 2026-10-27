@@ -729,11 +729,14 @@ class VenueTab(QtWidgets.QWidget):
         if not path:
             return
         try:
-            save_rig(self.rig, path, "Venue layout + calibration edited in the LiveReact console's Venue tab.")
+            # the rig's own description survives; the stock line only fills an empty one
+            save_rig(self.rig, path, self.rig.description
+                     or "Venue layout + calibration edited in the LiveReact console's Venue tab.")
         except RigError as exc:
             self.status.setText(f"Not saved — {exc}")
             self.status.setStyleSheet("color:#c33;")
             return
+        self.rig_path = path                    # the next Save offers the file just written
         self.status.setText(f"Saved to {path}. Positions/calibration are already live; fixture patching needs a restart.")
         self.status.setStyleSheet("color:#3c6;")
 

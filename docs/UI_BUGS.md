@@ -26,21 +26,26 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    makes widgets wider in the real app.
 4. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there).
-5. **Save overwrites the rig's description** with a fixed string (`VenueTab._save`, `FixtureTestPanel`,
-   `RigConfigTab._collect`), and the console keeps the old `rig_path` after "Save rig..." to a new file.
-6. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it: after
+5. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it: after
    Reset positions the sides keep their last derived values; exactly at the centre line it is never
    updated. The Rig Config tab's Side column is built once and can save a stale value back.
-7. **Resizing the room leaves fixtures and targets outside it** (`VenueTab._venue_changed`); it also
+6. **Resizing the room leaves fixtures and targets outside it** (`VenueTab._venue_changed`); it also
     writes `height_m` into files that had none.
-8. **Unplaced fixture shows X/Y but SET AIM refuses** ("place the head first"): `_load_fixture` shows the
+7. **Unplaced fixture shows X/Y but SET AIM refuses** ("place the head first"): `_load_fixture` shows the
     fallback position while `fx.position` stays None.
-9. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
+8. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
-10. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
+9. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Save replaced the rig's description with a fixed string, and the next Save still offered the old
+  file** (`VenueTab._save`, `RigConfigTab._collect/_save`, `FixtureTestPanel._save_home_position`). The
+  rig's own description is kept (the stock line only fills an empty one) and each panel remembers the
+  path it just wrote. (Each tab still keeps its own path: a Venue save does not move the Rig Config tab's
+  default.) Tests: `tests/test_console.py::test_saving_keeps_the_rig_description_and_remembers_the_new_path`,
+  `::test_fixture_test_home_save_keeps_the_rig_description` (2026-10-26).
 
 - **Property panel clipped at 1280 x 800** (button labels cut, pan/tilt readouts "0.", help text off the
   right edge, a horizontal scrollbar). With the console's theme the panel needed 602 px in a 474 px

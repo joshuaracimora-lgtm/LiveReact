@@ -633,3 +633,59 @@ def test_venue_panel_fits_a_1280x800_window_without_clipping(qapp):
     for lab in (tab.l_pan, tab.l_tilt):
         assert lab.width() >= lab.sizeHint().width()
     tab.close()
+
+
+def test_saving_keeps_the_rig_description_and_remembers_the_new_path(qapp, tmp_path, monkeypatch):
+    """UI_BUGS: Save rig... replaced the rig's own description with a fixed
+    string, and the next Save still defaulted to the old file."""
+    import json
+
+    from PySide6 import QtWidgets
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.rig_config import RigConfigTab
+    from livereact.ui.venue_tab import VenueTab
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(root, "rigs", "junior_crib.json")
+    asked = []
+
+    def dialog(path):
+        def fake(parent, caption, default, filt):
+            asked.append(default)
+            return str(path), filt
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName", staticmethod(fake))
+
+    rig = load_rig(src)
+    rig.description = "Josh's own notes on this room"
+    tab = VenueTab(rig, src, on_pins=None, active=False)
+    dialog(tmp_path / "venue.json")
+    tab.b_save.click()
+    assert json.loads((tmp_path / "venue.json").read_text(encoding="utf-8"))["description"] == rig.description
+    tab.b_save.click()
+    assert asked == [src, str(tmp_path / "venue.json")]
+
+    cfg = RigConfigTab(rig, src)
+    dialog(tmp_path / "cfg.json")
+    cfg._save()
+    assert json.loads((tmp_path / "cfg.json").read_text(encoding="utf-8"))["description"] == rig.description
+    assert cfg.rig_path == str(tmp_path / "cfg.json")
+
+
+def test_fixture_test_home_save_keeps_the_rig_description(qapp, tmp_path, monkeypatch):
+    import json
+
+    from PySide6 import QtWidgets
+    from livereact.core.frame_buffer import DmxFrameBuffer
+    from livereact.fixtures.profiles import MovingHead
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.fixture_test import FixtureTestPanel
+
+    rig = load_rig()
+    rig.description = "Josh's own notes on this room"
+    out = tmp_path / "home.json"
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a: (str(out), "JSON (*.json)")))
+    panel = FixtureTestPanel(rig, DmxFrameBuffer())
+    panel._save_home_position(next(fx for fx in rig.fixtures if isinstance(fx, MovingHead)))
+    assert json.loads(out.read_text(encoding="utf-8"))["description"] == rig.description
+    assert panel.rig_path == str(out)
