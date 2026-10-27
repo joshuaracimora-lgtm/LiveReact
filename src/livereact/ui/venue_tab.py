@@ -143,8 +143,7 @@ class VenueTab(QtWidgets.QWidget):
         left = QtWidgets.QWidget()
         lv = QtWidgets.QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
-        lv.addWidget(self.plan, 1)
-        lv.addWidget(self._build_targets())
+        lv.addWidget(self.plan, 1)              # the whole column: the targets grid lives in the panel
         split.addWidget(left)
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -236,6 +235,9 @@ class VenueTab(QtWidgets.QWidget):
             for col, b in enumerate(boxes, start=1):
                 self._targets_form.addWidget(b, row, col)
                 b.valueChanged.connect(lambda v, n=name, a="xyz"[col - 1]: self._target_edited(n, a, v))
+                if hasattr(self, "_wheel_guard"):   # rebuilt boxes scroll the panel too, like the first ones
+                    b.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+                    b.installEventFilter(self._wheel_guard)
             self._target_boxes[name] = boxes
 
     def _target_edited(self, name: str, axis: str, value_ft: float) -> None:
@@ -364,6 +366,7 @@ class VenueTab(QtWidgets.QWidget):
         self.s_hoff.valueChanged.connect(self._laser_edited)
         self.cb_probe.toggled.connect(self._probe_toggled)
 
+        v.addWidget(self._build_targets())
         v.addStretch(1)
         return panel
 

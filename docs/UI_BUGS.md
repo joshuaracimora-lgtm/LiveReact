@@ -22,21 +22,24 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    - leader lines, beams and wedges are not obstacles;
    - captions don't follow a drag until release; tooltips are never refreshed after a drop;
    - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
-3. **The floor plan is small at 1280 x 800**: the targets grid under it takes ~40% of the left
-   column's height, so a tall room is drawn ~330 px high with tiny captions. (The property panel's
-   clipping is fixed, below.) Note: `ui_snapshot.py` renders without the console's theme, which is what
-   makes widgets wider in the real app.
-4. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
+3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there).
-5. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it:
+4. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it:
    exactly at the centre line it is never updated (keeps whatever it was last). The Rig Config tab's
    Side column is built once and can save a stale value back. (Reset positions: fixed below.)
-6. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
+5. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
-7. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
+6. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **The floor plan was small at 1280 x 800**: the targets grid under it took ~40% of the left column, so
+  a tall room was drawn ~330 px high. The targets grid now sits at the bottom of the scrollable right
+  panel (its rebuilt boxes get the panel's wheel guard) and the plan has the whole column (~690 px at
+  1280 x 800). Captions are still small on long rooms (see Overlapping labels). Note: `ui_snapshot.py`
+  renders without the console's theme. Test:
+  `tests/test_console.py::test_floor_plan_gets_the_left_columns_height_at_1280x800` (2026-10-26).
 
 - **Editing one room dimension rewrote all three, and shrinking the room was silent**:
   `VenueTab._venue_changed` rebuilt width, length and ceiling from the boxes (0.1 ft rounding, and a

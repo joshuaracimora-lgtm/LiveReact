@@ -789,3 +789,23 @@ def test_room_box_edit_writes_only_its_dimension_and_warns_about_what_falls_outs
     assert "outside" in tab.status.text() and mh.label in tab.status.text()
     tab.sb_width.setValue(30.0)
     assert "outside" not in tab.status.text()
+
+
+def test_floor_plan_gets_the_left_columns_height_at_1280x800(qapp):
+    """UI_BUGS (layout): the targets grid under the plan took ~40% of the left
+    column, so a tall room was drawn ~330 px high with tiny captions."""
+    from PySide6 import QtWidgets
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.theme import apply_theme
+    from livereact.ui.venue_tab import VenueTab
+
+    apply_theme(qapp)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tab = VenueTab(load_rig(os.path.join(root, "rigs", "junior_crib.json")), None, on_pins=None, active=False)
+    tab.resize(1280, 800)
+    tab.show()
+    qapp.processEvents()
+    assert tab.plan.height() >= 0.75 * tab.height()
+    scroll = tab.findChild(QtWidgets.QScrollArea)
+    assert scroll.horizontalScrollBar().maximum() == 0          # the targets grid fits the panel too
+    tab.close()
