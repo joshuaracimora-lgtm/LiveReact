@@ -689,3 +689,25 @@ def test_fixture_test_home_save_keeps_the_rig_description(qapp, tmp_path, monkey
     panel._save_home_position(next(fx for fx in rig.fixtures if isinstance(fx, MovingHead)))
     assert json.loads(out.read_text(encoding="utf-8"))["description"] == rig.description
     assert panel.rig_path == str(out)
+
+
+def test_an_unplaced_head_says_so_in_the_panel(qapp):
+    """UI_BUGS: an unplaced fixture showed the X/Y it is drawn at, yet SET AIM
+    refused with "Place the head first" -- nothing said the boxes were not
+    its real position."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    mh = app.rig.fixture("mh_l")
+    assert mh.position is None
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    assert "not placed" in tab.grp_place.title()
+    tab.cb_jog.setChecked(True)
+    tab.b_set_aim.click()
+    assert not mh.calibration.captured
+    assert "not placed" in tab.status.text() and "drawn" in tab.status.text()
+    tab.sb_z.setValue(9.0)                      # typing a value places it
+    assert mh.position is not None
+    assert "not placed" not in tab.grp_place.title()

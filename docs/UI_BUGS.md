@@ -31,14 +31,17 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    updated. The Rig Config tab's Side column is built once and can save a stale value back.
 6. **Resizing the room leaves fixtures and targets outside it** (`VenueTab._venue_changed`); it also
     writes `height_m` into files that had none.
-7. **Unplaced fixture shows X/Y but SET AIM refuses** ("place the head first"): `_load_fixture` shows the
-    fallback position while `fx.position` stays None.
-8. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
+7. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
-9. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
+8. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **An unplaced fixture showed X/Y, yet SET AIM said "Place the head first"**: the boxes show where it
+  is drawn, not a position. The Fixture box is now titled "Fixture — not placed yet" until it is placed,
+  and the refusal says the X / Y shown is only where it is drawn and to type X, Y, Height or drag it.
+  Test: `tests/test_console.py::test_an_unplaced_head_says_so_in_the_panel` (2026-10-26).
 
 - **Save replaced the rig's description with a fixed string, and the next Save still offered the old
   file** (`VenueTab._save`, `RigConfigTab._collect/_save`, `FixtureTestPanel._save_home_position`). The

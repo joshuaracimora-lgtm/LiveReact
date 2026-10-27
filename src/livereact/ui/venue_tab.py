@@ -59,6 +59,10 @@ log = logging.getLogger(__name__)
 _MAX_FT = 500.0
 
 
+_NOT_PLACED = ("{} is not placed yet: the X / Y shown is only where it is drawn. "
+               "Type its X, Y and Height (or drag it) first.")
+
+
 def _ft_box(value_m: float, decimals: int = 1, step: float = 0.5, lo: float = 0.0, hi: float = _MAX_FT) -> QtWidgets.QDoubleSpinBox:
     b = QtWidgets.QDoubleSpinBox()
     b.setDecimals(decimals)
@@ -242,7 +246,7 @@ class VenueTab(QtWidgets.QWidget):
         v.setContentsMargins(0, 0, 0, 0)
 
         # fixture picker + placement
-        place = QtWidgets.QGroupBox("Fixture")
+        place = self.grp_place = QtWidgets.QGroupBox("Fixture")
         form = QtWidgets.QFormLayout(place)
         self.cb_fixture = QtWidgets.QComboBox()
         for fx in self.rig.fixtures:
@@ -387,6 +391,7 @@ class VenueTab(QtWidgets.QWidget):
             o = self.plan.fixture_origin(fx)
             self.sb_x.setValue(m_to_ft(o.x)); self.sb_y.setValue(m_to_ft(o.y)); self.sb_z.setValue(m_to_ft(o.z))
             self.sb_facing.setValue(fx.facing_deg)
+            self._update_place_title()
             is_head, is_laser = isinstance(fx, MovingHead), isinstance(fx, Laser)
             self.grp_head.setVisible(is_head)
             self.grp_laser.setVisible(is_laser)
@@ -431,8 +436,14 @@ class VenueTab(QtWidgets.QWidget):
         self.plan.set_fixture_position(self._selected, fx.position)
         self.plan.refresh_layout()
         self.plan.select(self._selected)
+        self._update_place_title()
         self._update_laser_readout()
         self._mark_dirty()
+
+    def _update_place_title(self) -> None:
+        fx = self._fx()
+        self.grp_place.setTitle("Fixture" if fx is None or fx.position is not None else
+                                "Fixture — not placed yet")
 
     def _plan_changed(self) -> None:
         """A drag on the plan moved a fixture or a target."""
@@ -444,6 +455,7 @@ class VenueTab(QtWidgets.QWidget):
                 self.sb_x.setValue(m_to_ft(o.x)); self.sb_y.setValue(m_to_ft(o.y))
             finally:
                 self._loading = False
+            self._update_place_title()
         self._loading = True
         try:
             for name, (bx, by, bz) in self._target_boxes.items():
@@ -543,7 +555,7 @@ class VenueTab(QtWidgets.QWidget):
         if not self._head_is_live():
             return
         if fx.position is None:
-            self.status.setText("Place the head first (X / Y / Height).")
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01 = self._pan_tilt01()
@@ -566,7 +578,7 @@ class VenueTab(QtWidgets.QWidget):
         if not self._head_is_live():
             return
         if fx.position is None:
-            self.status.setText("Place the head first (X / Y / Height).")
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         c: HeadCalibration = fx.calibration
         if not c.captured or c.pan01 is None or c.tilt01 is None or c.target not in self.rig.venue.targets:
