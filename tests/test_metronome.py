@@ -727,6 +727,20 @@ def test_manual_override_to_an_overlay_state_holds_and_never_crashes(cue):
     assert m._bucket_committed == cue
 
 
+def test_outro_cue_shows_outro_on_its_first_tick_whatever_the_float_rounding():
+    """2026-10-26 (TIME-11): back-dating the BREAK base by exactly its dwell read a few 1e-15 s
+    short of the floor at 132 BPM, t = 238.26 s, so a planned OUTRO showed BREAK for one tick
+    (a 0.0-bar BREAK run) before the overlay agreed on the next."""
+    clock = FakeClock(start=238.26)
+    m = _metronome(clock)
+    m._bpm = 132.0
+    m._energy_norm = 0.0
+    now = clock.monotonic()
+    assert now - (now - m._dwell_s(EnergyBucket.BREAK)) < m._dwell_s(EnergyBucket.BREAK)   # the rounding is real
+    m._apply_manual_override(EnergyBucket.OUTRO, now, peak_allowed=False, outro_allowed=True)
+    assert m._bucket_committed == EnergyBucket.OUTRO
+
+
 def test_manual_drop_override_captures_the_drop_bookkeeping():
     clock = FakeClock()
     m = _metronome(clock)

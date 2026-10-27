@@ -124,6 +124,27 @@ def test_micro_phrases_are_absorbed():
         ("intro", 1, 9), ("build", 9, 73), ("drop", 73, 137), ("outro", 137, 169)]
 
 
+def test_short_breakdown_after_a_drop_joins_its_successor():
+    # chorus 16 bars, down 4 bars (the kick leaves), up 8 bars, chorus: the breakdown must not be
+    # absorbed into the drop (its look would play through the breakdown, D-23) -- the build starts
+    # where the drop ends
+    spec = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (113, 2, "up"), (145, 5, "chorus"),
+            (209, 6, "outro")]
+    plan = plan_track(_table(spec, end=241), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat, s.end_beat) for s in plan.sections] == [
+        ("intro", 1, 33), ("drop", 33, 97), ("build", 97, 145), ("drop", 145, 209), ("outro", 209, 241)]
+    # before an outro: the outro starts on the breakdown
+    spec2 = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (113, 6, "outro")]
+    plan2 = plan_track(_table(spec2, end=145), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat, s.end_beat) for s in plan2.sections] == [
+        ("intro", 1, 33), ("drop", 33, 97), ("outro", 97, 145)]
+    # between two drops it stays inside the drop (no 4-bar break run, TIME-11)
+    spec3 = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (113, 5, "chorus"), (177, 6, "outro")]
+    plan3 = plan_track(_table(spec3, end=209), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat, s.end_beat) for s in plan3.sections] == [
+        ("intro", 1, 33), ("drop", 33, 177), ("outro", 177, 209)]
+
+
 def test_planner_knobs_reach_plan_rules_through_params():
     from livereact import params
     from livereact.core import metronome
