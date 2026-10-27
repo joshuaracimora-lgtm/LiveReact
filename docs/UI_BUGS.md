@@ -31,14 +31,20 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 5. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it:
    exactly at the centre line it is never updated (keeps whatever it was last). The Rig Config tab's
    Side column is built once and can save a stale value back. (Reset positions: fixed below.)
-6. **Resizing the room leaves fixtures and targets outside it** (`VenueTab._venue_changed`); it also
-    writes `height_m` into files that had none.
-7. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
+6. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
-8. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
+7. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Editing one room dimension rewrote all three, and shrinking the room was silent**:
+  `VenueTab._venue_changed` rebuilt width, length and ceiling from the boxes (0.1 ft rounding, and a
+  `height_m` written into files that had none), and fixtures/targets left outside were not mentioned.
+  Each box now writes only its own dimension, and the status line names whatever is outside the room
+  (nothing is moved: clamping them would change aims). Test:
+  `tests/test_console.py::test_room_box_edit_writes_only_its_dimension_and_warns_about_what_falls_outside`
+  (2026-10-26).
 
 - **Moving or re-facing a head after SET AIM was silent** (the offsets solved for the old geometry are
   kept). A box edit or a drag of a captured head now says its aim was captured at the old

@@ -188,24 +188,29 @@ class VenueTab(QtWidgets.QWidget):
         self.b_save = QtWidgets.QPushButton("Save rig…")
         h.addWidget(self.b_reset)
         h.addWidget(self.b_save)
-        self.sb_width.valueChanged.connect(self._venue_changed)
-        self.sb_length.valueChanged.connect(self._venue_changed)
-        self.sb_height.valueChanged.connect(self._venue_changed)
+        for b, dim in ((self.sb_width, "width_m"), (self.sb_length, "length_m"), (self.sb_height, "height_m")):
+            b.valueChanged.connect(lambda v, d=dim: self._venue_changed(d, v))
         self.b_reset.clicked.connect(self._reset_positions)
         self.b_save.clicked.connect(self._save)
         return box
 
-    def _venue_changed(self) -> None:
+    def _venue_changed(self, dim: str, value_ft: float) -> None:
         if self._loading:
             return
         v = self.rig.venue
-        v.width_m = ft_to_m(self.sb_width.value())
-        v.length_m = ft_to_m(self.sb_length.value())
-        v.height_m = ft_to_m(self.sb_height.value())
+        # only the edited dimension: the boxes show 0.1 ft, and a file with no
+        # ceiling keeps none until the Ceiling box itself is edited
+        setattr(v, dim, ft_to_m(value_ft))
         self.rig.refresh_geometry()
         self.plan.refresh_layout()
         self._refresh_targets()
-        self._mark_dirty()
+        eps = 1e-6
+        outside = [fx.label for fx in self.rig.fixtures if fx.position is not None
+                   and not (-eps <= fx.position.x <= v.width_m + eps and -eps <= fx.position.y <= v.length_m + eps)]
+        outside += [n for n, p in v.targets.items()
+                    if not (-eps <= p.x <= v.width_m + eps and -eps <= p.y <= v.length_m + eps)]
+        self._mark_dirty(f"Now outside the room: {', '.join(outside)} — move them back in (or enlarge the room)."
+                         if outside else "")
 
     # ------------------------------------------------------------------ targets
     def _build_targets(self) -> QtWidgets.QWidget:

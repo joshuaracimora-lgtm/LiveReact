@@ -765,3 +765,27 @@ def test_moving_a_calibrated_head_warns_that_its_aim_was_captured_elsewhere(qapp
         QTest.mouseMove(view.viewport(), QtCore.QPoint(p.x() + dx, p.y()))
     QTest.mouseRelease(view.viewport(), left, none, QtCore.QPoint(p.x() + 60, p.y()))
     assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()
+
+
+def test_room_box_edit_writes_only_its_dimension_and_warns_about_what_falls_outside(qapp):
+    """UI_BUGS: editing the room's width also rewrote length (rounded to 0.1 ft)
+    and height (into a file that had none), and fixtures/targets left outside
+    the shrunk room were not mentioned."""
+    from livereact.fixtures.geometry import Point3, Venue, ft_to_m
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rig = load_rig(os.path.join(root, "rigs", "josh_rig.json"))
+    w, l = ft_to_m(30.0), ft_to_m(40.33)
+    rig.venue = Venue(w, l, None, Venue.default_targets(w, l, None))
+    mh = rig.fixture("mh")
+    mh.position = Point3(ft_to_m(25), ft_to_m(2), ft_to_m(3))
+    rig.refresh_geometry()
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    tab.sb_width.setValue(20.0)
+    assert rig.venue.width_m == pytest.approx(ft_to_m(20.0))
+    assert rig.venue.length_m == l and rig.venue.height_m is None
+    assert "outside" in tab.status.text() and mh.label in tab.status.text()
+    tab.sb_width.setValue(30.0)
+    assert "outside" not in tab.status.text()
