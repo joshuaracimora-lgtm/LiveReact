@@ -19,25 +19,25 @@ BPM = 120.0
 BEAT_S = 60.0 / BPM
 
 
-def _table():
+def _table(spec=None, end=241):
     # intro 1-17, up 17-49, chorus 49-81, down 81-113, up 113-145, chorus 145-209, outro 209-241
-    spec = [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (81, 3, "down"), (113, 2, "up"),
-            (145, 5, "chorus"), (209, 6, "outro")]
+    spec = spec or [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (81, 3, "down"), (113, 2, "up"),
+                    (145, 5, "chorus"), (209, 6, "outro")]
     phrases = []
     for i, (beat, kind, label) in enumerate(spec):
-        nxt = spec[i + 1][0] if i + 1 < len(spec) else 241
+        nxt = spec[i + 1][0] if i + 1 < len(spec) else end
         phrases.append(Phrase(index=i + 1, beat=beat, end_beat=nxt, kind=kind, label=label))
-    return PhraseTable(mood=MOOD_HIGH, end_beat=241, bank=0, phrases=tuple(phrases))
+    return PhraseTable(mood=MOOD_HIGH, end_beat=end, bank=0, phrases=tuple(phrases))
 
 
 class Sim:
     """Drive a Metronome beat by beat with a synthetic XDJ status stream + audio."""
 
-    def __init__(self, drive=True, plan=True, track_id=7):
+    def __init__(self, drive=True, plan=True, track_id=7, table=None):
         self.clock = FakeClock()
         self.m = Metronome(queue.Queue(), ShowState(), self.clock, threading.Event())
         self.m.phrases_mode = "drive" if drive else "shadow"
-        self.table = _table()
+        self.table = table or _table()
         self.plan = plan_track(self.table, track_id=track_id, bpm=BPM) if plan else None
         self.m.queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=track_id, title="T", bpm=BPM,
                                             table=self.table, plan=self.plan, slot="sd"))
@@ -102,6 +102,19 @@ def test_plan_drives_sections_on_the_beat_counter():
     assert snap.bucket == "drop" and snap.planned_big_moment and snap.drop_hit_intensity >= 0.95
     snap = sim.run_to(215, level=0.1)
     assert snap.bucket == "outro" and not snap.planned_laser_allowed
+
+
+def test_planned_outro_after_a_build_enters_as_break():
+    # up -> outro: BUILD -> OUTRO is not a legal move (TIME-13; OUTRO is a version of BREAK, D-22),
+    # and the one-tick BREAK the old override showed first hid it. The outro enters as BREAK, and
+    # never shows a BREAK run shorter than a tick's worth before OUTRO either.
+    spec = [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (113, 2, "up"), (145, 6, "outro")]
+    sim = Sim(table=_table(spec, end=209))
+    sim.run_to(150, level=0.1)
+    buckets = [s.bucket for s in sim.snaps]
+    pairs = {(a, b) for a, b in zip(buckets, buckets[1:]) if a != b}
+    assert ("build", "outro") not in pairs
+    assert buckets[-1] == "break" and sim.snaps[-1].section_kind == "outro"
 
 
 def test_regular_drop_never_escalates_to_peak_but_the_big_moment_may():
