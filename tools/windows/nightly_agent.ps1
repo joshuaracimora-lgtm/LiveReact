@@ -1,8 +1,10 @@
-<# The nightly AGENTS (two since 2026-10-26): pull harness, run the sweep, then two headless Claude Code
+<# The nightly AGENTS (three since 2026-10-27): pull harness, run the sweep, then three headless Claude Code
    sessions one after the other, each on its own branch cut from harness and verified independently:
-     1. Bugs & UI (docs\AGENT_BRIEF_UI.md)       -> branch agent/<date>-ui, results\agent\<date>\ui\
-     2. Track Classifier (docs\AGENT_BRIEF.md)    -> branch agent/<date>,    results\agent\<date>\tracks\
-   then tune knobs around whatever the Track Classifier landed. Everything it prints goes to
+     1. Bugs & UI (docs\AGENT_BRIEF_UI.md)       -> branch agent/<date>-ui,  results\agent\<date>\ui\
+     2. App (docs\AGENT_BRIEF_APP.md)            -> branch agent/<date>-app, results\agent\<date>\app\
+     3. Track Classifier (docs\AGENT_BRIEF.md)    -> branch agent/<date>,     results\agent\<date>\tracks\
+   then tune knobs around whatever the Track Classifier landed. -HardStop (default 23:30) caps every agent's
+   deadline and the search so the night is over before the PC goes off at midnight. Everything it prints goes to
    results\nightly\<date>-agent.log, every step timestamped; the night's artefacts go to results\agent\<date>\
    (SWEEP.md, baseline_before.json, NIGHT.md, and per role prompt.md, agent.out, agent.err, gate_verify.json,
    the agent's REPORT.md). Exit codes: 0 ok, 2 an agent/search crashed, 3 preflight failed, 4 an agent's
@@ -11,12 +13,14 @@
 param(
   [double]$Hours = 3,            # Track Classifier wall-clock budget
   [double]$UiHours = 1.5,        # Bugs & UI agent budget (0 = skip that agent)
+  [double]$AppHours = 2.5,       # App agent budget: docs\APP_ROADMAP.md (0 = skip that agent)
+  [string]$HardStop = "23:30",   # nothing runs past this clock time today (agents, search); "" = no cap
   [double]$SearchHours = 1.5,    # knob search after the Track Classifier (0 = skip)
   [double]$SweepMinutes = 40,    # bug/invariant sweep over the USB export before the agents (0 = skip)
   [int]$Patience = 300,
   [string]$Model = "",           # e.g. "opus"; empty = Claude Code's default
   [double]$MaxBudgetUsd = 0,     # per agent; 0 = no cap
-  [switch]$Push,                 # push both branches (reports stay local: the repo is public, see tools\private_bundle.py)
+  [switch]$Push,                 # push the agents' branches (reports stay local: the repo is public, see tools\private_bundle.py)
   [string]$AgentCmd = "",        # stress tests only: a command line run INSTEAD of claude (reads the prompt on stdin;
                                  # $env:LIVEREACT_AGENT_ROLE tells it which agent it is)
   [string]$PulledFrom = ""       # set by self_update.ps1 on the re-run: the harness commit it pulled from
@@ -56,6 +60,18 @@ function Step($msg) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $msg" }
 $AllowTracks = '^(src/livereact/rekordbox/(planner|mapping|sections)\.py$|src/livereact/core/metronome\.py$|params\.json$|rekordbox_map\.json$|section_classes\.json$|tests/.+)'
 $AllowUi = '^(src/livereact/ui/.+|src/livereact/fixtures/(geometry|rig)\.py$|docs/UI_BUGS\.md$|tests/.+)'
 $UiFamily0 = '^src/livereact/(rekordbox|core)/[^/]+\.py$'   # the ONE file a sweep traceback names (family 0)
+# the App agent builds around the show, never in it: no app.py, engines, scenes, merge, sim, profiles.py
+$AllowApp = '^(src/livereact/(userdata|settings)\.py$|src/livereact/fixtures/(definition|generic|library|traits|ofl|rig)\.py$|src/livereact/fixtures/(builtin|manual_reader)/.+|src/livereact/presets/.+|src/livereact/ui/.+|packaging/.+|\.github/workflows/release\.yml$|docs/APP_ROADMAP\.md$|tests/.+)'
+
+# -HardStop as a clock time today; agents and the search are clamped to it (2026-10-27: the PC goes off at
+# midnight). A task started after the stop time gets no agents rather than one that runs into the night.
+$hardStopAt = $null
+if ($HardStop) { $hardStopAt = [datetime]::Today.Add([timespan]::Parse($HardStop)) }
+function Get-HoursLeft([int]$ReserveMin) {
+  # hours until the hard stop minus a reserve (an agent's gates + push); a large number when there is no cap
+  if (-not $hardStopAt) { return [double]1e6 }
+  return [math]::Max([double]0, ($hardStopAt.AddMinutes(-$ReserveMin) - (Get-Date)).TotalHours)
+}
 
 function Get-Changed([string]$range) { @(git -c core.quotepath=off diff --name-only $range 2>$null | Where-Object { $_ }) }
 
@@ -63,6 +79,8 @@ function Invoke-GitTimed([string[]]$GitArgs, [int]$Seconds) {
   # git push once hung the night (suspected credential prompt); never wait more than $Seconds
   $o = Join-Path $env:TEMP "lr_git_$PID.out"; $e = Join-Path $env:TEMP "lr_git_$PID.err"
   $p = Start-Process -FilePath "git" -ArgumentList $GitArgs -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+  # read the handle now: without it ExitCode stays empty after exit and every push read as failed (2026-10-26)
+  $null = $p.Handle
   if (-not $p.WaitForExit($Seconds * 1000)) {
     & taskkill /T /F /PID $p.Id 2>&1 | Out-Null
     Write-Host "  git $($GitArgs -join ' '): no answer after $Seconds s, killed"
@@ -103,16 +121,23 @@ function Invoke-NightAgent([string]$Role, [string]$Brief, [double]$AgentHours, [
                    OutOfScope = @(); HeadEval = $null; Start = (Get-Date); Exit = 0; Changed = @() }
   $dir = Join-Path $night $Role
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  $budget = [math]::Min($AgentHours, (Get-HoursLeft 20))
+  if ($budget -lt 0.1) {
+    Step "$Role agent: skipped, under 6 min left before the hard stop ($HardStop)"
+    $r.Status = "skipped (hard stop)"
+    return [pscustomobject]$r
+  }
+  if ($budget -lt $AgentHours) { Step "$Role agent: budget cut from $AgentHours h to $([math]::Round($budget, 2)) h by the hard stop ($HardStop)" }
   git checkout harness 2>&1 | Out-Null
-  $branch = if ($Role -eq "ui") { "agent/$date-ui" } else { "agent/$date" }
+  $branch = switch ($Role) { "ui" { "agent/$date-ui" } "app" { "agent/$date-app" } default { "agent/$date" } }
   $stem = $branch; $k = 2
   while (git rev-parse --verify --quiet $branch 2>$null) { $branch = "$stem-$k"; $k++ }
   git checkout -b $branch 2>&1 | Out-Null
   $r.Branch = $branch
-  Step "$Role agent: branch $branch (from harness $Base), budget $AgentHours h"
+  Step "$Role agent: branch $branch (from harness $Base), budget $([math]::Round($budget, 2)) h"
 
   $start = Get-Date; $r.Start = $start
-  $deadline = $start.AddHours($AgentHours)
+  $deadline = $start.AddHours($budget)
   $header = @"
 # Runtime header (generated by nightly_agent.ps1)
 - agent: $Role  (brief below)
@@ -150,7 +175,7 @@ $SweepNote
   $cmd = "type `"$promptPath`" | $runner > `"$outPath`" 2> `"$errPath`""
   $env:LIVEREACT_AGENT_ROLE = $Role
   $script:proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmd -WorkingDirectory $root -PassThru -WindowStyle Hidden
-  $finished = $script:proc.WaitForExit([int]($AgentHours * 3600 * 1000))
+  $finished = $script:proc.WaitForExit([int]($budget * 3600 * 1000))
   if (-not $finished) {
     Step "$Role agent: deadline reached, killing the session tree"
     & taskkill /T /F /PID $script:proc.Id 2>&1 | Out-Null
@@ -218,6 +243,9 @@ $SweepNote
     if ($Role -eq "ui") {
       Step "ui agent: gate_ui vs harness"
       & $py tools\agent\gate_ui.py --base harness --baseline $BaselineBefore --out $verify 2>&1 | Select-Object -Last 30 | Out-Host
+    } elseif ($Role -eq "app") {
+      Step "app agent: gate_app vs harness"
+      & $py tools\agent\gate_app.py --base harness --baseline $BaselineBefore --out $verify 2>&1 | Select-Object -Last 30 | Out-Host
     } else {
       $rulesOnly = @($r.Changed | Where-Object { $_ -notmatch '^(section_classes\.json|src/livereact/rekordbox/sections\.py|tests/.+)$' }).Count -eq 0
       $r.HeadEval = Join-Path $dir "head_eval.json"
@@ -267,14 +295,16 @@ try {
   $base = (git rev-parse --short HEAD).Trim()
   Write-Host ("code: " + (git log --oneline -1))
   # [ui]: the Bugs & UI agent's tests need PySide6 (2026-10-26: without it every UI test silently skipped)
-  & $py -m pip install --quiet -e ".[sim,dev,ui]" 2>&1 | Out-Null
+  # [app]: platformdirs, pypdf, anthropic, keyring for the App agent's roadmap items (2026-10-27)
+  & $py -m pip install --quiet -e ".[sim,dev,ui,app]" 2>&1 | Out-Null
   & $py -m pytest -o addopts="" -q tests\test_harness_determinism.py 2>&1 | Select-Object -Last 1
   if ($LASTEXITCODE -ne 0) { Fail "determinism test"; exit 3 }
   # the planner era needs the rekordbox USB export copy (docs\HANDOFF_windows_resync.md step 10)
   if (-not (Test-Path "usb_export\PIONEER\rekordbox\export.pdb")) { Fail "usb_export\PIONEER\rekordbox\export.pdb missing: copy the rekordbox USB export into usb_export\"; exit 3 }
   $uiReady = $true
   & $py -c "import PySide6" 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { $uiReady = $false; Write-Host "PySide6 not importable: the Bugs & UI agent is skipped tonight" }
+  if ($LASTEXITCODE -ne 0) { $uiReady = $false; Write-Host "PySide6 not importable: the Bugs & UI and App agents are skipped tonight" }
+  if ($hardStopAt) { Write-Host "hard stop: $($hardStopAt.ToString('yyyy-MM-dd HH:mm')) (agents and search are cut to it)" }
 
   # ---- sweep (bugs, invariants, plan sanity over every USB track; exit 1 = findings, not a failed night) --
   $sweepNote = "skipped"
@@ -304,9 +334,12 @@ try {
   $baselineBefore = Join-Path $night "baseline_before.json"
   Copy-Item "results\baseline\evaluation.json" $baselineBefore -Force
 
-  # ---- the two agents --------------------------------------------------------------------------------
+  # ---- the three agents ------------------------------------------------------------------------------
   if ($UiHours -gt 0 -and $uiReady) {
     $results += Invoke-NightAgent -Role "ui" -Brief "docs\AGENT_BRIEF_UI.md" -AgentHours $UiHours -AllowRe $AllowUi -BaselineBefore $baselineBefore -SweepNote $sweepNote -SweepExit $sweepExit -Base $base
+  }
+  if ($AppHours -gt 0 -and $uiReady) {
+    $results += Invoke-NightAgent -Role "app" -Brief "docs\AGENT_BRIEF_APP.md" -AgentHours $AppHours -AllowRe $AllowApp -BaselineBefore $baselineBefore -SweepNote $sweepNote -SweepExit $sweepExit -Base $base
   }
   $tracks = $null
   if ($Hours -gt 0) {
@@ -319,6 +352,12 @@ try {
   # The search's baseline is the verified evaluation of HEAD (head_eval.json), never the local file.
   $searchNote = "skipped"
   $searchOut = $null
+  $searchLeft = Get-HoursLeft 10
+  if ($SearchHours -gt $searchLeft) {
+    Step "search: cut from $SearchHours h to $([math]::Round($searchLeft, 2)) h by the hard stop ($HardStop)"
+    $SearchHours = [math]::Round($searchLeft, 2)
+    if ($SearchHours -lt 0.1) { $SearchHours = 0 }
+  }
   if ($SearchHours -gt 0 -and $tracks -and $tracks.Commits -gt 0 -and $tracks.Gate -eq "ACCEPT" -and $tracks.Tests -eq "ok" -and (Test-Path $tracks.HeadEval)) {
     git checkout $tracks.Branch 2>&1 | Out-Null
     $searchOut = "results\search\$date-$(Get-Date -Format HHmm)-agent"
@@ -332,7 +371,7 @@ try {
     # unused, so a quiet night is not an idle one. [double]0: Max(int,int) would truncate 3.4 h to 3.
     $unused = 0
     if ($tracks) { $unused = [math]::Max([double]0, $Hours - ((Get-Date) - $tracks.Start).TotalHours) }
-    $fallbackHours = [math]::Round($SearchHours + $unused, 2)
+    $fallbackHours = [math]::Round([math]::Min($SearchHours + $unused, (Get-HoursLeft 10)), 2)
     $searchOut = "results\search\$date-$(Get-Date -Format HHmm)-harness"
     git checkout harness 2>&1 | Out-Null
     Step "search: nothing accepted tonight; $fallbackHours h on harness $base -> $searchOut"
@@ -352,7 +391,7 @@ try {
   foreach ($r in $results) {
     $rep = Join-Path $night "$($r.Role)\REPORT.md"
     $head = if (Test-Path $rep) { (Get-Content $rep -Encoding UTF8 | Select-Object -First 50) -join "`n" } else { "(the agent wrote no REPORT.md)" }
-    $name = if ($r.Role -eq "ui") { "Bugs & UI agent" } else { "Track Classifier" }
+    $name = switch ($r.Role) { "ui" { "Bugs & UI agent" } "app" { "App agent" } default { "Track Classifier" } }
     $sections += @"
 ## $name - $($r.Branch)
 
@@ -365,14 +404,21 @@ $((git log --oneline "harness..$($r.Branch)" 2>$null) -join "`n")
 $head
 "@
   }
+  # every pair of branches: a file two of them changed means merge one, then the other (and re-check)
   $both = @()
-  if ($results.Count -eq 2) { $both = @($results[0].Changed | Where-Object { $results[1].Changed -contains $_ -and $_ -notmatch '^tests/' }) }
+  for ($i = 0; $i -lt $results.Count; $i++) {
+    for ($j = $i + 1; $j -lt $results.Count; $j++) {
+      foreach ($f in @($results[$i].Changed | Where-Object { $results[$j].Changed -contains $_ -and $_ -notmatch '^tests/' })) {
+        $both += "$f ($($results[$i].Role) + $($results[$j].Role))"
+      }
+    }
+  }
   $nightMd = @"
 # Night $date (harness $base)
 
 - sweep: exit $sweepExit (0 clean, 1 findings, 2 error) -> $night\SWEEP.md
 - baseline: $(if ($freshExit -eq 0) { 'fresh' } else { 'regenerated on harness before the agents' }); every agent was gated against baseline_before.json
-- files changed on BOTH branches (merge one, then the other): $(if ($both.Count) { $both -join ', ' } else { 'none' })
+- files changed on more than one branch (merge one, then the other): $(if ($both.Count) { $both -join ', ' } else { 'none' })
 - knob search:
 $searchNote
 

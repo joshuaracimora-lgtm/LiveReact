@@ -153,3 +153,60 @@ def test_open_ui_bugs_reads_the_numbered_open_list(tmp_path):
     assert status.open_ui_bugs(f) == ["**First.** a", "**Second.** b"]
     assert len(status.open_ui_bugs()) >= 1                         # the real list parses too
 
+
+
+def test_app_role_has_its_own_state_and_reads_the_actionable_roadmap(tmp_path):
+    """The App agent (2026-10-27) keeps its state under roles.app and skips Josh's / blocked roadmap items."""
+    rn = _load("record_night")
+    status = _load("status")
+    assert "app" in rn.ROLES
+    st = rn.load(tmp_path / "state.json")
+    st = rn.record(st, date="20261027", branch="agent/20261027-app", role="app", commits=2, gate="ACCEPT",
+                   tests="ok", family=None, subgoal="item 8", note="", questions=["app q"])
+    assert st["roles"]["app"]["subgoal"] == "item 8" and st["subgoal"] == ""     # the tracks state is untouched
+    assert [n["role"] for n in status._role_view(st, "app")["nights"]] == ["app"]
+    f = tmp_path / "APP_ROADMAP.md"
+    f.write_text("# x\n\n## Open (in order)\n\n1. [JOSH] **Gate.** a\n2. **Defs.** b\n"
+                 "3. [JOSH] [SHOW-CHANGE] **Default.** c\n4. [BLOCKED: item 1] **Swap.** d\n5. **UI.** e\n\n"
+                 "## Done\n\n6. **Old.** f\n", encoding="utf-8")
+    todo, waiting = status.app_items(f)
+    assert todo == ["**Defs.** b", "**UI.** e"]
+    assert len(waiting) == 3
+    todo, _ = status.app_items()                                   # the real roadmap parses too
+    assert todo and not any(t in todo[0] for t in status.APP_SKIP_TAGS)
+
+
+def test_gate_app_picks_the_app_tests_and_spots_show_code():
+    gate_app = _load("gate_app")
+    mods = gate_app.app_test_files(["tests/test_rig.py", "tests/gone_test_x.py", "src/livereact/ui/console.py"])
+    assert "tests/test_rig.py" in mods and "tests/gone_test_x.py" not in mods
+    assert all(m.startswith("tests/test_") for m in mods)
+    assert gate_app.touches_show_code("src/livereact/fixtures/rig.py")
+    assert gate_app.touches_show_code("src/livereact/fixtures/definition.py")
+    assert not gate_app.touches_show_code("src/livereact/ui/console.py")
+    assert not gate_app.touches_show_code("docs/APP_ROADMAP.md")
+    assert not gate_app.touches_show_code("packaging/livereact.spec")
+
+
+def test_offline_mode_blocks_the_internet_and_hides_the_api_key(tmp_path):
+    """tests/conftest.py under LIVEREACT_OFFLINE=1 (what gate_app.py runs the App agent's tests with)."""
+    import os
+    import subprocess
+    import sys
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(
+        "import os, socket, pytest\n"
+        "def test_probe():\n"
+        "    assert 'ANTHROPIC_API_KEY' not in os.environ\n"
+        "    s = socket.socket(); s.settimeout(0.2)\n"
+        "    with pytest.raises(OSError, match='LIVEREACT_OFFLINE'):\n"
+        "        s.connect(('203.0.113.7', 443))\n"
+        "    srv = socket.socket(); srv.bind(('127.0.0.1', 0)); srv.listen(1)\n"
+        "    c = socket.socket(); c.connect(srv.getsockname())   # loopback still works\n"
+        "    c.close(); srv.close(); s.close()\n", encoding="utf-8")
+    (tmp_path / "conftest.py").write_text((ROOT / "tests" / "conftest.py").read_text(encoding="utf-8"),
+                                          encoding="utf-8")
+    env = dict(os.environ, LIVEREACT_OFFLINE="1", ANTHROPIC_API_KEY="sk-test-not-real")
+    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-o", "addopts=",
+                        str(probe)], cwd=str(tmp_path), env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-1500:]

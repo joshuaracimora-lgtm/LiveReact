@@ -4,6 +4,7 @@
     python tools/agent/status.py --baseline <file>    # any evaluation json
     python tools/agent/status.py --json               # machine-readable
     python tools/agent/status.py --role ui            # the Bugs & UI agent's screen (2026-10-26)
+    python tools/agent/status.py --role app           # the App agent's screen (2026-10-27)
 
 Prints the commit, the baseline summary (mode, drop placement, sweep set), FAIL
 counts per rule grouped by the planner-era rule families, the family to work on,
@@ -114,20 +115,35 @@ def sweep_serious(sweep: dict | None) -> int:
 
 
 UI_BUGS = ROOT / "docs" / "UI_BUGS.md"
+APP_ROADMAP = ROOT / "docs" / "APP_ROADMAP.md"
+# roadmap items the App agent skips (docs/APP_ROADMAP.md): Josh's, score-moving, or waiting on another item
+APP_SKIP_TAGS = ("[JOSH]", "[SHOW-CHANGE]", "[BLOCKED")
 
 
-def open_ui_bugs(path: Path = UI_BUGS) -> list[str]:
-    """The numbered items under '## Open' in docs/UI_BUGS.md (first line of each)."""
+def open_items(path: Path) -> list[str]:
+    """The numbered items under '## Open...' in a work list (first line of each)."""
     if not path.exists():
         return []
     out, inside = [], False
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
-            inside = line.strip() == "## Open (highest risk first)" or line.strip().startswith("## Open")
+            inside = line.strip().startswith("## Open")
             continue
         if inside and line[:1].isdigit() and ". " in line[:5]:
             out.append(line.split(". ", 1)[1].strip())
     return out
+
+
+def open_ui_bugs(path: Path = UI_BUGS) -> list[str]:
+    """The numbered items under '## Open' in docs/UI_BUGS.md (first line of each)."""
+    return open_items(path)
+
+
+def app_items(path: Path = APP_ROADMAP) -> tuple[list[str], list[str]]:
+    """(actionable, waiting) open roadmap items; waiting = tagged for Josh, a show change, or blocked."""
+    items = open_items(path)
+    waiting = [i for i in items if any(t in i for t in APP_SKIP_TAGS)]
+    return [i for i in items if i not in waiting], waiting
 
 
 def next_family(rows: list[dict], state: dict | None = None, sweep: dict | None = None,
@@ -150,11 +166,11 @@ def next_family(rows: list[dict], state: dict | None = None, sweep: dict | None 
 
 
 def _role_view(state: dict | None, role: str) -> dict | None:
-    """The state a role reads: tracks = the top level (without roles.*), ui = roles.ui; nights of that role."""
+    """The state a role reads: tracks = the top level (without roles.*), ui/app = roles.<role>; that role's nights."""
     if not state:
         return None
-    if role == "ui":
-        view = dict((state.get("roles") or {}).get("ui") or {})
+    if role in ("ui", "app"):
+        view = dict((state.get("roles") or {}).get(role) or {})
     else:
         view = {k: v for k, v in state.items() if k not in ("roles", "nights", "updated")}
     view["nights"] = [n for n in state.get("nights", []) if (n.get("role") or "tracks") == role][-5:]
@@ -177,6 +193,22 @@ def render_ui(state: dict | None, sweep: dict | None) -> str:
     L += ["", "NEXT: " + ("family 0 -- fix the sweep's serious findings first" if nf == 0
                           else (f"UI bug 1: {bugs[0][:90]}" if bugs else "nothing open: report and stop")), ""]
     L.append("agent state (results/agent/state.json, roles.ui):")
+    L.append(json.dumps(view, indent=1, ensure_ascii=False))
+    return "\n".join(L)
+
+
+def render_app(state: dict | None) -> str:
+    view = _role_view(state, "app") or {}
+    todo, waiting = app_items()
+    L = [f"HEAD: {head()}", "App agent (docs/AGENT_BRIEF_APP.md, work list docs/APP_ROADMAP.md)",
+         f"actionable roadmap items: {len(todo)}   waiting on Josh / blocked: {len(waiting)}"]
+    for i, item in enumerate(todo[:5], 1):
+        L.append(f"  {i}. {item[:110]}")
+    if waiting:
+        L.append("waiting:")
+        L += [f"  - {w[:110]}" for w in waiting[:8]]
+    L += ["", "NEXT: " + (f"{todo[0][:100]}" if todo else "nothing actionable: report and stop"), ""]
+    L.append("agent state (results/agent/state.json, roles.app):")
     L.append(json.dumps(view, indent=1, ensure_ascii=False))
     return "\n".join(L)
 
@@ -231,8 +263,17 @@ def main() -> int:
     p.add_argument("--baseline", default="results/baseline/evaluation.json")
     p.add_argument("--state", default="results/agent/state.json")
     p.add_argument("--json", action="store_true")
-    p.add_argument("--role", choices=("tracks", "ui"), default="tracks")
+    p.add_argument("--role", choices=("tracks", "ui", "app"), default="tracks")
     a = p.parse_args()
+    if a.role == "app":
+        state = json.loads(Path(a.state).read_text(encoding="utf-8")) if Path(a.state).exists() else None
+        if a.json:
+            todo, waiting = app_items()
+            print(json.dumps({"head": head(), "actionable": todo, "waiting": waiting,
+                              "state": _role_view(state, "app")}, indent=1, ensure_ascii=False))
+        else:
+            print(render_app(state))
+        return 0
     if a.role == "ui":
         state = json.loads(Path(a.state).read_text(encoding="utf-8")) if Path(a.state).exists() else None
         sweep = latest_sweep()

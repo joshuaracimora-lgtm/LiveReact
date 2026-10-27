@@ -25,6 +25,9 @@ hardware = ["pyserial>=3.5", "mido>=1.3", "python-rtmidi>=1.5", "sounddevice>=0.
 # same USB-B cable already carrying MIDI, no new hardware/port needed.
 sim = ["numpy>=2.0"]                                    # offline replay harness (livereact.sim); ffmpeg binary on PATH; librosa optional
 dev = ["pytest>=8.0"]
+# the publishable app (docs/APP_ROADMAP.md): user data folder, fixture manual reader (PDF pages ->
+# Claude -> draft channel map), API key kept in the OS keychain. The nightly installs it for the App agent.
+app = ["platformdirs>=4.0", "pypdf>=4.0", "anthropic>=0.40", "keyring>=24.0"]
 
 [project.scripts]
 livereact = "livereact.__main__:main"

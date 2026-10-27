@@ -8,11 +8,11 @@ state.json shape:
    "subgoal": "<free text>",         # what to continue tomorrow
    "open_questions": ["..."],        # things only Josh can answer; the agent appends, Josh clears
    "nights": [{"date","branch","role","commits","gate","tests","family","note"}],
-   "roles": {"ui": {"family", "subgoal", "open_questions"}}}
+   "roles": {"ui": {...}, "app": {...}}}       # each {"family", "subgoal", "open_questions"}
 
-Two agents run each night (2026-10-26): the Track Classifier (role "tracks") keeps the top-level
-family/subgoal/open_questions, as before; the Bugs & UI agent (role "ui") has its own under
-roles.ui, so neither can steer the other's next night.
+Three agents run each night (2026-10-27): the Track Classifier (role "tracks") keeps the top-level
+family/subgoal/open_questions, as before; the Bugs & UI agent (role "ui") and the App agent (role
+"app") have their own under roles.<role>, so none can steer another's next night.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def load(path: Path) -> dict:
     return {"family": None, "subgoal": "", "open_questions": [], "nights": []}
 
 
-ROLES = ("tracks", "ui")
+ROLES = ("tracks", "ui", "app")
 
 
 def role_state(state: dict, role: str) -> dict:

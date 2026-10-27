@@ -3,7 +3,8 @@
    runs a tools\windows script for N hours. Run once per change.
 
      .\register_task.ps1                                                             # knob search only (nightly.ps1, 6 h)
-     .\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-Hours 4 -SearchHours 1.5"   # the engine agent
+     .\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-UiHours 1.5 -AppHours 2.5 -Hours 2.5 -SearchHours 1 -Push" -At "2:00PM" -LimitHours 10
+                                                                                     # the three agents (2026-10-27)
 
    The task keeps one name so re-registering replaces the previous job. It runs as the current user,
    only while that user is logged on (a locked screen is fine; a reboot without a login is not). #>

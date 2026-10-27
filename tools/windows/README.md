@@ -26,17 +26,23 @@ runs the same night instead of the next one.
 
 - `nightly.ps1` — knob search only (random perturbation of `tunable` params, gated). Cheap; useful right
   after an engine change lands, pointless night after night on an unchanged engine.
-- `nightly_agent.ps1` — the **two nightly agents** (2026-10-26), one after the other, each a headless Claude
+- `nightly_agent.ps1` — the **three nightly agents** (2026-10-27), one after the other, each a headless Claude
   Code session on its own branch cut from harness and verified by the orchestrator, never by itself:
   1. **Bugs & UI** (`docs/AGENT_BRIEF_UI.md`, `-UiHours`, branch `agent/<date>-ui`): sweep crashes first,
      then `docs/UI_BUGS.md` (the Venue tab); gated by `tools/agent/gate_ui.py`.
-  2. **Track Classifier** (`docs/AGENT_BRIEF.md`, `-Hours`, branch `agent/<date>`): classes of sections
+  2. **App** (`docs/AGENT_BRIEF_APP.md`, `-AppHours`, branch `agent/<date>-app`): the publishable app --
+     fixture definitions, rig manager, presets, Manual Override panel, packaging -- from
+     `docs/APP_ROADMAP.md`, never touching the show; gated by `tools/agent/gate_app.py` (offline tests,
+     UI checks, show unchanged).
+  3. **Track Classifier** (`docs/AGENT_BRIEF.md`, `-Hours`, branch `agent/<date>`): classes of sections
      across the whole USB library, scene proposals for Josh, then one planner improvement; gated by
      `tools/agent/gate_head.py` against harness's baseline.
-  Then `-SearchHours` of knob search around the Track Classifier's accepted code. Nothing reaches `harness`
-  until Josh merges a branch (NIGHT.md flags files both branches changed). Before the agents the baseline
-  is regenerated if the pull changed code, scorer or labels (`tools/agent/baseline_fresh.py`). Setup:
-  `docs/HANDOFF_windows_agent_setup.md`. Morning read: `results\agent\<date>\NIGHT.md`, then
-  `ui\REPORT.md`, `tracks\REPORT.md`, `tracks\SCENE_PROPOSALS.md`. Register with
-  `register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-UiHours 1.5 -Hours 3 -SearchHours 1.5 -Push" -LimitHours 10`
-  (about 7.2 h: sweep 0.7 + UI 1.5 + tracks 3 + search 1.5 + gates).
+  Then `-SearchHours` of knob search around the Track Classifier's accepted code. `-HardStop` (default
+  `23:30`) cuts every agent's deadline and the search to that clock time. Nothing reaches `harness`
+  until Josh merges a branch (NIGHT.md flags files changed on more than one branch). Before the agents the
+  baseline is regenerated if the pull changed code, scorer or labels (`tools/agent/baseline_fresh.py`).
+  Setup: `docs/HANDOFF_windows_agent_setup.md`. Morning read: `results\agent\<date>\NIGHT.md`, then
+  `ui\REPORT.md`, `app\REPORT.md`, `tracks\REPORT.md`, `tracks\SCENE_PROPOSALS.md`. Register (from an
+  administrator PowerShell) with
+  `register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-UiHours 1.5 -AppHours 2.5 -Hours 2.5 -SearchHours 1 -Push" -At "2:00PM" -LimitHours 10`
+  (about 9 h from 2 PM: sweep 0.7 + UI 1.5 + app 2.5 + tracks 2.5 + search 1 + gates; done by about 23:15).
