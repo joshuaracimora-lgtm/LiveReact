@@ -145,6 +145,53 @@ def test_destroying_the_plan_with_a_fixture_selected_raises_nothing(qapp, monkey
     assert errors == []
 
 
+def _click(view, item, drag_px: tuple[int, int] = (0, 0)):
+    """Press on ``item`` through the viewport, optionally drag, release."""
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+
+    view.resize(800, 900)
+    view._fit()
+    vp = view.viewport()
+    p = view.mapFromScene(item.scenePos())
+    left = QtCore.Qt.MouseButton.LeftButton
+    QTest.mousePress(vp, left, QtCore.Qt.KeyboardModifier.NoModifier, p)
+    if drag_px != (0, 0):
+        for k in (0.25, 0.5, 0.75, 1.0):
+            q = QtCore.QPoint(p.x() + int(drag_px[0] * k), p.y() + int(drag_px[1] * k))
+            QTest.mouseMove(vp, q)
+        p = q
+    QTest.mouseRelease(vp, left, QtCore.Qt.KeyboardModifier.NoModifier, p)
+
+
+def test_a_plain_click_moves_no_fixture(qapp):
+    """UI_BUGS #2: clicking (no drag) committed a drop for the selected item:
+    an unplaced fixture got a real position (and a new side), a placed one
+    was snapped to the 0.5 ft grid."""
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    mh = rig.fixture("mh")
+    mh.position = Point3(ft_to_m(5.2), ft_to_m(2.3), ft_to_m(1))   # off the snap grid
+    unplaced = next(fx for fx in rig.fixtures if fx.position is None)
+    key = getattr(unplaced, "slot_id", unplaced.label)
+    side = unplaced.side
+    changed = []
+    view = FloorPlanView(rig, editable=True, on_changed=lambda: changed.append(1))
+    _click(view, view._bodies[key])
+    assert view._bodies[key].isSelected()
+    assert unplaced.position is None and unplaced.side == side
+    _click(view, view._bodies["mh"])
+    assert view._bodies["mh"].isSelected()
+    assert mh.position == Point3(ft_to_m(5.2), ft_to_m(2.3), ft_to_m(1))
+    _click(view, view._targets["dj_booth"])
+    assert view._targets["dj_booth"].isSelected()
+    assert changed == []
+    # a real drag still commits (and snaps) the dragged body
+    _click(view, view._bodies["mh"], drag_px=(60, 0))
+    assert mh.position.x > ft_to_m(5.2) and changed == [1]
+
+
 def test_dropping_a_plan_with_a_fixture_selected_does_not_crash(qapp):
     """The scene had no parent, so it died after its view and reported the
     selection change to the already-deleted view: an access violation that

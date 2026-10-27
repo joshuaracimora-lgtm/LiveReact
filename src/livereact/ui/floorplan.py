@@ -260,6 +260,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self._captions: dict[str, _Caption] = {}
         self._layout_dirty = False
         self._dragging: set[str] = set()
+        self._press_pos: dict[int, QtCore.QPointF] = {}
         self._scene.selectionChanged.connect(self._on_selection)
         self.refresh_layout()
 
@@ -547,17 +548,27 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             item.setSelected(key == slot_id)
         self._scene.blockSignals(False)
 
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        # where everything sat before this press: only what the drag moved is committed
+        self._press_pos = {id(i): i.pos() for i in (*self._bodies.values(), *self._targets.values())}
+        super().mousePressEvent(event)
+
+    def _moved(self, item: PlanItem) -> bool:
+        before = self._press_pos.get(id(item))
+        return item.isSelected() and before is not None and item.pos() != before
+
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (Qt override)
         super().mouseReleaseEvent(event)
         if not self.editable:
             return
         changed = False
         for key, item in self._bodies.items():
-            if item.isSelected():
+            if self._moved(item):
                 changed |= self._commit_fixture_drop(key, item)
         for name, item in self._targets.items():
-            if item.isSelected():
+            if self._moved(item):
                 changed |= self._commit_target_drop(name, item)
+        self._press_pos = {}
         if changed:
             self.rig.refresh_geometry()
             self._mark_stacks()
