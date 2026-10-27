@@ -18,7 +18,6 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
-   - the last-resort placement ignores the reserved bands and the scene rectangle and only moves down;
    - leader lines, beams and wedges are not obstacles;
    - captions don't follow a drag until release; tooltips are never refreshed after a drop;
    - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
@@ -33,6 +32,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **On a crowded small room a caption was pushed out of the scene** onto the wall title (the last-resort
+  placement stacked it straight down, ignoring the scene and the reserved bands). It now takes the slot
+  inside the scene that overlaps least (bodies, captions and bands). junior_crib@small overlaps 7 -> 2
+  (harness -> now). Test:
+  `tests/test_floorplan.py::test_crowded_small_room_keeps_every_caption_inside_the_scene` (2026-10-26).
 
 - **The floor plan was small at 1280 x 800**: the targets grid under it took ~40% of the left column, so
   a tall room was drawn ~330 px high. The targets grid now sits at the bottom of the scrollable right

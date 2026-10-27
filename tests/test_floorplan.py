@@ -245,3 +245,29 @@ def test_legend_fits_the_scene_in_a_narrow_room(qapp, width_ft):
     for key, cap in view._captions.items():
         for line in cap._lines():
             assert not line.sceneBoundingRect().intersects(legend.sceneBoundingRect()), key
+
+
+def test_crowded_small_room_keeps_every_caption_inside_the_scene(qapp):
+    """UI_BUGS (labels): when no slot was free, the last resort stacked the
+    caption straight down, ignoring the scene and the axis / wall-title bands:
+    on a small room "booth_edge_right" landed under the room, cropped and on
+    top of "DJ BOOTH WALL"."""
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = load_rig(os.path.join(HERE, "rigs", "junior_crib.json"))
+    k, v = 0.6, rig.venue
+    rig.venue = Venue(v.width_m * k, v.length_m * k, v.height_m,
+                      {n: Point3(p.x * k, p.y * k, p.z) for n, p in v.targets.items()})
+    for fx in rig.fixtures:
+        if fx.position is not None:
+            fx.position = Point3(fx.position.x * k, fx.position.y * k, fx.position.z)
+    rig.refresh_geometry()
+    view = FloorPlanView(rig, editable=True)
+    view._layout_labels()
+    scene = view._scene.sceneRect()
+    room_bottom = view.to_scene(0, 0).y()
+    for key, cap in view._captions.items():
+        for line in cap._lines():
+            r = line.sceneBoundingRect()
+            assert scene.contains(r), (key, line.text())
+            assert r.top() < room_bottom, (key, line.text())      # not in the axis / wall-title band

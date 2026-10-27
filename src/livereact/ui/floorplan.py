@@ -536,12 +536,16 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                         chosen = r
                         break
             if chosen is None:
-                # last resort (room smaller than its labels): below, ignoring the bands
-                chosen = slot_rect(0, 1)
-                for _ in range(40):
-                    if not any(chosen.intersects(o) for o in obstacles + placed):
-                        break
-                    chosen.translate(0, lh + 4)
+                # last resort (room smaller than its labels): the slot inside the
+                # scene that overlaps the least (bodies, captions AND the bands),
+                # nearest first. (It used to stack straight down, out of the
+                # scene and onto the wall title.)
+                def overlap(r: QtCore.QRectF) -> float:
+                    return sum(i.width() * i.height()
+                               for i in (r.intersected(o) for o in obstacles + placed + reserved))
+
+                cands = [slot_rect(*p_) for p_ in [*self._SLOTS, *ring]]
+                chosen = min([r for r in cands if scene_rect.contains(r)] or cands, key=overlap)
             cap.place(chosen)
             cap.leader_to(chosen if far else None)
             placed.append(chosen.adjusted(-3, -2, 3, 2))
