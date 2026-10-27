@@ -246,9 +246,27 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
         need = rules.min_build_beats if m["kind"] == "build" else rules.min_section_beats
         return (m["end_beat"] - m["beat"]) < need
 
+    # Exception (D-23, "a drop's look never carries into a break"): a short break-bucket section
+    # right after a drop is where the kick leaves (rekordbox "down" 3-4 bars, then "up"); absorbed
+    # backwards it would hold the drop look -- PEAK and the laser fan on the big one -- through the
+    # breakdown. It joins its successor instead (the build or outro starts where the drop ends);
+    # before another drop it stays absorbed into the drop as before.
+    def forward(i: int, m: dict) -> bool:
+        return (m["bucket"] == "break" and merged[i - 1]["kind"] == "drop"
+                and merged[i + 1]["kind"] != "drop")
+
     absorbed: list[dict] = []
+    carry: dict | None = None   # a short break waiting to be prepended to its successor
     for i, m in enumerate(merged):
-        if 0 < i < len(merged) - 1 and absorbed and too_short(m):
+        if carry is not None:
+            m = dict(m, beat=carry["beat"], phrases=m["phrases"] + carry["phrases"],
+                     energy=(carry["energy"] * (carry["end_beat"] - carry["beat"])
+                             + m["energy"] * (m["end_beat"] - m["beat"])) / max(1, m["end_beat"] - carry["beat"]))
+            carry = None
+        elif 0 < i < len(merged) - 1 and absorbed and too_short(m):
+            if forward(i, m):
+                carry = m
+                continue
             prev = absorbed[-1]
             prev["end_beat"] = m["end_beat"]
             prev["phrases"] += m["phrases"]
