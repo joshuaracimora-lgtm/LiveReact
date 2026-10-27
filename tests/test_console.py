@@ -604,3 +604,32 @@ def test_set_home_says_it_is_unused_while_a_motion_box_exists(qapp):
     assert "unused" in tab.status.text()
     tab.b_bound_clear.click()
     assert "unused" not in tab.l_cal.text()
+
+
+def test_venue_panel_fits_a_1280x800_window_without_clipping(qapp):
+    """UI_BUGS (layout): at 1280 x 800 the property panel was wider than its
+    column: button labels cut ("... (solves direction + rang"), the pan/tilt
+    readouts showed "0.", the help text ran off the right edge."""
+    from PySide6 import QtWidgets
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    from livereact.ui.theme import apply_theme
+
+    apply_theme(qapp)                           # the console's look: its fonts/padding set the widths
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rig = load_rig(os.path.join(root, "rigs", "junior_crib.json"))
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    tab.resize(1280, 800)
+    tab.show()
+    qapp.processEvents()
+    head = next(fx for fx in rig.fixtures if type(fx).__name__ == "MovingHead")
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(getattr(head, "slot_id", head.label)))
+    qapp.processEvents()
+    scroll = tab.findChild(QtWidgets.QScrollArea)
+    assert scroll.horizontalScrollBar().maximum() == 0
+    for b in tab.grp_head.findChildren(QtWidgets.QAbstractButton):
+        assert b.width() >= b.sizeHint().width(), b.text()
+    for lab in (tab.l_pan, tab.l_tilt):
+        assert lab.width() >= lab.sizeHint().width()
+    tab.close()

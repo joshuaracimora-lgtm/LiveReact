@@ -20,9 +20,10 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    - leader lines, beams and wedges are not obstacles;
    - captions don't follow a drag until release; tooltips are never refreshed after a drop;
    - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
-3. **Layout at a normal window size (1280 x 800).** The floor plan is a narrow column with tiny text; the
-   property panel is clipped: button labels cut ("ADD 2ND POINT ... rang"), the pan/tilt readouts show
-   "0.", the help text runs off the right edge. Look at `results/agent/<date>/ui/*.png`.
+3. **The floor plan is small at 1280 x 800**: the targets grid under it takes ~40% of the left
+   column's height, so a tall room is drawn ~330 px high with tiny captions. (The property panel's
+   clipping is fixed, below.) Note: `ui_snapshot.py` renders without the console's theme, which is what
+   makes widgets wider in the real app.
 4. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there).
 5. **Save overwrites the rig's description** with a fixed string (`VenueTab._save`, `FixtureTestPanel`,
@@ -40,6 +41,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Property panel clipped at 1280 x 800** (button labels cut, pan/tilt readouts "0.", help text off the
+  right edge, a horizontal scrollbar). With the console's theme the panel needed 602 px in a 474 px
+  column: the "Light the selected head ..." checkbox and the ADD BOUND POINT + Clear box row, then
+  ADD 2ND POINT. Those three labels now take two lines (same words); the panel needs 418 px. Test:
+  `tests/test_console.py::test_venue_panel_fits_a_1280x800_window_without_clipping` (2026-10-26).
 
 - **The glyph legend was cropped** on every room under ~33 ft wide (a 436 px line placed at the room's
   left edge). It now wraps onto as many lines as the scene needs, the top band grows to fit, and the

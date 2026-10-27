@@ -264,7 +264,8 @@ class VenueTab(QtWidgets.QWidget):
         # moving head: calibrate
         self.grp_head = QtWidgets.QGroupBox("Calibrate (moving head)")
         hf = QtWidgets.QFormLayout(self.grp_head)
-        self.cb_light = QtWidgets.QCheckBox("Light the selected head — open white at full, so you can see the beam")
+        self.cb_light = QtWidgets.QCheckBox("Light the selected head — open white at full,\n"
+                                         "so you can see the beam")
         self.cb_light.setChecked(True)
         self.cb_jog = QtWidgets.QCheckBox("Jog live — pins the REAL head to the sliders")
         self.s_pan = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal); self.s_pan.setRange(0, 65535); self.s_pan.setValue(32768)
@@ -278,7 +279,10 @@ class VenueTab(QtWidgets.QWidget):
         inv = QtWidgets.QHBoxLayout(); inv.addWidget(self.cb_invert_pan); inv.addWidget(self.cb_invert_tilt); inv.addStretch(1)
         self.b_set_aim = QtWidgets.QPushButton("SET AIM — the head is on this target now")
         self.b_set_aim.setObjectName("cue")
-        self.b_set_aim2 = QtWidgets.QPushButton("ADD 2ND POINT — the head is on a DIFFERENT target now (solves direction + range)")
+        # two-line labels (this, Light, ADD BOUND POINT): on one line they made the
+        # panel wider than its column at 1280 x 800 (labels cut, help text off the edge)
+        self.b_set_aim2 = QtWidgets.QPushButton("ADD 2ND POINT — the head is on a DIFFERENT\n"
+                                                "target now (solves direction + range)")
         self.b_aim = QtWidgets.QPushButton("Aim at target (verify)")
         self.b_home = QtWidgets.QPushButton("Set home = target")
         self.l_cal = QtWidgets.QLabel("Not captured")
@@ -298,7 +302,7 @@ class VenueTab(QtWidgets.QWidget):
         # can see, ADD BOUND POINT each time; every scene then stays inside.
         self.l_bounds = QtWidgets.QLabel("Motion box: none — the head sweeps its full travel")
         self.l_bounds.setWordWrap(True)
-        self.b_bound_add = QtWidgets.QPushButton("ADD BOUND POINT — the beam is on an edge now")
+        self.b_bound_add = QtWidgets.QPushButton("ADD BOUND POINT —\nthe beam is on an edge now")
         self.b_bound_add.setObjectName("cue")
         self.b_bound_clear = QtWidgets.QPushButton("Clear box")
         brow = QtWidgets.QHBoxLayout(); brow.addWidget(self.b_bound_add, 1); brow.addWidget(self.b_bound_clear)
