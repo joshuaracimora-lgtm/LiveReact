@@ -61,7 +61,7 @@ $AllowTracks = '^(src/livereact/rekordbox/(planner|mapping|sections)\.py$|src/li
 $AllowUi = '^(src/livereact/ui/.+|src/livereact/fixtures/(geometry|rig)\.py$|docs/UI_BUGS\.md$|tests/.+)'
 $UiFamily0 = '^src/livereact/(rekordbox|core)/[^/]+\.py$'   # the ONE file a sweep traceback names (family 0)
 # the App agent builds around the show, never in it: no app.py, engines, scenes, merge, sim, profiles.py
-$AllowApp = '^(src/livereact/(userdata|settings)\.py$|src/livereact/fixtures/(definition|generic|library|traits|ofl|rig)\.py$|src/livereact/fixtures/(builtin|manual_reader)/.+|src/livereact/presets/.+|src/livereact/ui/.+|packaging/.+|\.github/workflows/release\.yml$|docs/APP_ROADMAP\.md$|tests/.+)'
+$AllowApp = '^(src/livereact/(userdata|settings)\.py$|src/livereact/fixtures/(definition|generic|library|traits|ofl|rig)\.py$|src/livereact/fixtures/(builtin|manual_reader)/.+|src/livereact/presets/.+|src/livereact/ui/.+|packaging/.+|\.github/workflows/release\.yml$|docs/APP_ROADMAP\.md$|tests/(?!conftest\.py$).+)'
 
 # -HardStop as a clock time today; agents and the search are clamped to it (2026-10-27: the PC goes off at
 # midnight). A task started after the stop time gets no agents rather than one that runs into the night.
