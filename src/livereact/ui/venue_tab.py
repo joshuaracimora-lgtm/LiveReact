@@ -128,6 +128,10 @@ class VenueTab(QtWidgets.QWidget):
             self.rig.venue = Venue(w, l, h, Venue.default_targets(w, l, h))
             self.rig.refresh_geometry()
 
+        # Rig.refresh_geometry only ever overwrites `side` from x: keep the sides
+        # the rig came with, so Reset positions can give them back
+        self._loaded_sides = {getattr(fx, "slot_id", fx.label): fx.side for fx in rig.fixtures}
+
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(8)
@@ -472,6 +476,7 @@ class VenueTab(QtWidgets.QWidget):
         for fx in self.rig.fixtures:
             fx.position = None
             fx.facing_deg = 0.0
+            fx.side = self._loaded_sides.get(getattr(fx, "slot_id", fx.label), fx.side)
         self.rig.refresh_geometry()
         self.plan.refresh_layout()
         if self._selected:

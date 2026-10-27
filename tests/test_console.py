@@ -711,3 +711,22 @@ def test_an_unplaced_head_says_so_in_the_panel(qapp):
     tab.sb_z.setValue(9.0)                      # typing a value places it
     assert mh.position is not None
     assert "not placed" not in tab.grp_place.title()
+
+
+def test_reset_positions_restores_each_fixtures_side(qapp):
+    """UI_BUGS (side gets stuck): after Reset positions every fixture kept the
+    side last derived from its x, not the one the rig file declared."""
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rig = load_rig(os.path.join(root, "rigs", "josh_rig.json"))
+    declared = {fx.slot_id: fx.side for fx in rig.fixtures}
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    fx = next(f for f in rig.fixtures if f.side == "left")
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(fx.slot_id))
+    tab.sb_x.setValue(tab.sb_width.value() - 1.0)     # drag it to the right wall
+    assert fx.side == "right"
+    tab._reset_positions()
+    assert fx.position is None
+    assert {f.slot_id: f.side for f in rig.fixtures} == declared

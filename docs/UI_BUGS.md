@@ -26,9 +26,9 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    makes widgets wider in the real app.
 4. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there).
-5. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it: after
-   Reset positions the sides keep their last derived values; exactly at the centre line it is never
-   updated. The Rig Config tab's Side column is built once and can save a stale value back.
+5. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it:
+   exactly at the centre line it is never updated (keeps whatever it was last). The Rig Config tab's
+   Side column is built once and can save a stale value back. (Reset positions: fixed below.)
 6. **Resizing the room leaves fixtures and targets outside it** (`VenueTab._venue_changed`); it also
     writes `height_m` into files that had none.
 7. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
@@ -37,6 +37,11 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Reset positions left every fixture on the side last derived from its x** (a left head dragged right
+  stayed "right" with no position). The Venue tab keeps the sides the rig had when it opened and Reset
+  positions gives them back. UI-only; the centre-line case in `Rig.refresh_geometry` is still open. Test:
+  `tests/test_console.py::test_reset_positions_restores_each_fixtures_side` (2026-10-26).
 
 - **An unplaced fixture showed X/Y, yet SET AIM said "Place the head first"**: the boxes show where it
   is drawn, not a position. The Fixture box is now titled "Fixture — not placed yet" until it is placed,
