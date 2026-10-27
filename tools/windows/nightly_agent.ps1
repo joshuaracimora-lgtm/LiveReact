@@ -121,8 +121,9 @@ function Invoke-NightAgent([string]$Role, [string]$Brief, [double]$AgentHours, [
                    OutOfScope = @(); HeadEval = $null; Start = (Get-Date); Exit = 0; Changed = @() }
   $dir = Join-Path $night $Role
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
-  $budget = [math]::Min($AgentHours, (Get-HoursLeft 20))
-  if ($budget -lt 0.1) {
+  $left = Get-HoursLeft 20
+  $budget = [math]::Min($AgentHours, $left)
+  if ($left -lt 0.1) {
     Step "$Role agent: skipped, under 6 min left before the hard stop ($HardStop)"
     $r.Status = "skipped (hard stop)"
     return [pscustomobject]$r
