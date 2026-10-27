@@ -31,6 +31,7 @@ movement slew limit still apply to a pinned fixture. Leaving the tab clears ever
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 from typing import Callable
@@ -221,14 +222,15 @@ class VenueTab(QtWidgets.QWidget):
             boxes = (_ft_box(p.x), _ft_box(p.y), _ft_box(p.z))
             for col, b in enumerate(boxes, start=1):
                 self._targets_form.addWidget(b, row, col)
-                b.valueChanged.connect(lambda _v, n=name: self._target_edited(n))
+                b.valueChanged.connect(lambda v, n=name, a="xyz"[col - 1]: self._target_edited(n, a, v))
             self._target_boxes[name] = boxes
 
-    def _target_edited(self, name: str) -> None:
+    def _target_edited(self, name: str, axis: str, value_ft: float) -> None:
         if self._loading:
             return
-        bx, by, bz = self._target_boxes[name]
-        self.rig.venue.targets[name] = Point3(ft_to_m(bx.value()), ft_to_m(by.value()), ft_to_m(bz.value()))
+        # only the edited axis: the boxes show 0.1 ft, the file keeps more
+        p = self.rig.venue.targets[name]
+        self.rig.venue.targets[name] = dataclasses.replace(p, **{axis: ft_to_m(value_ft)})
         self.plan.refresh_layout()
         self._update_laser_readout()
         self._mark_dirty()
@@ -255,8 +257,8 @@ class VenueTab(QtWidgets.QWidget):
         form.addRow("Y (out into the crowd)", self.sb_y)
         form.addRow("Height (lens above floor)", self.sb_z)
         form.addRow("Facing (0 = into the crowd)", self.sb_facing)
-        for b in (self.sb_x, self.sb_y, self.sb_z, self.sb_facing):
-            b.valueChanged.connect(self._placement_edited)
+        for b, axis in ((self.sb_x, "x"), (self.sb_y, "y"), (self.sb_z, "z"), (self.sb_facing, "facing")):
+            b.valueChanged.connect(lambda v, a=axis: self._placement_edited(a, v))
         v.addWidget(place)
 
         # moving head: calibrate
@@ -408,14 +410,19 @@ class VenueTab(QtWidgets.QWidget):
             self._loading = False
 
     # ------------------------------------------------------------------ placement
-    def _placement_edited(self) -> None:
+    def _placement_edited(self, axis: str, value: float) -> None:
         if self._loading:
             return
         fx = self._fx()
         if fx is None:
             return
-        fx.position = Point3(ft_to_m(self.sb_x.value()), ft_to_m(self.sb_y.value()), ft_to_m(self.sb_z.value()))
-        fx.facing_deg = self.sb_facing.value()
+        # only the edited axis: the boxes show 0.1 ft, the file keeps more
+        p = self.plan.fixture_origin(fx)
+        if axis == "facing":
+            fx.facing_deg = value
+            fx.position = p
+        else:
+            fx.position = dataclasses.replace(p, **{axis: ft_to_m(value)})
         self.rig.refresh_geometry()
         self.plan.set_fixture_position(self._selected, fx.position)
         self.plan.refresh_layout()

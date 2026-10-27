@@ -9,11 +9,7 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Open (highest risk first)
 
-1. **Placement boxes round to 0.1 ft and write all three back.** `VenueTab._placement_edited` rebuilds
-   `fx.position` from `sb_x/sb_y/sb_z`, which show one decimal: a rig file position like 16.25 ft becomes
-   16.2/16.3 the moment ANY box (even height) is edited, nudging the fixture. Write only the edited axis,
-   or give the boxes the precision of the file.
-2. **Calibration is not tied to what it was solved for.**
+1. **Calibration is not tied to what it was solved for.**
    - Moving a head or changing its facing after SET AIM keeps the old offsets (solved against the old
      facing, `geometry.calibrate_from_capture`), so every aim silently rotates. Invalidate (or warn and
      re-solve) on a position/facing change.
@@ -21,7 +17,7 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
      (`VenueTab._set_aim`). Require Jog live.
    - Set home shows a value but is ignored whenever a motion box (`bounds`) exists
      (`profiles.MovingHead.apply_home_position`). Say so in the UI, or apply it inside the box.
-3. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
+2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
    - the last-resort placement ignores the reserved bands and the scene rectangle and only moves down;
@@ -30,26 +26,32 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
      every rig; the legend line is wider than the scene and is cropped;
    - captions don't follow a drag until release; tooltips are never refreshed after a drop;
    - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
-4. **Layout at a normal window size (1280 x 800).** The floor plan is a narrow column with tiny text; the
+3. **Layout at a normal window size (1280 x 800).** The floor plan is a narrow column with tiny text; the
    property panel is clipped: button labels cut ("ADD 2ND POINT ... rang"), the pan/tilt readouts show
    "0.", the help text runs off the right edge. Look at `results/agent/<date>/ui/*.png`.
-5. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
+4. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there).
-6. **Save overwrites the rig's description** with a fixed string (`VenueTab._save`, `FixtureTestPanel`,
+5. **Save overwrites the rig's description** with a fixed string (`VenueTab._save`, `FixtureTestPanel`,
    `RigConfigTab._collect`), and the console keeps the old `rig_path` after "Save rig..." to a new file.
-7. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it: after
+6. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it: after
    Reset positions the sides keep their last derived values; exactly at the centre line it is never
    updated. The Rig Config tab's Side column is built once and can save a stale value back.
-8. **Resizing the room leaves fixtures and targets outside it** (`VenueTab._venue_changed`); it also
+7. **Resizing the room leaves fixtures and targets outside it** (`VenueTab._venue_changed`); it also
     writes `height_m` into files that had none.
-9. **Unplaced fixture shows X/Y but SET AIM refuses** ("place the head first"): `_load_fixture` shows the
+8. **Unplaced fixture shows X/Y but SET AIM refuses** ("place the head first"): `_load_fixture` shows the
     fallback position while `fx.position` stays None.
-10. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
+9. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
-11. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
+10. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Editing any placement box nudged the fixture** (and any target box the target): the boxes show
+  0.1 ft, and `VenueTab._placement_edited` / `_target_edited` rebuilt the whole position from all three
+  boxes, so a file value like 16.25 ft became 16.2/16.3 on a height or facing edit. Each box now writes
+  only its own axis. (Facing on an unplaced fixture still places it at its drawn spot, as before.) Test:
+  `tests/test_console.py::test_venue_tab_box_edit_writes_only_its_own_axis` (2026-10-26).
 
 - **A plain click moved fixtures**: clicking an unplaced fixture gave it a real position (fallback xy,
   z = 1 m) and so a new `side`; clicking a placed one snapped it to 0.5 ft; clicking a target snapped it.

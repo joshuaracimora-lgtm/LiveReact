@@ -482,3 +482,35 @@ def test_console_launch_pins_nothing_until_the_venue_tab_is_opened(qapp):
     assert app.manual.calibration is None
     win.tabs.setCurrentWidget(tab)                         # ... and coming back re-lights it
     assert app.manual.calibration is not None
+
+
+def test_venue_tab_box_edit_writes_only_its_own_axis(qapp):
+    """UI_BUGS: the boxes show 0.1 ft; editing ANY box (even height or facing)
+    rebuilt the whole position from all three, so a file value like 16.25 ft
+    was rounded and the fixture nudged. Same for the target boxes."""
+    from livereact.fixtures.geometry import Point3, ft_to_m
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    rig = load_rig(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                "rigs", "junior_crib.json"))
+    head = next(fx for fx in rig.fixtures if type(fx).__name__ == "MovingHead")
+    key = getattr(head, "slot_id", head.label)
+    exact = Point3(ft_to_m(16.25), ft_to_m(7.33), ft_to_m(9.87))
+    head.position = exact
+    rig.refresh_geometry()
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(key))
+    tab.sb_facing.setValue(tab.sb_facing.value() + 15.0)
+    assert head.position == exact
+    tab.sb_z.setValue(10.0)
+    assert head.position == Point3(exact.x, exact.y, ft_to_m(10.0))
+    tab.sb_x.setValue(12.0)
+    assert head.position == Point3(ft_to_m(12.0), exact.y, ft_to_m(10.0))
+    name = sorted(rig.venue.targets)[0]
+    t = Point3(ft_to_m(3.33), ft_to_m(4.44), ft_to_m(5.55))
+    rig.venue.targets[name] = t
+    tab._refresh_targets()
+    bx, by, bz = tab._target_boxes[name]
+    bz.setValue(6.0)
+    assert rig.venue.targets[name] == Point3(t.x, t.y, ft_to_m(6.0))
