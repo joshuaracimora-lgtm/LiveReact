@@ -548,8 +548,7 @@ class VenueTab(QtWidgets.QWidget):
             invert_pan=self.cb_invert_pan.isChecked(), invert_tilt=self.cb_invert_tilt.isChecked(),
             target_name=name)
         self._update_cal_label()
-        self.status.setText(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
-        self._mark_dirty()
+        self._mark_dirty(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
 
     def _set_aim_second(self) -> None:
         """Second capture: the head is now on a DIFFERENT target. Together
@@ -592,8 +591,7 @@ class VenueTab(QtWidgets.QWidget):
         msg = f"Solved {fx.label} from {c.target} + {name_b}. Now 'Aim at target' with a third target to verify."
         if weak:
             msg += f"  ({'/'.join(weak)} barely moved between the two points — kept the profile's range for it; pick points further apart.)"
-        self.status.setText(msg)
-        self._mark_dirty()
+        self._mark_dirty(msg)
 
     def _aim_at_target(self) -> None:
         fx = self._fx()
@@ -615,9 +613,8 @@ class VenueTab(QtWidgets.QWidget):
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
         fx.home_pan, fx.home_tilt = pan01, tilt01
-        self.status.setText(f"Home = {name} (pan {pan01:.3f}, tilt {tilt01:.3f})" + ("" if ok else " — clamped"))
         self._update_cal_label()
-        self._mark_dirty()
+        self._mark_dirty(f"Home = {name} (pan {pan01:.3f}, tilt {tilt01:.3f})" + ("" if ok else " — clamped"))
 
     # --- raw motion box (2026-10-10) ---
     def _bound_add(self) -> None:
@@ -630,12 +627,11 @@ class VenueTab(QtWidgets.QWidget):
         self._update_bounds_label()
         b = fx.bounds
         if b.pan_max - b.pan_min < 0.01 and b.tilt_max - b.tilt_min < 0.01:
-            self.status.setText(f"{fx.label}: first edge stored (pan {pan01:.3f} / tilt {tilt01:.3f}). "
-                                "Jog to the opposite edge and ADD BOUND POINT again.")
+            self._mark_dirty(f"{fx.label}: first edge stored (pan {pan01:.3f} / tilt {tilt01:.3f}). "
+                             "Jog to the opposite edge and ADD BOUND POINT again.")
         else:
-            self.status.setText(f"{fx.label} motion box: pan {b.pan_min:.3f}–{b.pan_max:.3f}, "
-                                f"tilt {b.tilt_min:.3f}–{b.tilt_max:.3f}. Add more edges or Save rig…")
-        self._mark_dirty()
+            self._mark_dirty(f"{fx.label} motion box: pan {b.pan_min:.3f}–{b.pan_max:.3f}, "
+                             f"tilt {b.tilt_min:.3f}–{b.tilt_max:.3f}. Add more edges or Save rig…")
 
     def _bound_clear(self) -> None:
         fx = self._fx()
@@ -643,8 +639,7 @@ class VenueTab(QtWidgets.QWidget):
             return
         fx.bounds = None
         self._update_bounds_label()
-        self.status.setText(f"{fx.label}: motion box cleared — full travel again.")
-        self._mark_dirty()
+        self._mark_dirty(f"{fx.label}: motion box cleared — full travel again.")
 
     def _update_bounds_label(self) -> None:
         fx = self._fx()
@@ -714,8 +709,11 @@ class VenueTab(QtWidgets.QWidget):
         self.on_pins(CalibrationPins(channels=channels, laser_open=True))
 
     # ------------------------------------------------------------------ save
-    def _mark_dirty(self) -> None:
-        self.status.setText("Unsaved changes — Save rig… writes them to the rig file.")
+    def _mark_dirty(self, note: str = "") -> None:
+        """Flag unsaved edits; ``note`` is the action's own message, kept in
+        front (it used to be overwritten the moment it was set)."""
+        self.status.setText((note + "  ·  " if note else "")
+                            + "Unsaved changes — Save rig… writes them to the rig file.")
         self.status.setStyleSheet(f"color:{MUTED};")
 
     def _save(self) -> None:

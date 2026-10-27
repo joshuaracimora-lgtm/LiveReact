@@ -45,6 +45,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Fixed
 
+- **The Venue tab's calibration guidance never showed**: SET AIM, ADD 2ND POINT (including its "pick
+  points further apart" warning), Set home and the motion-box buttons each set a status message and then
+  `VenueTab._mark_dirty()` replaced it with "Unsaved changes" (found 2026-10-26). `_mark_dirty(note)` now
+  keeps the action's message in front. Test:
+  `tests/test_console.py::test_venue_action_messages_are_not_overwritten_by_unsaved` (2026-10-26).
+
 - **SET AIM / ADD 2ND POINT / ADD BOUND POINT stored a pose the real head was not in**: with Jog live off
   (or Freeze on) the sliders do not move the head, yet the buttons captured them. They now refuse with a
   status line saying to tick Jog live (or unfreeze). Test:
