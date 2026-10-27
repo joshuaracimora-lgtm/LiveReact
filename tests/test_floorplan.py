@@ -207,3 +207,19 @@ def test_dropping_a_plan_with_a_fixture_selected_does_not_crash(qapp):
 
     build_and_drop()
     gc.collect()
+
+
+@pytest.mark.parametrize("rig_name", sorted(os.listdir(os.path.join(HERE, "rigs"))))
+def test_booth_wall_title_clears_the_axis_numbers_and_stays_in_the_scene(qapp, rig_name):
+    """UI_BUGS (labels): "DJ BOOTH WALL" sat at a fixed offset under the x-axis
+    numbers and overlapped one of them on every rig."""
+    from PySide6 import QtWidgets
+    from livereact.ui.floorplan import FloorPlanView
+
+    view = FloorPlanView(load_rig(os.path.join(HERE, "rigs", rig_name)), editable=True)
+    texts = [i for i in view._scene.items() if isinstance(i, QtWidgets.QGraphicsSimpleTextItem)]
+    booth = next(t for t in texts if t.text() == "DJ BOOTH WALL")
+    ticks = [t for t in texts if t.text().endswith("′") and t.text()[:-1].isdigit()]
+    rect = booth.sceneBoundingRect()
+    assert ticks and not [t.text() for t in ticks if t.sceneBoundingRect().intersects(rect)]
+    assert view._scene.sceneRect().contains(rect)

@@ -342,8 +342,15 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             if j % 5 == 0:
                 t = self._scene.addSimpleText(f"{j}′"); t.setBrush(_TEXT); t.setPos(-_MARGIN + 2, y - 7)
         self._scene.addRect(0, 0, w_px, l_px, QtGui.QPen(_ROOM_EDGE, 2))
+        # the wall title goes under the x-axis numbers (not across them); the
+        # scene grows to fit it
         booth = self._scene.addSimpleText("DJ BOOTH WALL")
-        booth.setBrush(_ROOM_EDGE); booth.setPos(w_px / 2 - 44, l_px + 14)
+        booth.setBrush(_ROOM_EDGE)
+        tick_h = QtGui.QFontMetricsF(booth.font()).height()
+        booth.setPos(w_px / 2 - booth.boundingRect().width() / 2, l_px + 4 + tick_h)
+        r = self._scene.sceneRect()
+        r.setBottom(max(r.bottom(), booth.sceneBoundingRect().bottom() + 2))
+        self._scene.setSceneRect(r)
         legend = self._scene.addSimpleText(_LEGEND)
         legend.setFont(QtGui.QFont("Arial", 7)); legend.setBrush(_TEXT)
         legend.setPos(0, -_MARGIN - _LEGEND_H + 2)

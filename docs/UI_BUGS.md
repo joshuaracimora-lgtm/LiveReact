@@ -18,8 +18,7 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
    - the last-resort placement ignores the reserved bands and the scene rectangle and only moves down;
    - leader lines, beams and wedges are not obstacles;
-   - "DJ BOOTH WALL" is placed at a hard-coded offset under the x-axis numbers and overlaps them on
-     every rig; the legend line is wider than the scene and is cropped;
+   - the legend line is wider than the scene and is cropped on narrow rooms;
    - captions don't follow a drag until release; tooltips are never refreshed after a drop;
    - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
 3. **Layout at a normal window size (1280 x 800).** The floor plan is a narrow column with tiny text; the
@@ -42,6 +41,13 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **"DJ BOOTH WALL" overlapped an x-axis number on every rig** (fixed offset 10 px under the numbers).
+  It is now centred one text line below them and the scene grows to fit it. Overlap counts
+  (`ui_snapshot.py`, harness -> fix): 2->1 on six rigs, 4->2 junior_crib / testing_setup, 7->5
+  junior_crib@small. Test:
+  `tests/test_floorplan.py::test_booth_wall_title_clears_the_axis_numbers_and_stays_in_the_scene`
+  (2026-10-26).
 
 - **Set home showed a value that was silently ignored** whenever a motion box exists (the box wins in
   `MovingHead.apply_home_position`). The calibration readout now says "(unused: the motion box wins)"
