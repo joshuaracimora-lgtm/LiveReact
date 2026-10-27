@@ -31,6 +31,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gate_ui  # noqa: E402  (same folder; reuses its git / UI / overlap helpers)
 
 PY = sys.executable
+# the checks print track names (non-ASCII); a cp1252 pipe crashed gate_head mid-run and read as a REJECT.
+# The orchestrator sets these (common.ps1); set them here too so the agent's own runs behave the same.
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("PYTHONUTF8", "1")
 
 
 def app_test_files(changed: list[str]) -> list[str]:
