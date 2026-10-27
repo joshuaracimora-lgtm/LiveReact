@@ -614,7 +614,9 @@ class VenueTab(QtWidgets.QWidget):
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
         fx.home_pan, fx.home_tilt = pan01, tilt01
         self._update_cal_label()
-        self._mark_dirty(f"Home = {name} (pan {pan01:.3f}, tilt {tilt01:.3f})" + ("" if ok else " — clamped"))
+        self._mark_dirty(f"Home = {name} (pan {pan01:.3f}, tilt {tilt01:.3f})" + ("" if ok else " — clamped")
+                         + ("  — unused while a motion box is set (Clear box to use it)"
+                            if fx.bounds is not None else ""))
 
     # --- raw motion box (2026-10-10) ---
     def _bound_add(self) -> None:
@@ -624,7 +626,7 @@ class VenueTab(QtWidgets.QWidget):
         pan01, tilt01 = self._pan_tilt01()
         fx.bounds = (fx.bounds.include(pan01, tilt01) if fx.bounds is not None
                      else MotionBounds.point(pan01, tilt01))
-        self._update_bounds_label()
+        self._update_cal_label()
         b = fx.bounds
         if b.pan_max - b.pan_min < 0.01 and b.tilt_max - b.tilt_min < 0.01:
             self._mark_dirty(f"{fx.label}: first edge stored (pan {pan01:.3f} / tilt {tilt01:.3f}). "
@@ -638,7 +640,7 @@ class VenueTab(QtWidgets.QWidget):
         if not isinstance(fx, MovingHead):
             return
         fx.bounds = None
-        self._update_bounds_label()
+        self._update_cal_label()
         self._mark_dirty(f"{fx.label}: motion box cleared — full travel again.")
 
     def _update_bounds_label(self) -> None:
@@ -659,6 +661,7 @@ class VenueTab(QtWidgets.QWidget):
         self._update_bounds_label()
         c: HeadCalibration = fx.calibration
         home = (f"  ·  home {fx.home_pan:.2f}/{fx.home_tilt:.2f}"
+                + (" (unused: the motion box wins)" if fx.bounds is not None else "")
                 if fx.home_pan is not None and fx.home_tilt is not None else "")
         if c.captured:
             two = (f"  ·  2-point ({c.target2}): pan travel {c.pan_range_deg:.0f}°, tilt travel {c.tilt_range_deg:.0f}°"

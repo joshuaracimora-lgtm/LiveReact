@@ -578,3 +578,29 @@ def test_venue_action_messages_are_not_overwritten_by_unsaved(qapp):
     assert "first edge stored" in tab.status.text()
     tab.b_bound_clear.click()
     assert "motion box cleared" in tab.status.text()
+
+
+def test_set_home_says_it_is_unused_while_a_motion_box_exists(qapp):
+    """UI_BUGS: Set home showed a value but the motion box wins
+    (MovingHead.apply_home_position), with no word of it in the UI."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.cb_target.setCurrentText("dancefloor_centre")
+    tab.b_home.click()
+    assert mh.home_pan is not None and "home" in tab.l_cal.text()
+    assert "unused" not in tab.l_cal.text()
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.3 * 65535)); tab.b_bound_add.click()
+    tab.s_pan.setValue(int(0.7 * 65535)); tab.b_bound_add.click()
+    assert mh.bounds is not None
+    assert "unused" in tab.l_cal.text() and "motion box" in tab.l_cal.text()
+    tab.b_home.click()
+    assert "unused" in tab.status.text()
+    tab.b_bound_clear.click()
+    assert "unused" not in tab.l_cal.text()

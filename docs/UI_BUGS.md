@@ -13,8 +13,6 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    - Moving a head or changing its facing after SET AIM keeps the old offsets (solved against the old
      facing, `geometry.calibrate_from_capture`), so every aim silently rotates. Invalidate (or warn and
      re-solve) on a position/facing change.
-   - Set home shows a value but is ignored whenever a motion box (`bounds`) exists
-     (`profiles.MovingHead.apply_home_position`). Say so in the UI, or apply it inside the box.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
@@ -44,6 +42,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Set home showed a value that was silently ignored** whenever a motion box exists (the box wins in
+  `MovingHead.apply_home_position`). The calibration readout now says "(unused: the motion box wins)"
+  and Set home's message says to Clear box to use it; the box buttons refresh that readout. Rendering is
+  unchanged (applying home inside the box is a look change: Josh's call). Test:
+  `tests/test_console.py::test_set_home_says_it_is_unused_while_a_motion_box_exists` (2026-10-26).
 
 - **The Venue tab's calibration guidance never showed**: SET AIM, ADD 2ND POINT (including its "pick
   points further apart" warning), Set home and the motion-box buttons each set a status message and then
