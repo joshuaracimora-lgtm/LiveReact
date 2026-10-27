@@ -520,10 +520,23 @@ class VenueTab(QtWidgets.QWidget):
         p = self.rig.venue.targets.get(name)
         return (name, p) if p is not None else None
 
+    def _head_is_live(self) -> bool:
+        """A capture stores the sliders: only true of the real head while
+        Jog live pins it there (and Freeze is not holding the output)."""
+        if not self.cb_jog.isChecked():
+            self.status.setText("Tick Jog live first: the sliders only move the real head while it is on.")
+            return False
+        if self.is_frozen():
+            self.status.setText("Freeze is on — unfreeze (F) so the head is where the sliders say.")
+            return False
+        return True
+
     def _set_aim(self) -> None:
         fx = self._fx()
         tp = self._target_point()
         if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if not self._head_is_live():
             return
         if fx.position is None:
             self.status.setText("Place the head first (X / Y / Height).")
@@ -546,6 +559,8 @@ class VenueTab(QtWidgets.QWidget):
         fx = self._fx()
         tp = self._target_point()
         if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if not self._head_is_live():
             return
         if fx.position is None:
             self.status.setText("Place the head first (X / Y / Height).")
@@ -607,7 +622,7 @@ class VenueTab(QtWidgets.QWidget):
     # --- raw motion box (2026-10-10) ---
     def _bound_add(self) -> None:
         fx = self._fx()
-        if not isinstance(fx, MovingHead):
+        if not isinstance(fx, MovingHead) or not self._head_is_live():
             return
         pan01, tilt01 = self._pan_tilt01()
         fx.bounds = (fx.bounds.include(pan01, tilt01) if fx.bounds is not None

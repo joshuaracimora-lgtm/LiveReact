@@ -13,8 +13,6 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    - Moving a head or changing its facing after SET AIM keeps the old offsets (solved against the old
      facing, `geometry.calibrate_from_capture`), so every aim silently rotates. Invalidate (or warn and
      re-solve) on a position/facing change.
-   - SET AIM captures the slider values even with Jog live off, i.e. a pose the real head is not in
-     (`VenueTab._set_aim`). Require Jog live.
    - Set home shows a value but is ignored whenever a motion box (`bounds`) exists
      (`profiles.MovingHead.apply_home_position`). Say so in the UI, or apply it inside the box.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
@@ -46,6 +44,11 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **SET AIM / ADD 2ND POINT / ADD BOUND POINT stored a pose the real head was not in**: with Jog live off
+  (or Freeze on) the sliders do not move the head, yet the buttons captured them. They now refuse with a
+  status line saying to tick Jog live (or unfreeze). Test:
+  `tests/test_console.py::test_set_aim_and_bound_point_need_jog_live` (2026-10-26).
 
 - **Editing any placement box nudged the fixture** (and any target box the target): the boxes show
   0.1 ft, and `VenueTab._placement_edited` / `_target_edited` rebuilt the whole position from all three

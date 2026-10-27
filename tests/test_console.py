@@ -273,6 +273,7 @@ def test_set_aim_captures_a_calibration_and_aim_at_target_reuses_it(qapp):
     tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
     tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
     tab.cb_target.setCurrentText("dj_booth")
+    tab.cb_jog.setChecked(True)                 # the documented flow: the real head is on the sliders
     tab.b_set_aim.click()
     assert mh.calibration.captured and mh.calibration.target == "dj_booth"
     assert "Captured on dj_booth" in tab.l_cal.text()
@@ -514,3 +515,38 @@ def test_venue_tab_box_edit_writes_only_its_own_axis(qapp):
     bx, by, bz = tab._target_boxes[name]
     bz.setValue(6.0)
     assert rig.venue.targets[name] == Point3(t.x, t.y, ft_to_m(6.0))
+
+
+def test_set_aim_and_bound_point_need_jog_live(qapp):
+    """UI_BUGS: SET AIM / ADD 2ND POINT / ADD BOUND POINT stored the slider
+    values with Jog live off -- a pose the real head is not in."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    assert not tab.cb_jog.isChecked()
+    bounds = mh.bounds
+    tab.b_set_aim.click()
+    assert not mh.calibration.captured
+    assert "Jog live" in tab.status.text()
+    tab.b_bound_add.click()
+    assert mh.bounds == bounds
+    tab.cb_jog.setChecked(True)
+    tab.b_set_aim.click()
+    assert mh.calibration.captured and mh.calibration.target == "dj_booth"
+    tab.cb_jog.setChecked(False)
+    tab.cb_target.setCurrentText("dancefloor_centre")
+    tab.s_pan.setValue(int(0.30 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None
+    tab.cb_jog.setChecked(True)
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 == "dancefloor_centre"
+    tab.b_bound_add.click()
+    assert mh.bounds is not None and mh.bounds != bounds
