@@ -55,17 +55,6 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-17. **P5 presets.** `src/livereact/presets/`: a pure `resolve(event) -> PresetEffect(manual: dict,
-    catalog_kwargs: dict, palette: str | None)` plus JSON preset data.
-    - **Colour scheme**: Auto, Warm, Ice, Neon, Sunset, Mono, plus the rekordbox lighting banks (cool,
-      natural, hot, subtle, warm, vivid, club1, club2).
-    - **Genre**: Auto, Techno, House, UK Garage, Drum & Bass, Open format, Latin.
-    - **Event type**: Club, Bar, House party, Wedding, Corporate, Festival. Event type sets ceilings:
-      `master_brightness` max, `strobe_cap` max, `lasers_allowed`, movement on/off.
-    - Precedence: event ceilings, then genre, then scheme. "Auto" everywhere resolves to exactly today's
-      `ManualParams` defaults and an empty `catalog_kwargs`.
-    - Named events load and save under `userdata.paths().events`.
-    Accept: tests (Auto is a no-op; Wedding forbids lasers and caps strobe).
 18. **P5 Manual Override panel (widget).** `src/livereact/ui/override_panel.py`, a standalone widget bound
     to `app.manual`:
     - **Lasers block**: arm/disarm button with status (armed, blocked by event, disarmed).
@@ -223,3 +212,11 @@ Hard rules for every item, whoever does it:
   byte-for-byte as before (expected output hashes in `tests/data/rig_v1_save_hashes.json`, no names).
   Left for later: motion box / aim calibration / `dj_pan_tilt` for GenericMovingHead slots (MovingHead-only
   today). Tests: `tests/test_app_rig_v2.py`, lighting gate no-regress.
+- **17. P5 presets** (2026-10-28). `presets/__init__.py` + `presets/presets.json`: pure
+  `resolve(PresetEvent) -> PresetEffect(manual, catalog_kwargs, palette, + ceilings: master_brightness_max,
+  strobe_cap_max, lasers_allowed, movement)`; `PresetEffect.apply_to(ManualParams)` applies and only ever
+  lowers (brightness, strobe cap) or disarms; no preset ever arms lasers. Auto is a no-op (empty
+  overrides). Named events save/load/list under `userdata.paths().events`. `userdata.paths(create=False)`
+  added for read-only lookups. The numbers in presets.json (biases, ceilings, which event types forbid
+  lasers) are design defaults for Josh to tune; genre only sets a `catalog_kwargs` token until item 31.
+  Tests: `tests/test_app_presets.py`.

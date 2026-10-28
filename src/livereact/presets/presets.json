@@ -1,0 +1,37 @@
+{
+ "_note": "Design defaults, not measured: every number here is a starting point for Josh to tune.",
+ "schemes": {
+  "auto":    {"label": "Auto",    "palette": null,       "manual": {}},
+  "warm":    {"label": "Warm",    "palette": "warm",     "manual": {"warm_cool_bias": -0.4}},
+  "ice":     {"label": "Ice",     "palette": "ice",      "manual": {"warm_cool_bias": 0.5}},
+  "neon":    {"label": "Neon",    "palette": "neon",     "manual": {}},
+  "sunset":  {"label": "Sunset",  "palette": "sunset",   "manual": {"warm_cool_bias": -0.25}},
+  "mono":    {"label": "Mono",    "palette": "mono",     "manual": {}},
+  "rb_cool":    {"label": "rekordbox: Cool",    "palette": "rb_cool",    "manual": {"warm_cool_bias": 0.3}},
+  "rb_natural": {"label": "rekordbox: Natural", "palette": "rb_natural", "manual": {}},
+  "rb_hot":     {"label": "rekordbox: Hot",     "palette": "rb_hot",     "manual": {"warm_cool_bias": -0.3}},
+  "rb_subtle":  {"label": "rekordbox: Subtle",  "palette": "rb_subtle",  "manual": {}},
+  "rb_warm":    {"label": "rekordbox: Warm",    "palette": "rb_warm",    "manual": {"warm_cool_bias": -0.3}},
+  "rb_vivid":   {"label": "rekordbox: Vivid",   "palette": "rb_vivid",   "manual": {}},
+  "rb_club1":   {"label": "rekordbox: Club 1",  "palette": "rb_club1",   "manual": {}},
+  "rb_club2":   {"label": "rekordbox: Club 2",  "palette": "rb_club2",   "manual": {}}
+ },
+ "genres": {
+  "auto":        {"label": "Auto",        "catalog": {}, "manual": {}},
+  "techno":      {"label": "Techno",      "catalog": {"genre": "techno"}, "manual": {}},
+  "house":       {"label": "House",       "catalog": {"genre": "house"}, "manual": {}},
+  "uk_garage":   {"label": "UK Garage",   "catalog": {"genre": "uk_garage"}, "manual": {}},
+  "dnb":         {"label": "Drum & Bass", "catalog": {"genre": "dnb"}, "manual": {}},
+  "open_format": {"label": "Open format", "catalog": {"genre": "open_format"}, "manual": {}},
+  "latin":       {"label": "Latin",       "catalog": {"genre": "latin"}, "manual": {}}
+ },
+ "event_types": {
+  "auto":        {"label": "Auto",        "master_brightness_max": 1.0, "strobe_cap_max": 1.0, "lasers_allowed": true,  "movement": true},
+  "club":        {"label": "Club",        "master_brightness_max": 1.0, "strobe_cap_max": 1.0, "lasers_allowed": true,  "movement": true},
+  "bar":         {"label": "Bar",         "master_brightness_max": 0.85, "strobe_cap_max": 0.6, "lasers_allowed": true,  "movement": true},
+  "house_party": {"label": "House party", "master_brightness_max": 0.9, "strobe_cap_max": 0.6, "lasers_allowed": false, "movement": true},
+  "wedding":     {"label": "Wedding",     "master_brightness_max": 0.8, "strobe_cap_max": 0.3, "lasers_allowed": false, "movement": true},
+  "corporate":   {"label": "Corporate",   "master_brightness_max": 0.8, "strobe_cap_max": 0.2, "lasers_allowed": false, "movement": false},
+  "festival":    {"label": "Festival",    "master_brightness_max": 1.0, "strobe_cap_max": 1.0, "lasers_allowed": true,  "movement": true}
+ }
+}

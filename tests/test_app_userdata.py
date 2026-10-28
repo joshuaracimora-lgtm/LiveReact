@@ -37,6 +37,11 @@ def test_files_are_not_created(home):
     assert not p.settings.exists() and not p.config.exists() and not p.midi_map.exists()
 
 
+def test_read_only_lookup_creates_nothing(home):
+    p = userdata.paths(create=False)
+    assert p.root == home and not home.exists()
+
+
 def test_livereact_home_wins_over_dev_mode(home):
     assert userdata.paths(dev=True).root == home
 

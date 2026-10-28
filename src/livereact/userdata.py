@@ -46,8 +46,9 @@ def dev_mode(argv: list[str] | None = None) -> bool:
     return (_PACKAGE_DIR.parent.parent / "pyproject.toml").is_file()
 
 
-def paths(dev: bool | None = None) -> Paths:
-    """The data folder layout, creating its directories (never its files) on first use."""
+def paths(dev: bool | None = None, create: bool = True) -> Paths:
+    """The data folder layout, creating its directories (never its files) on first use.
+    ``create=False`` for read-only lookups, so merely opening a window makes no folders."""
     env = os.environ.get(HOME_ENV)
     if env:
         root = Path(env)
@@ -57,6 +58,7 @@ def paths(dev: bool | None = None) -> Paths:
         root = Path(user_data_dir(APP_NAME, appauthor=False, roaming=False))
     p = Paths(root=root, settings=root / "settings.json", config=root / "config.json",
               midi_map=root / "midi_map.json", **{d: root / d for d in _DIRS})
-    for d in _DIRS:
-        getattr(p, d).mkdir(parents=True, exist_ok=True)
+    if create:
+        for d in _DIRS:
+            getattr(p, d).mkdir(parents=True, exist_ok=True)
     return p
