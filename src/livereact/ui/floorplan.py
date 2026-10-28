@@ -478,7 +478,11 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         look-alike discs. The highest-mounted one keeps its normal glyph on
         top; each one beneath it becomes a progressively larger dashed
         outline around it, so every member of the pile stays visible and
-        clickable. Positions are untouched."""
+        clickable. Positions are untouched.
+
+        A target under a fixture glyph (dj_booth under the wash bar) is drawn
+        above the fixtures instead, so its small diamond stays visible and
+        clickable; anywhere else it sits under them as usual."""
         entries = [(self._key(fx), self.fixture_origin(fx)) for fx in self.rig.fixtures]
         for key, _o in entries:
             item = self._bodies.get(key)
@@ -501,6 +505,11 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                 item = self._bodies[k]
                 item.set_glyph_scale(1.0 + _STACK_STEP * rank)
                 item.setZValue(10 - 0.1 * rank)
+        bodies = [b.mapRectToScene(b.glyph_rect()) for b in self._bodies.values()]
+        for t in self._targets.values():
+            covered = any(t.mapRectToScene(t.glyph_rect()).intersects(r) for r in bodies)
+            base = 4.5 if t.glyph == "ceiling_target" else 5      # the hollow ceiling diamond under a floor one
+            t.setZValue(base + 6.5 if covered else base)
 
     def _layout_labels(self) -> None:
         """Keep every caption legible: each starts centred under its body and

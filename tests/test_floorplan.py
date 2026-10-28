@@ -308,3 +308,30 @@ def test_tooltips_follow_a_drag(qapp):
     _click(view, view._targets["dj_booth"], drag_px=(0, -60))
     p = rig.venue.targets["dj_booth"]
     assert f"{m_to_ft(p.y):.1f} ft out" in view._targets["dj_booth"].toolTip()
+
+
+def test_a_target_under_a_fixture_stays_visible_and_clickable(qapp):
+    """UI_BUGS (labels): `_mark_stacks` ignored targets, so a target under a
+    fixture (junior_crib's dj_booth under the wash bar) was drawn beneath it:
+    hidden, and a click there picked the fixture."""
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    o = rig.fixture("mh").position
+    rig.venue.targets["dj_booth"] = Point3(o.x, o.y, ft_to_m(4))
+    view = FloorPlanView(rig, editable=True)
+    target = view._targets["dj_booth"]
+    top = view._scene.items(target.scenePos())[0]            # topmost item at the diamond's centre
+    assert top is target
+    # moved off the fixture (a drag), it goes back under the bodies' layer
+    _click(view, target, drag_px=(0, -80))
+    assert target.zValue() < view._bodies["mh"].zValue()
+    # and a fixture dragged onto a target puts the target back on top
+    rig2 = _josh_rig_with_venue()
+    view2 = FloorPlanView(rig2, editable=True)
+    t2 = view2._targets["dj_booth"]
+    mh = view2._bodies["mh"]
+    view2.resize(800, 900); view2._fit()
+    d = view2.mapFromScene(t2.scenePos()) - view2.mapFromScene(mh.scenePos())
+    _click(view2, mh, drag_px=(d.x(), d.y()))
+    assert view2._scene.items(t2.scenePos())[0] is t2

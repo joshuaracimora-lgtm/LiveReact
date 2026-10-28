@@ -20,7 +20,6 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
    - leader lines, beams and wedges are not obstacles;
    - captions don't follow a drag until release (tooltips after a drop: fixed below);
-   - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
@@ -31,6 +30,13 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **A target under a fixture was hidden and unclickable**: `_mark_stacks` ignored targets, so
+  junior_crib's dj_booth / booth_edge diamonds were drawn beneath the wash bar and lasers and a click
+  there picked the fixture. A target covered by a fixture glyph is now drawn above the fixtures
+  (re-checked after every drop / box edit); elsewhere it stays under them. The dashed-ring stack stays
+  fixtures-only, as the legend says. Test:
+  `tests/test_floorplan.py::test_a_target_under_a_fixture_stays_visible_and_clickable` (2026-10-28).
 
 - **A fixture's or target's tooltip kept its old position after a drag** (only `refresh_layout` set
   tooltips; a drop does not rebuild the plan). The drop commits and the placement-box path now rewrite
