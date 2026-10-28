@@ -73,6 +73,32 @@ function Get-HoursLeft([int]$ReserveMin) {
   return [math]::Max([double]0, ($hardStopAt.AddMinutes(-$ReserveMin) - (Get-Date)).TotalHours)
 }
 
+function Test-ApiReachable {
+  # DNS + TCP 443 to the API host, 5 s cap; no HTTP, no credentials
+  try {
+    $null = [System.Net.Dns]::GetHostAddresses("api.anthropic.com")
+    $c = New-Object System.Net.Sockets.TcpClient
+    $ok = $c.ConnectAsync("api.anthropic.com", 443).Wait(5000) -and $c.Connected
+    $c.Close()
+    return $ok
+  } catch { return $false }
+}
+
+function Wait-ApiReachable([string]$Role, [int]$MaxMinutes) {
+  # 2026-10-27: the network dropped at 14:28 and all three agents died in 3 min each on ENOTFOUND.
+  # Wait for it (one check a minute) rather than burn an agent; never past the hard stop.
+  if (Test-ApiReachable) { return $true }
+  $until = (Get-Date).AddMinutes($MaxMinutes)
+  if ($hardStopAt -and $hardStopAt.AddMinutes(-26) -lt $until) { $until = $hardStopAt.AddMinutes(-26) }
+  Step "$Role agent: API unreachable, waiting up to $($until.ToString('HH:mm')) for the network"
+  while ((Get-Date) -lt $until) {
+    Start-Sleep -Seconds 60
+    if (Test-ApiReachable) { Step "$Role agent: network back"; return $true }
+  }
+  Step "$Role agent: API still unreachable at $(Get-Date -Format 'HH:mm')"
+  return $false
+}
+
 function Get-Changed([string]$range) { @(git -c core.quotepath=off diff --name-only $range 2>$null | Where-Object { $_ }) }
 
 function Invoke-GitTimed([string[]]$GitArgs, [int]$Seconds) {
@@ -175,8 +201,23 @@ $SweepNote
   }
   $cmd = "type `"$promptPath`" | $runner > `"$outPath`" 2> `"$errPath`""
   $env:LIVEREACT_AGENT_ROLE = $Role
-  $script:proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmd -WorkingDirectory $root -PassThru -WindowStyle Hidden
-  $finished = $script:proc.WaitForExit([int]($budget * 3600 * 1000))
+  # stub agents (-AgentCmd) need no network; a real one waits for it, then gets one retry on a network death
+  if (-not $AgentCmd -and -not (Wait-ApiReachable $Role 30)) { Write-Host "$Role agent: launching anyway" }
+  for ($attempt = 1; $attempt -le 2; $attempt++) {
+    $msLeft = [int][math]::Max(0, ($deadline - (Get-Date)).TotalMilliseconds)
+    $script:proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmd -WorkingDirectory $root -PassThru -WindowStyle Hidden
+    $finished = $script:proc.WaitForExit($msLeft)
+    if (-not $finished) { break }
+    if ($script:proc.ExitCode -eq 0 -or $attempt -eq 2) { break }
+    # retry only a session that never got going: no commits, a network error, 30+ min of budget left
+    $said = ((Get-Content $outPath, $errPath -Raw -ErrorAction SilentlyContinue) -join "`n")
+    $commits = [int](git rev-list --count "harness..HEAD" 2>$null)
+    if ($commits -gt 0 -or $said -notmatch "ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|Can't reach the API") { break }
+    if (($deadline - (Get-Date)).TotalMinutes -lt 30) { break }
+    Step "$Role agent: died on a network error, retrying once"
+    Copy-Item $outPath "$outPath.attempt1" -Force -ErrorAction SilentlyContinue
+    if (-not $AgentCmd -and -not (Wait-ApiReachable $Role 30)) { break }
+  }
   if (-not $finished) {
     Step "$Role agent: deadline reached, killing the session tree"
     & taskkill /T /F /PID $script:proc.Id 2>&1 | Out-Null
