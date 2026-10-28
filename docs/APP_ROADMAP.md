@@ -48,13 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-9. **P1 user data folder module.** `src/livereact/userdata.py`: `paths()` uses `platformdirs` to return
-   `%LOCALAPPDATA%\LiveReact` (Windows) or `~/Library/Application Support/LiveReact` (macOS), with the
-   layout `settings.json, config.json, midi_map.json, rigs/, fixtures/, manuals/, events/, recordings/,
-   logs/`. Directories are created on first use. `LIVEREACT_HOME` overrides it; `dev_mode()` (a source
-   checkout: `pyproject.toml` beside the package, or `--dev`) returns the old working-folder paths.
-   `settings.py` holds a small JSON settings store (recent rigs, last event, onboarding done). Not wired
-   into the app (item 3). Accept: tests with `LIVEREACT_HOME=tmp_path`.
 10. **P1 GenericFixture.** `src/livereact/fixtures/generic.py` `GenericFixture(definition, mode)`, a
     `profiles.Fixture` subclass:
     - `channel_kinds()` and `boot_defaults()` come from the definition (shutter open, dimmer 0).
@@ -218,3 +211,8 @@ Hard rules for every item, whoever does it:
   color_wheel+dimmer+strobe_channel, Laser -> laser), equal to their builtin definitions' traits;
   definitions (or a fixture carrying `.definition`) from channel functions; a laser is only ever
   `laser`. Nothing on the show path reads it (item 15). Tests: `tests/test_app_traits.py`.
+- **9. P1 user data folder module** (2026-10-28). `userdata.paths()` (platformdirs, %LOCALAPPDATA% not
+  Roaming; directories created, files not), `LIVEREACT_HOME` override (wins over dev mode),
+  `dev_mode()` (`pyproject.toml` two levels above the package, or `--dev`) -> the working folder.
+  `settings.py` `Settings`: recent rigs (10, most recent first), last event, onboarding done; corrupt
+  file -> defaults, unknown keys kept, atomic save. Not wired (item 3). Tests: `tests/test_app_userdata.py`.
