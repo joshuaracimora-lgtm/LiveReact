@@ -48,10 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-8. **P1 fixture traits.** `src/livereact/fixtures/traits.py` `traits_of(fx) -> frozenset`: `rgb_wash`,
-   `pan_tilt`, `color_wheel`, `strobe_channel`, `dimmer`, `laser`. Native classes map by class (Par/WashBar
-   -> rgb_wash, MovingHead -> pan_tilt + color_wheel, Laser -> laser); definition-driven fixtures map from
-   their channel functions. Does NOT edit `profiles.py` or any scene (item 15 does the swap). Accept: test.
 9. **P1 user data folder module.** `src/livereact/userdata.py`: `paths()` uses `platformdirs` to return
    `%LOCALAPPDATA%\LiveReact` (Windows) or `~/Library/Application Support/LiveReact` (macOS), with the
    layout `settings.json, config.json, midi_map.json, rigs/, fixtures/, manuals/, events/, recordings/,
@@ -217,3 +213,8 @@ Hard rules for every item, whoever does it:
   the MH and the laser are not (the laser has no `laser_intents`, so a definition-driven laser built
   from it stays dark). Tests: `tests/test_app_builtin_definitions.py` (count, `kind_of()` per channel
   and boot defaults equal the native class).
+- **8. P1 fixture traits** (2026-10-28). `fixtures/traits.py` `traits_of(fx, mode=None)`: native classes
+  by class (Par -> rgb_wash+dimmer, WashBar -> rgb_wash+dimmer+strobe_channel, MovingHead -> pan_tilt+
+  color_wheel+dimmer+strobe_channel, Laser -> laser), equal to their builtin definitions' traits;
+  definitions (or a fixture carrying `.definition`) from channel functions; a laser is only ever
+  `laser`. Nothing on the show path reads it (item 15). Tests: `tests/test_app_traits.py`.
