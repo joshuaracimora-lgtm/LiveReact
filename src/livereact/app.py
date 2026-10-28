@@ -26,6 +26,7 @@ from .engines.laser_feature import LaserFeatureEngine
 from .engines.laser_manual import LaserManualEngine
 from .engines.laser_show import LaserShowEngine
 from .engines.laser_trigger import LaserTriggerEngine
+from .engines.laser_fan import LaserFanEngine
 from .engines.phrase import PhraseEngine
 from .engines.reactive import ReactiveLayerEngine
 from .engines.transition import TransitionEngine
@@ -131,6 +132,10 @@ class App:
             self.laser_engine = LaserFeatureEngine(self.clock, manual=self.manual)
         elif self.rig.laser_profile == "trigger":
             self.laser_engine = LaserTriggerEngine(self.clock, manual=self.manual)
+        elif self.rig.laser_profile == "fan":
+            # "fan" (2026-10-28): the Junior Crib fan fired by the music after big
+            # drops, colour from the triggering sound's band -- engines/laser_fan.py
+            self.laser_engine = LaserFanEngine(self.clock, manual=self.manual)
         elif self.rig.laser_profile == "show":
             # "show" (2026-10-08, Sophia's Thai): the lasers hold a picked
             # scene for the whole set -- engines/laser_show.py, the console's

@@ -1,0 +1,146 @@
+{
+  "name": "Junior Crib (fan)",
+  "description": "Junior Crib's rig with the lasers on the music (2026-10-28, for the 2026-10-31 event): laser_profile=fan, engines/laser_fan.py -- the Junior Crib Rainbow fan after big drops, colour from the triggering sound (bass red, mids green, highs blue, broad = rainbow).",
+  "laser_profile": "fan",
+  "venue": {
+    "width_m": 7.62,
+    "length_m": 15.24,
+    "height_m": null,
+    "targets": {
+      "dj_booth": {
+        "x_m": 3.81,
+        "y_m": 1.0668,
+        "z_m": 1.2
+      },
+      "dancefloor_centre": {
+        "x_m": 3.81,
+        "y_m": 7.62,
+        "z_m": 1.0
+      },
+      "back_wall": {
+        "x_m": 3.81,
+        "y_m": 15.0388,
+        "z_m": 2.0
+      },
+      "ceiling_bounce": {
+        "x_m": 3.81,
+        "y_m": 7.62,
+        "z_m": 6.096
+      },
+      "venue_edge_left": {
+        "x_m": 0.0,
+        "y_m": 7.62,
+        "z_m": 0.9144
+      },
+      "venue_edge_right": {
+        "x_m": 7.62,
+        "y_m": 7.62,
+        "z_m": 0.9144
+      },
+      "booth_edge_left": {
+        "x_m": 2.8956,
+        "y_m": 1.0668,
+        "z_m": 1.2192
+      },
+      "booth_edge_right": {
+        "x_m": 4.7244,
+        "y_m": 1.0668,
+        "z_m": 1.2192
+      }
+    }
+  },
+  "slots": [
+    {
+      "slot_id": "mh_l",
+      "label": "Moving Head L",
+      "fixture_type": "shehds_180w_mh",
+      "dmx_address": 51,
+      "role": "spot",
+      "side": "left",
+      "position": {
+        "x_m": 2.5908,
+        "y_m": 1.0668,
+        "z_m": 5.4864
+      },
+      "bounds": {
+        "pan_min": 0.5517,
+        "pan_max": 0.6552,
+        "tilt_min": 0.0,
+        "tilt_max": 0.1207
+      },
+      "mount_note": "Left moving head. Unit set to address 51 (15-channel mode). Placed 2026-10-10 at x=8.5 ft, y=3.5 ft, z=18.0 ft (height from Josh; x/y spread ASSUMED, correct on the Venue tab)."
+    },
+    {
+      "slot_id": "mh_r",
+      "label": "Moving Head R",
+      "fixture_type": "shehds_180w_mh",
+      "dmx_address": 36,
+      "role": "spot",
+      "side": "right",
+      "position": {
+        "x_m": 5.0292,
+        "y_m": 1.0668,
+        "z_m": 5.4864
+      },
+      "bounds": {
+        "pan_min": 0.6207,
+        "pan_max": 0.7241,
+        "tilt_min": 0.0,
+        "tilt_max": 0.1207
+      },
+      "mount_note": "Right moving head. Unit set to address 36 (15-channel mode). Placed 2026-10-10 at x=16.5 ft, y=3.5 ft, z=18.0 ft (height from Josh; x/y spread ASSUMED, correct on the Venue tab)."
+    },
+    {
+      "slot_id": "laser_l",
+      "label": "Laser L",
+      "fixture_type": "shehds_3w_laser",
+      "dmx_address": 75,
+      "role": "laser",
+      "side": "left",
+      "position": {
+        "x_m": 3.3528,
+        "y_m": 1.0668,
+        "z_m": 2.7432
+      },
+      "beam": {
+        "tilt_deg": 0.0,
+        "fan_half_angle_deg": 30.0,
+        "h_offset01": 0.5
+      },
+      "mount_note": "Left laser. Unit set to address 75 (12-channel mode). Josh 2026-10-10: on the DJ stand, 1.5 ft left of the wash bar centre (x = 11 ft), 3.5 ft from the back wall, emitter 9 ft up."
+    },
+    {
+      "slot_id": "laser_r",
+      "label": "Laser R",
+      "fixture_type": "shehds_3w_laser",
+      "dmx_address": 1,
+      "role": "laser",
+      "side": "right",
+      "position": {
+        "x_m": 4.2672,
+        "y_m": 1.0668,
+        "z_m": 2.7432
+      },
+      "beam": {
+        "tilt_deg": 0.0,
+        "fan_half_angle_deg": 30.0,
+        "h_offset01": 0.5
+      },
+      "mount_note": "Right laser. Unit set to address A01 (12-channel mode). Josh 2026-10-10: on the DJ stand, 1.5 ft right of the wash bar centre (x = 14 ft), 3.5 ft from the back wall, emitter 9 ft up."
+    },
+    {
+      "slot_id": "bar",
+      "label": "Wash Bar",
+      "fixture_type": "ok103_wash_bar",
+      "dmx_address": 69,
+      "role": "wash",
+      "side": "left",
+      "position": {
+        "x_m": 3.81,
+        "y_m": 1.0668,
+        "z_m": 1.2192
+      },
+      "mount_note": "Wash bar. Unit set to address 69 (6-channel mode). Josh 2026-10-10: ON the DJ stand, centred (x = 12.5 ft), 3.5 ft from the back wall. Height 4 ft is an ESTIMATE (stand top), correct on the Venue tab."
+    }
+  ]
+}

@@ -65,7 +65,7 @@ log = logging.getLogger(__name__)
 # are the main light, lit for (almost) the whole set. A rig file picks this
 # because the choice is a property of the venue and its mount, not of a
 # session; app.py reads it, nothing else does.
-LASER_PROFILES = ("accent", "feature", "trigger", "show", "manual")  # "show" (2026-10-08): engines/laser_show.py; "manual" (2026-10-10): engines/laser_manual.py
+LASER_PROFILES = ("accent", "feature", "trigger", "show", "manual", "fan")  # "fan" (2026-10-28): engines/laser_fan.py;  # "show" (2026-10-08): engines/laser_show.py; "manual" (2026-10-10): engines/laser_manual.py
 DEFAULT_LASER_PROFILE = "accent"
 
 # Slot keys the loader models; anything else rides along in Fixture.extra.

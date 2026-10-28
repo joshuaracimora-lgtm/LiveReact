@@ -252,6 +252,10 @@ class LaserTriggerEngine:
             self.mood = MOOD_READY
             self.primed = True
         self.budget = self._lit_share(now)
+        self._write(c, snap, rig)
+        return c
+
+    def _write(self, c: Contribution, snap: ShowSnapshot, rig: Rig) -> None:
+        """What a moment shows (and what is primed between them); engines/laser_fan.py overrides it."""
         for fx in rig.by_role("laser"):
             fx.set_dotted_line_sweep(c, color=self.color, sweep_intensity=self.sweep, lit=self.active)
-        return c

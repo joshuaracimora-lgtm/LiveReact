@@ -140,6 +140,14 @@ class RunResult:
 
 # ----------------------------------------------------------------- the run
 
+def _laser_engine_for(profile: str, clock):
+    from ..engines.laser_fan import LaserFanEngine
+    from ..engines.laser_feature import LaserFeatureEngine
+    from ..engines.laser_trigger import LaserTriggerEngine
+    engine = {"feature": LaserFeatureEngine, "trigger": LaserTriggerEngine, "fan": LaserFanEngine}.get(profile, LaserEngine)
+    return engine(clock)
+
+
 def run_sim(
     track: str | Path,
     timeline: Timeline,
@@ -215,7 +223,8 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
     from ..scenes.catalog import show_catalog
     classes = section_classes.load()
     phrase = PhraseEngine(show_catalog(extra=classes.approved_scenes()))
-    laser_engine = LaserEngine(clock)
+    # app.py parity for the music-driven laser profiles (the button-driven show/manual keep the accent engine)
+    laser_engine = _laser_engine_for(rig.laser_profile, clock)
     transition = TransitionEngine()
     frame_buffer = DmxFrameBuffer()
     manual = manual if manual is not None else ManualParams(laser_enable=True)
@@ -308,6 +317,9 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
             "laser_on": laser_engine.active, "silence_active": show_engine.silence.active,
             "crossfader": round(snap.crossfader, 3), "fader_a": round(snap.fader_a, 3),
         }
+        if hasattr(laser_engine, "trigger"):   # trigger/fan profiles only, so the accent schema is unchanged
+            row["laser_trigger"] = laser_engine.trigger
+            row["laser_color"] = getattr(laser_engine, "color_name", laser_engine.color)
         if phrases is not None:   # only when asked, so signals.csv's schema is unchanged otherwise
             row["section"] = snap.section_kind
             row["phrase"] = snap.phrase_label
@@ -326,6 +338,8 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
 
     summary = _summarize(rows, frames, times, rig, slots, applied_gain, timeline)
     summary["seed_range"] = list(seed_range) if seed_range else None
+    if hasattr(laser_engine, "candidates"):   # engines/laser_fan.py: every drop it fired on or refused, and why
+        summary["laser_candidates"] = list(laser_engine.candidates)
     summary["params"] = dict(params) if params else {}
     return RunResult(track=str(track), rig=str(rig_path), timeline=timeline,
                      gestures=str(gestures) if gestures else None,

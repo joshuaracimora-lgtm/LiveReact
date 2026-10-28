@@ -17,6 +17,7 @@ param(
   [string]$HardStop = "23:30",   # nothing runs past this clock time today (agents, search); "" = no cap
   [double]$SearchHours = 1.5,    # knob search after the Track Classifier (0 = skip)
   [double]$SweepMinutes = 40,    # bug/invariant sweep over the USB export before the agents (0 = skip)
+  [double]$LaserMinutes = 30,    # laser report (fan profile) over the USB export after the sweep (0 = skip)
   [int]$Patience = 300,
   [string]$Model = "",           # e.g. "opus"; empty = Claude Code's default
   [double]$MaxBudgetUsd = 0,     # per agent; 0 = no cap
@@ -365,6 +366,18 @@ try {
     Step "sweep: exit $sweepExit"
   }
 
+  # ---- laser report (2026-10-28, for the 10-31 event): the fan profile on every track, every drop's verdict --
+  $laserNote = "skipped"
+  if ($LaserMinutes -gt 0) {
+    Step "lasers: $LaserMinutes min over usb_export -> $night\LASERS.md"
+    & $py tools\agent\laser_report.py --minutes $LaserMinutes --out $night 2>&1 | Out-Host
+    $laserExit = $LASTEXITCODE
+    $laserMd = Join-Path $night "LASERS.md"
+    if (Test-Path $laserMd) { $laserNote = (Get-Content $laserMd -Encoding UTF8 | Select-Object -First 8) -join "`n" }
+    else { $laserNote = "laser report wrote no LASERS.md (exit $laserExit)" }
+    Step "lasers: exit $laserExit"
+  }
+
   # ---- the baseline the night starts from: fresh for harness, then snapshotted -------------------------
   # results\baseline\evaluation.json is local and gitignored (private). If the pull brought new engine code,
   # a scorer change or new labels, regenerate it first, or the gates would credit the agents with the pull.
@@ -467,6 +480,8 @@ $head
 - files changed on more than one branch (merge one, then the other): $(if ($both.Count) { $both -join ', ' } else { 'none' })
 - knob search:
 $searchNote
+- lasers ($night\LASERS.md):
+$laserNote
 
 $($sections -join "`n`n")
 
