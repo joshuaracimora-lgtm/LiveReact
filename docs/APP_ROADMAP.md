@@ -83,10 +83,6 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-41. **P2 the channel-test screen needs the console's laser arm switch.** Josh, 2026-10-28 (answering the
-    App night's question): laser channels on `ui/channel_test.py` stay at zero unless BOTH its own "Enable
-    laser output" box is ticked AND the console's arm switch (`laser_enable`, L) is on. Two keys for a
-    laser. Test both orders, and that disarming in the console zeroes the screen's laser channels.
 42. **P6 console Help menu.** Help -> About (`ui/about.py`) and Help -> "Run first-time setup again"
     (`FirstRunDialog`, saving only; wiring the choices into `AppConfig` stays item 40).
 
@@ -264,3 +260,10 @@ Hard rules for every item, whoever does it:
   field, cleared after saving) and remove the key in the OS keychain through `store_api_key()`; shows only
   whether a key is saved; keychain errors are reported without the key. Tests: `tests/test_app_api_key.py`
   (fake keyring).
+- **41. P2 the channel-test screen needs the console's laser arm switch** (2026-10-28). Laser channels on
+  `ui/channel_test.py` stay at zero unless BOTH the screen's "Enable laser output" box is ticked AND
+  `laser_armed()` (the console passes `manual.laser_enable` through `FixtureLibraryBrowser` and
+  `FixtureWizard`) is on; no switch passed = never armed. The switch is polled every 100 ms, so a disarm
+  from anywhere (button, L, MIDI, an event type) zeroes the screen; a label shows the console's arm state.
+  Tests: `tests/test_app_channel_test_arm.py` (both orders, disarm zeroes, polling, no console, par
+  unaffected, console wiring); `test_app_channel_test.py`'s single-key test now runs with the console armed.

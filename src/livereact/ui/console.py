@@ -435,7 +435,8 @@ class ConsoleWindow(QtWidgets.QMainWindow):
 
     def open_fixture_library(self):
         from .fixture_library import FixtureLibraryBrowser
-        self.fixture_library = FixtureLibraryBrowser()
+        # its channel-test screens need the console's arm switch too (item 41: two keys for a laser)
+        self.fixture_library = FixtureLibraryBrowser(laser_armed=lambda: self.app.manual.laser_enable)
         self.fixture_library.setWindowTitle("Fixture library")
         # a fixture added or confirmed there shows up in Rig Config's type list
         self.fixture_library.library_changed.connect(self.rig_config.reload_definitions)

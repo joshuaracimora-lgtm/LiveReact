@@ -24,9 +24,11 @@ def origin_label(origin: str, source_kind: str) -> str:
 
 class FixtureLibraryBrowser(QtWidgets.QWidget):
     library_changed = QtCore.Signal()
-    def __init__(self, parent: QtWidgets.QWidget | None = None, save=None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None, save=None, laser_armed=None) -> None:
+        """``laser_armed()``: the console's arm switch, passed on to every channel-test screen."""
         super().__init__(parent)
         self._save = save
+        self._laser_armed = laser_armed
         self.wizard: FixtureWizard | None = None
         self.test_panel: ChannelTestPanel | None = None
         v = QtWidgets.QVBoxLayout(self)
@@ -68,7 +70,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         self.b_test.setEnabled(bool(self.entries))
 
     def open_wizard(self) -> FixtureWizard:
-        self.wizard = FixtureWizard(self, save=self._save)
+        self.wizard = FixtureWizard(self, save=self._save, laser_armed=self._laser_armed)
         self.wizard.added.connect(lambda _d: self.reload())
         self.wizard.show()
         return self.wizard
@@ -78,7 +80,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         if not rows:
             return None
         e = self.entries[min(rows)]
-        self.test_panel = ChannelTestPanel(e.definition, save=self._save)
+        self.test_panel = ChannelTestPanel(e.definition, save=self._save, laser_armed=self._laser_armed)
         self.test_panel.confirmed.connect(lambda _d: self.reload())
         self.test_panel.setWindowTitle(f"Test {e.definition.manufacturer} {e.definition.model}")
         self.test_panel.show()
