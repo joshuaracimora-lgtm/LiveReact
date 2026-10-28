@@ -87,13 +87,13 @@ def report_md(recs: list[dict], minutes: float, rig: str, total: int) -> str:
     if lit:
         out.append(f"- lit share per track: median {lit[len(lit) // 2]} %, max {lit[-1]} %")
     out += ["", "## Every drop (tune engines/laser_fan.py from this)", "",
-            "| track | t (s) | section | hit | low | mid | high | colour | verdict |", "|---|---|---|---|---|---|---|---|---|"]
+            "| track | t (s) | section | hit | palette | colour | verdict |", "|---|---|---|---|---|---|---|"]
     for r in recs:
         for c in r["candidates"]:
             if c["trigger"] != "drop":
                 continue
-            out.append(f"| {r['track'][:40]} | {c['t']:.0f} | {c.get('section', '')} | {c['hit']} | {c['low']} | "
-                       f"{c['mid']} | {c['high']} | {c['color']} | {c['verdict']} |")
+            out.append(f"| {r['track'][:40]} | {c['t']:.0f} | {c.get('section', '')} | {c['hit']} | "
+                       f"{c.get('palette', '')} | {c['color']} | {c['verdict']} |")
     out += ["", "## Per track", "", "| track | lit % | drops fired | moments (t s trigger colour) |", "|---|---|---|---|"]
     for r in recs:
         ms = ", ".join(f"{m['t']:.0f} {m['trigger']} {m['color']}" for m in r["moments"][:8])

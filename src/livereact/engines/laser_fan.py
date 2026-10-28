@@ -25,14 +25,16 @@ verdict) -- tools/agent/laser_report.py turns that into the per-drop table
 Josh reviews to tune these criteria. First-guess numbers, not measured.
 
 WHAT: the Junior Crib scene bytes verbatim (FAN_SCENE, laser_show.py's
-"Rainbow", the manual profile's default), except CH12, picked once when a
-moment opens from the sound that opened it (each band's self-normalised
-transient envelope, engines/envelope.py):
-
-  mids AND highs both >= BROAD  -> rainbow (the scene's own CH12 colour cycle)
-  else the strongest band       -> bass red / mids green / highs blue
-
-Held for the whole moment, so the colour never flickers mid-fan.
+"Rainbow", the manual profile's default), except CH12: the show's palette.
+Josh, 2026-10-28: "approve D-23 and have the lasers follow the palette".
+D-23 (docs/13_DECISION_LOG.md) ties the colour scheme to the track's overall
+frequency profile from the rekordbox colour waveform (high = bright, low =
+dark, middle = blue; section_classes.json palette_by_profile), so the lasers
+take the snapshot's palette through engines/laser.py's PALETTE_TO_LASER --
+the colour the wash and spots are showing -- picked when a moment opens and
+held for the whole moment. Simulated on 30 tracks before the switch: lasers
+on the lights' palette matched the other fixtures on 70 of 71 bursts; a
+colour picked from the live audio alone clashed on 22.
 """
 from __future__ import annotations
 
@@ -42,31 +44,19 @@ from ..fixtures.profiles import Laser
 from ..fixtures.rig import Rig
 from ..merge.merge import Contribution, ManualParams
 from .envelope import NORMALIZE_TAU_S, BandEnvelope
+from .laser import laser_color_for_palette
+from .laser_feature import laser_color_name
 from .laser_show import LASER_SCENES
 from .laser_trigger import (AUTO_TRIGGERS, MIN_GAP_BARS, MOOD_READY, TRIGGER_DROP, TRIGGER_PEAK,
                             LaserTriggerEngine)
 
 FAN_SCENE_NAME = "Rainbow"
 FAN_SCENE = LASER_SCENES[FAN_SCENE_NAME]
-RAINBOW = FAN_SCENE[11]          # CH12 255: the scene's own colour cycle
 DROP_MIN_HIT = 0.95              # a drop must hit at least this hard to fire the lasers
-BROAD = 0.8                      # mids and highs both this strong = a broad, colourful sound
-
-COLOR_NAMES = {Laser.COLOR_RED: "red", Laser.COLOR_GREEN: "green", Laser.COLOR_BLUE: "blue", RAINBOW: "rainbow"}
-
-
-def fan_color(low: float, mid: float, high: float) -> int:
-    """CH12 for a moment opened by a sound with these band envelopes (each 0..1)."""
-    if mid >= BROAD and high >= BROAD:
-        return RAINBOW
-    best = max(low, mid, high)
-    if best == low:
-        return Laser.COLOR_RED
-    return Laser.COLOR_GREEN if best == mid else Laser.COLOR_BLUE
 
 
 class LaserFanEngine(LaserTriggerEngine):
-    """LaserTriggerEngine's timing, the Junior Crib scene, colour by frequency."""
+    """LaserTriggerEngine's timing, the Junior Crib scene, the show's palette as its colour."""
 
     def __init__(self, clock: Clock, manual: ManualParams | None = None) -> None:
         super().__init__(clock, manual=manual)
@@ -78,9 +68,9 @@ class LaserFanEngine(LaserTriggerEngine):
         self._noted: set[tuple[str, int]] = set()  # (trigger, bar) already in candidates
         self._pending: dict | None = None        # this tick's candidate, verdict still open
         self.candidates: list[dict] = []
-        self.color = self.color_l = self.color_r = RAINBOW
-        self.color_name = "rainbow"
-        self._ch12 = RAINBOW
+        self.color = self.color_l = self.color_r = Laser.COLOR_WHITE
+        self.color_name = "white"
+        self._ch12 = Laser.COLOR_WHITE
 
     def _refusal(self, snap: ShowSnapshot) -> str:
         if snap.plan_active and not snap.planned_laser_allowed:
@@ -103,7 +93,7 @@ class LaserFanEngine(LaserTriggerEngine):
             self._pending = {"t": round(now, 2), "bar": int(snap.bar), "trigger": fired,
                              "bucket": str(snap.bucket).upper(), "hit": round(float(snap.drop_hit_intensity), 3),
                              "low": round(self.wub, 3), "mid": round(self.mid, 3), "high": round(self.high, 3),
-                             "color": COLOR_NAMES[fan_color(self.wub, self.mid, self.high)]}
+                             "palette": snap.palette, "color": laser_color_name(laser_color_for_palette(snap.palette))}
         why = self._refusal(snap)
         if why:
             self._close_pending(why)
@@ -139,8 +129,8 @@ class LaserFanEngine(LaserTriggerEngine):
             self.mood, self.primed, self.source = MOOD_READY, True, ""
         if self.active and self._picked_for != self._moment_start:
             self._picked_for = self._moment_start
-            self._ch12 = fan_color(self.wub, self.mid, self.high)
-            self.color_name = COLOR_NAMES[self._ch12]
+            self._ch12 = laser_color_for_palette(snap.palette)
+            self.color_name = laser_color_name(self._ch12)
         ch12 = self._ch12
         self.color = self.color_l = self.color_r = ch12
         values = FAN_SCENE[:11] + (ch12,)

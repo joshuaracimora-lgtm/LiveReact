@@ -37,20 +37,25 @@ def _book(classes, palette=None):
     return section_classes.from_dict({"schema": 1, "classes": classes, **({"palette_by_profile": palette} if palette else {})})
 
 
-def test_the_shipped_file_is_valid_and_approves_nothing():
+def test_the_shipped_file_is_valid_and_approves_only_the_profile_palette():
     d = json.loads(section_classes.CLASSES_PATH.read_text(encoding="utf-8"))
     assert section_classes.validate(d) == []
     book = section_classes.load()
-    assert book.classes and book.approved_scenes() == [] and not book.palette_approved
+    # Josh approved D-23 on 2026-10-28 ("approve D-23 and have the lasers follow the palette"); no class yet
+    assert book.classes and book.approved_scenes() == [] and book.palette_approved
 
 
-def test_night_one_the_shipped_classes_change_nothing_but_the_tags():
-    """With nothing approved the plan is today's plan: same scenes, hits, flags, palette -- only cls added."""
+def test_the_shipped_classes_change_only_the_tags_and_the_profile_palette():
+    """No class is approved, so the plan keeps today's scenes, hits and flags (only cls added); the palette
+    is D-23's pick for the track's frequency profile (approved 2026-10-28)."""
+    from livereact.rekordbox.sections import track_profile
     t, w = _table(), _wave()
     before = plan_track(t, track_id=3, bpm=120.0, waveform=w)
-    after = plan_track(t, track_id=3, bpm=120.0, waveform=w, classes=section_classes.load())
+    book = section_classes.load()
+    after = plan_track(t, track_id=3, bpm=120.0, waveform=w, classes=book)
     assert [replace(s, cls="") for s in after.sections] == list(before.sections)
-    assert replace(after, sections=before.sections) == before
+    assert after.palette and after.palette == book.palette_for(track_profile(w), 3)
+    assert replace(after, sections=before.sections, palette=before.palette) == before
     assert any(s.cls for s in after.sections)
 
 

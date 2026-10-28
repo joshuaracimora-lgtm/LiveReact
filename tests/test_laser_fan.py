@@ -4,7 +4,7 @@ from __future__ import annotations
 from livereact.clock import FakeClock
 from livereact.core.show_state import ShowSnapshot
 from livereact.engines import laser_fan as lf
-from livereact.engines.laser_fan import LaserFanEngine, fan_color
+from livereact.engines.laser_fan import LaserFanEngine
 from livereact.fixtures.profiles import Laser
 from livereact.fixtures.rig import load_rig
 
@@ -44,11 +44,22 @@ def test_rig_loads_the_fan_profile():
     assert rig.laser_profile == "fan"
 
 
-def test_colour_by_band():
-    assert fan_color(1.0, 0.2, 0.1) == Laser.COLOR_RED
-    assert fan_color(0.2, 0.9, 0.3) == Laser.COLOR_GREEN
-    assert fan_color(0.2, 0.3, 0.9) == Laser.COLOR_BLUE
-    assert fan_color(0.5, 0.9, 0.85) == lf.RAINBOW          # broad: mids and highs both strong
+def test_the_laser_takes_the_palette_the_other_lights_show():
+    eng, clock, rig = _engine()
+    _run(eng, clock, rig, _snap(bucket="build", bar=10, palette="acid_yellow"), 2 * BAR_S)
+    clock.advance(0.05)
+    c = eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, palette="acid_yellow"), rig)
+    assert eng.active and eng.color == Laser.COLOR_YELLOW and eng.color_name == "yellow"
+    assert c.values[rig.fixture("laser_l").offset + 11] == Laser.COLOR_YELLOW
+
+
+def test_colour_held_for_the_whole_moment_even_if_the_palette_turns():
+    eng, clock, rig = _engine()
+    _run(eng, clock, rig, _snap(bucket="build", bar=10, palette="deep_blue"), 2 * BAR_S)
+    clock.advance(0.05)
+    eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, palette="deep_blue"), rig)
+    _run(eng, clock, rig, _snap(bucket="drop", bar=12, drop_start_bar=12, palette="blood_red"), BAR_S)
+    assert eng.active and eng.color == Laser.COLOR_BLUE
 
 
 def test_dark_through_the_build_and_primed_with_the_fan_scene():
@@ -66,7 +77,7 @@ def test_a_big_drop_fires_the_scene_with_a_colour():
     laser = rig.fixture("laser_l")
     assert eng.active and eng.trigger == "drop"
     assert c.values[laser.offset] == lf.FAN_SCENE[0]
-    assert c.values[laser.offset + 11] in lf.COLOR_NAMES
+    assert c.values[laser.offset + 11] == Laser.COLOR_RED            # the snapshot's blood_red palette
     assert eng.candidates[-1]["verdict"] == "fired"
 
 
@@ -106,16 +117,6 @@ def test_a_moment_stops_at_the_plans_laser_free_edge():
     clock.advance(0.05)
     c = eng.tick(_snap(bucket="drop", bar=13, drop_start_bar=12, plan_active=True, planned_laser_allowed=False), rig)
     assert not eng.active and c.values[rig.fixture("laser_l").offset] == 0
-
-
-def test_colour_held_for_the_whole_moment():
-    eng, clock, rig = _engine()
-    _drop(eng, clock, rig)
-    first = eng.color
-    # the band mix swings during the moment; the colour picked at the hit stays
-    _run(eng, clock, rig, _snap(bucket="drop", bar=12, drop_start_bar=12, audio_band_mid_abs=5.0,
-                                audio_band_high_abs=5.0, audio_band_low_abs=0.0), BAR_S)
-    assert eng.active and eng.color == first
 
 
 def test_audio_loss_goes_dark():

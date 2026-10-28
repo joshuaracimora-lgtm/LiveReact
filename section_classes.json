@@ -18,7 +18,7 @@
      "notes": "Claude 2026-10-26: a breakdown entered from a loud section (energy_delta p50 -0.27 after a drop, 121 sections). Every tuning-track planned breakdown is in it (-0.35..-0.52); the ear breakdowns there are power-offs (STRUCT-05) and 2-fixture static washes (TIME-06)."}
   ],
   "palette_by_profile": {
-    "approved": false,
+    "approved": true,
     "high": ["acid_yellow", "warm_white", "deep_amber", "toxic_green"],
     "mid": ["deep_blue", "cyan_ice", "cold_steel"],
     "low": ["blood_red", "uv_violet", "hot_magenta"]
