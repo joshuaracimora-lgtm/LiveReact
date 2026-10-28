@@ -48,13 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-14. **P1 rig file v2.** `rig.py`:
-    - A slot may say `"fixture": "<id>@<mode>"` instead of `fixture_type`.
-    - The rig embeds a top-level `"definitions": {id: {...}}` snapshot, so the file is self-contained and
-      shareable.
-    - Load builds a Generic* fixture through item 13; save round-trips it.
-    - Every existing v1 rig loads and saves byte-for-byte as before.
-    Accept: tests, and the lighting gate (rig.py is on the show path).
 15. [JOSH] [BLOCKED: item 1] **P1 swap isinstance checks for traits.** `scenes/base.py`,
     `scenes/library.py`, `engines/reactive.py`, `engines/transition.py`, `scenes/movement.py`, `rig.py`
     `dj_pose`, `ui/visualizer.py`, `sim/score.py` (wash bar by name, `PAN_MAX_DEG_PER_S`). Each commit
@@ -223,3 +216,10 @@ Hard rules for every item, whoever does it:
   neither a user file nor a rig snapshot can redefine it), `list_definitions()` (bad user files
   skipped), `save_user_definition()` (validated, safe lowercase ids, atomic), `refs()`.
   Tests: `tests/test_app_fixture_library.py`.
+- **14. P1 rig file v2** (2026-10-28). `rig.py`: a slot's `"fixture": "<id>@<mode>"` builds a Generic*
+  fixture through the library; save writes `fixture` (not `fixture_type`) for it and embeds a top-level
+  `definitions` snapshot of every non-builtin definition used; both keys on one slot, an unknown ref or
+  an invalid definition are `RigError`s. v1 rigs: every `rigs/*.json` and the default rig save
+  byte-for-byte as before (expected output hashes in `tests/data/rig_v1_save_hashes.json`, no names).
+  Left for later: motion box / aim calibration / `dj_pan_tilt` for GenericMovingHead slots (MovingHead-only
+  today). Tests: `tests/test_app_rig_v2.py`, lighting gate no-regress.

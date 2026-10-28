@@ -36,6 +36,14 @@ pre-2026-09-18 rig file loads unchanged):
       ]
     }
 
+Rig file v2 (2026-10-28, docs/APP_ROADMAP.md item 14): a slot may say
+``"fixture": "<id>@<mode>"`` instead of ``fixture_type``; it is built as a
+Generic* fixture (fixtures/generic.py) from a definition found through
+fixtures/library.py (the rig's top-level ``"definitions": {id: {...}}``
+snapshot, then the user folder, then fixtures/builtin/). A save embeds the
+snapshot of every non-builtin definition in use, so the file is shareable.
+A rig with no such slot loads and saves exactly as a v1 rig always did.
+
 ``dj_pan_tilt`` is read by the scorer only (sim/score.py STRUCT-04 "heads to
 the DJ"); no engine path looks at it. ``Rig.dj_pose(fx)`` resolves the pose:
 the explicit field first, else derived from a ``dj_booth`` venue target when
@@ -73,7 +81,7 @@ _KNOWN_SLOT_KEYS = frozenset({
     "slot_id", "label", "fixture_type", "dmx_address", "role", "side",
     "x", "y", "home_pan", "home_tilt",
     "position", "facing_deg", "calibration", "beam", "bounds",
-    "dj_pan_tilt",
+    "dj_pan_tilt", "fixture",
 })
 
 
@@ -286,6 +294,26 @@ def _venue_from_dict(d: dict | None) -> Venue | None:
     return Venue(width_m=width, length_m=length, height_m=height, targets=targets)
 
 
+def _definition_fixture(slot: dict, embedded: dict | None) -> Fixture:
+    """A v2 slot (``"fixture": "<id>@<mode>"``) -> its Generic* fixture."""
+    from .definition import DefinitionError
+    from .generic import make_fixture
+    from .library import resolve
+
+    ref = slot["fixture"]
+    if "fixture_type" in slot:
+        raise RigError(f"slot {slot.get('slot_id', ref)!r} has both 'fixture' and 'fixture_type'")
+    try:
+        definition, mode = resolve(str(ref), embedded if isinstance(embedded, dict) else None)
+        return make_fixture(definition, mode, address=int(slot["dmx_address"]),
+                            label=slot.get("label", slot.get("slot_id", str(ref))),
+                            role=slot.get("role"), side=slot.get("side", "left"))
+    except KeyError as exc:
+        raise RigError(f"unknown fixture {ref!r}: {exc}") from exc
+    except (DefinitionError, ValueError) as exc:
+        raise RigError(f"fixture {ref!r}: {exc}") from exc
+
+
 def _rig_from_dict(data: dict) -> Rig:
     try:
         slots = data["slots"]
@@ -294,16 +322,20 @@ def _rig_from_dict(data: dict) -> Rig:
 
     fixtures: list[Fixture] = []
     for slot in slots:
-        ftype = slot.get("fixture_type")
-        cls = FIXTURE_TYPES.get(ftype)
-        if cls is None:
-            raise RigError(f"unknown fixture_type {ftype!r} (known: {sorted(FIXTURE_TYPES)})")
-        fx = cls(
-            address=int(slot["dmx_address"]),
-            label=slot.get("label", slot.get("slot_id", ftype)),
-            role=slot.get("role", "wash"),
-            side=slot.get("side", "left"),
-        )
+        if "fixture" in slot:
+            fx = _definition_fixture(slot, data.get("definitions"))
+            ftype = fx.type_name
+        else:
+            ftype = slot.get("fixture_type")
+            cls = FIXTURE_TYPES.get(ftype)
+            if cls is None:
+                raise RigError(f"unknown fixture_type {ftype!r} (known: {sorted(FIXTURE_TYPES)})")
+            fx = cls(
+                address=int(slot["dmx_address"]),
+                label=slot.get("label", slot.get("slot_id", ftype)),
+                role=slot.get("role", "wash"),
+                side=slot.get("side", "left"),
+            )
         # Stash slot_id for fixture() lookups.
         fx.slot_id = slot.get("slot_id", fx.label)  # type: ignore[attr-defined]
         # Optional custom canvas position (normalized 0..1) — see Fixture.layout_x/y.
@@ -372,10 +404,11 @@ def _point_dict(p: Point3) -> dict:
 def slot_to_dict(fx: Fixture) -> dict:
     """One rig-file slot for ``fx``, every modeled field included when set,
     plus whatever unknown keys it was loaded with."""
+    type_key = "fixture" if hasattr(fx, "definition") else "fixture_type"  # v2 slot
     slot: dict = {
         "slot_id": getattr(fx, "slot_id", fx.label),
         "label": fx.label,
-        "fixture_type": fx.type_name,
+        type_key: fx.type_name,
         "dmx_address": fx.address,
         "role": fx.role,
         "side": fx.side,
@@ -434,7 +467,22 @@ def rig_to_dict(rig: Rig, description: str | None = None) -> dict:
             "targets": {name: _point_dict(p) for name, p in v.targets.items()},
         }
     data["slots"] = [slot_to_dict(fx) for fx in rig.fixtures]
+    defs = _definitions_snapshot(rig)
+    if defs:  # v1 rigs (no definition-driven slot) keep their exact v1 shape
+        data["definitions"] = defs
     return data
+
+
+def _definitions_snapshot(rig: Rig) -> dict:
+    """Every non-builtin definition the rig's fixtures use, by id (builtins always ship)."""
+    from .library import BUILTIN_DIR
+
+    out: dict = {}
+    for fx in rig.fixtures:
+        d = getattr(fx, "definition", None)
+        if d is not None and d.id not in out and not (BUILTIN_DIR / f"{d.id}.json").is_file():
+            out[d.id] = d.to_dict()
+    return out
 
 
 def save_rig(rig: Rig, path: str, description: str | None = None) -> dict:
