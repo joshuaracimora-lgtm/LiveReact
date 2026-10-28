@@ -55,14 +55,6 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-22. **P2 channel-test screen.** Extend `ui/fixture_test.py` for a definition-driven fixture:
-    - one slider per channel, labelled by function (not just kind);
-    - a capability picker ("Red: 10-19", click to send);
-    - a pass/fail mark per channel and a **Confirm** button that sets `source.confirmed` + `confirmed_at`
-      and saves through item 13;
-    - for lasers, the user picks the values for blank / static line / fan into `laser_intents`.
-    Accept: UI tests (Confirm writes the definition; an unconfirmed laser cannot be marked confirmed without
-    all three intents).
 23. **P2 fixture library browser + add-fixture wizard.** `ui/fixture_library.py` (browse builtin / user /
     imported definitions) and `ui/fixture_wizard.py` with three pages: Search Open Fixture Library (item 25),
     Upload manual (item 28), Enter by hand (a channel table editor producing a `user` definition). Every
@@ -225,3 +217,10 @@ Hard rules for every item, whoever does it:
   "Address set" checklist column is saved as the slot's `address_set` (unticked = v1 slot unchanged);
   definition rows save as v2 `fixture` slots with the `definitions` snapshot. The channel reference lists a
   definition's channels. Tests: `tests/test_app_patch_view.py`.
+- **22. P2 channel-test screen** (2026-10-28). `ui/channel_test.py` `ChannelTestPanel(definition, mode,
+  address, frame_buffer, save)`: a slider per channel labelled by function, a capability picker ("Red: 10-19",
+  sends the middle of the range), a pass/fail mark per channel, and Confirm (every channel pass; sets
+  `confirmed` + `confirmed_at`, saves through the library). For lasers: capture blank / static line / fan from
+  the sliders into `laser_intents`; Confirm needs all three. Laser channels send zeros unless "Enable laser
+  output on this screen" is ticked (this screen is outside the show's arm switch). `ui/fixture_test.py` labels
+  definition fixtures' channels by function. Tests: `tests/test_app_channel_test.py`.
