@@ -235,6 +235,7 @@ def test_jog_live_pins_the_head_and_unticking_clears_them(qapp):
     app = _app()
     win = ConsoleWindow(app)
     tab = win.venue_tab
+    win.tabs.setCurrentWidget(tab)   # pins only while the Venue tab is on screen
     tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
     mh = app.rig.fixture("mh_l")
     tab.cb_jog.setChecked(True)
@@ -272,6 +273,7 @@ def test_set_aim_captures_a_calibration_and_aim_at_target_reuses_it(qapp):
     tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
     tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
     tab.cb_target.setCurrentText("dj_booth")
+    tab.cb_jog.setChecked(True)                 # the documented flow: the real head is on the sliders
     tab.b_set_aim.click()
     assert mh.calibration.captured and mh.calibration.target == "dj_booth"
     assert "Captured on dj_booth" in tab.l_cal.text()
@@ -292,6 +294,7 @@ def test_laser_probe_pins_a_static_line_only_within_ch7s_static_half(qapp):
     app = _app()
     win = ConsoleWindow(app)
     tab = win.venue_tab
+    win.tabs.setCurrentWidget(tab)   # pins only while the Venue tab is on screen
     tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("laser_l"))
     laser = app.rig.fixture("laser_l")
     tab.cb_probe.setChecked(True)
@@ -424,6 +427,7 @@ def test_venue_tab_selecting_a_head_lights_it_and_jog_adds_pan_tilt(qapp):
     app = _app()
     win = ConsoleWindow(app)
     tab = win.venue_tab
+    win.tabs.setCurrentWidget(tab)   # pins only while the Venue tab is on screen
     mh = app.rig.fixture("mh_l")
     a = mh.address
     tab._load_fixture("mh_l")
@@ -456,3 +460,352 @@ def test_laser_hit_button_and_j_key_count_moments(qapp):
     win.b_laser_hit.click()
     win.b_laser_hit.click()
     assert app.manual.laser_hit == 2
+
+
+def test_console_launch_pins_nothing_until_the_venue_tab_is_opened(qapp):
+    """2026-10-26: building the console selected the first fixture inside the
+    hidden Venue tab; on a rig whose first fixture is a moving head that lit it
+    full white and held off the no-music auto-blackout from launch."""
+    from livereact.fixtures.profiles import MovingHead
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    assert isinstance(app.rig.fixtures[0], MovingHead)     # the case that triggered it
+    win = ConsoleWindow(app)
+    assert app.manual.calibration is None
+    tab = win.venue_tab
+    tab.cb_jog.setChecked(True)                            # jog on a hidden tab pins nothing either
+    assert app.manual.calibration is None
+    tab.cb_jog.setChecked(False)
+    win.tabs.setCurrentWidget(tab)                         # opening the tab lights the selected head
+    assert app.manual.calibration is not None
+    win.tabs.setCurrentIndex(0)                            # leaving clears it ...
+    assert app.manual.calibration is None
+    win.tabs.setCurrentWidget(tab)                         # ... and coming back re-lights it
+    assert app.manual.calibration is not None
+
+
+def test_venue_tab_box_edit_writes_only_its_own_axis(qapp):
+    """UI_BUGS: the boxes show 0.1 ft; editing ANY box (even height or facing)
+    rebuilt the whole position from all three, so a file value like 16.25 ft
+    was rounded and the fixture nudged. Same for the target boxes."""
+    from livereact.fixtures.geometry import Point3, ft_to_m
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    rig = load_rig(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                "rigs", "junior_crib.json"))
+    head = next(fx for fx in rig.fixtures if type(fx).__name__ == "MovingHead")
+    key = getattr(head, "slot_id", head.label)
+    exact = Point3(ft_to_m(16.25), ft_to_m(7.33), ft_to_m(9.87))
+    head.position = exact
+    rig.refresh_geometry()
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(key))
+    tab.sb_facing.setValue(tab.sb_facing.value() + 15.0)
+    assert head.position == exact
+    tab.sb_z.setValue(10.0)
+    assert head.position == Point3(exact.x, exact.y, ft_to_m(10.0))
+    tab.sb_x.setValue(12.0)
+    assert head.position == Point3(ft_to_m(12.0), exact.y, ft_to_m(10.0))
+    name = sorted(rig.venue.targets)[0]
+    t = Point3(ft_to_m(3.33), ft_to_m(4.44), ft_to_m(5.55))
+    rig.venue.targets[name] = t
+    tab._refresh_targets()
+    bx, by, bz = tab._target_boxes[name]
+    bz.setValue(6.0)
+    assert rig.venue.targets[name] == Point3(t.x, t.y, ft_to_m(6.0))
+
+
+def test_set_aim_and_bound_point_need_jog_live(qapp):
+    """UI_BUGS: SET AIM / ADD 2ND POINT / ADD BOUND POINT stored the slider
+    values with Jog live off -- a pose the real head is not in."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    assert not tab.cb_jog.isChecked()
+    bounds = mh.bounds
+    tab.b_set_aim.click()
+    assert not mh.calibration.captured
+    assert "Jog live" in tab.status.text()
+    tab.b_bound_add.click()
+    assert mh.bounds == bounds
+    tab.cb_jog.setChecked(True)
+    tab.b_set_aim.click()
+    assert mh.calibration.captured and mh.calibration.target == "dj_booth"
+    tab.cb_jog.setChecked(False)
+    tab.cb_target.setCurrentText("dancefloor_centre")
+    tab.s_pan.setValue(int(0.30 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None
+    tab.cb_jog.setChecked(True)
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 == "dancefloor_centre"
+    tab.b_bound_add.click()
+    assert mh.bounds is not None and mh.bounds != bounds
+
+
+def test_venue_action_messages_are_not_overwritten_by_unsaved(qapp):
+    """Every calibration action set its guidance on the status line and then
+    _mark_dirty() replaced it with "Unsaved changes": Josh never saw "Now
+    'Aim at target' ...", the 2-point result, or the motion-box readout."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    assert "Captured" in tab.status.text() and "Unsaved" in tab.status.text()
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert "Solved" in tab.status.text()
+    tab.b_home.click()
+    assert "Home = back_wall" in tab.status.text()
+    tab.b_bound_add.click()
+    assert "first edge stored" in tab.status.text()
+    tab.b_bound_clear.click()
+    assert "motion box cleared" in tab.status.text()
+
+
+def test_set_home_says_it_is_unused_while_a_motion_box_exists(qapp):
+    """UI_BUGS: Set home showed a value but the motion box wins
+    (MovingHead.apply_home_position), with no word of it in the UI."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.cb_target.setCurrentText("dancefloor_centre")
+    tab.b_home.click()
+    assert mh.home_pan is not None and "home" in tab.l_cal.text()
+    assert "unused" not in tab.l_cal.text()
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.3 * 65535)); tab.b_bound_add.click()
+    tab.s_pan.setValue(int(0.7 * 65535)); tab.b_bound_add.click()
+    assert mh.bounds is not None
+    assert "unused" in tab.l_cal.text() and "motion box" in tab.l_cal.text()
+    tab.b_home.click()
+    assert "unused" in tab.status.text()
+    tab.b_bound_clear.click()
+    assert "unused" not in tab.l_cal.text()
+
+
+def test_venue_panel_fits_a_1280x800_window_without_clipping(qapp):
+    """UI_BUGS (layout): at 1280 x 800 the property panel was wider than its
+    column: button labels cut ("... (solves direction + rang"), the pan/tilt
+    readouts showed "0.", the help text ran off the right edge."""
+    from PySide6 import QtWidgets
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    from livereact.ui.theme import apply_theme
+
+    apply_theme(qapp)                           # the console's look: its fonts/padding set the widths
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rig = load_rig(os.path.join(root, "rigs", "junior_crib.json"))
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    tab.resize(1280, 800)
+    tab.show()
+    qapp.processEvents()
+    head = next(fx for fx in rig.fixtures if type(fx).__name__ == "MovingHead")
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(getattr(head, "slot_id", head.label)))
+    qapp.processEvents()
+    scroll = tab.findChild(QtWidgets.QScrollArea)
+    assert scroll.horizontalScrollBar().maximum() == 0
+    for b in tab.grp_head.findChildren(QtWidgets.QAbstractButton):
+        assert b.width() >= b.sizeHint().width(), b.text()
+    for lab in (tab.l_pan, tab.l_tilt):
+        assert lab.width() >= lab.sizeHint().width()
+    tab.close()
+
+
+def test_saving_keeps_the_rig_description_and_remembers_the_new_path(qapp, tmp_path, monkeypatch):
+    """UI_BUGS: Save rig... replaced the rig's own description with a fixed
+    string, and the next Save still defaulted to the old file."""
+    import json
+
+    from PySide6 import QtWidgets
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.rig_config import RigConfigTab
+    from livereact.ui.venue_tab import VenueTab
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(root, "rigs", "junior_crib.json")
+    asked = []
+
+    def dialog(path):
+        def fake(parent, caption, default, filt):
+            asked.append(default)
+            return str(path), filt
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName", staticmethod(fake))
+
+    rig = load_rig(src)
+    rig.description = "Josh's own notes on this room"
+    tab = VenueTab(rig, src, on_pins=None, active=False)
+    dialog(tmp_path / "venue.json")
+    tab.b_save.click()
+    assert json.loads((tmp_path / "venue.json").read_text(encoding="utf-8"))["description"] == rig.description
+    tab.b_save.click()
+    assert asked == [src, str(tmp_path / "venue.json")]
+
+    cfg = RigConfigTab(rig, src)
+    dialog(tmp_path / "cfg.json")
+    cfg._save()
+    assert json.loads((tmp_path / "cfg.json").read_text(encoding="utf-8"))["description"] == rig.description
+    assert cfg.rig_path == str(tmp_path / "cfg.json")
+
+
+def test_fixture_test_home_save_keeps_the_rig_description(qapp, tmp_path, monkeypatch):
+    import json
+
+    from PySide6 import QtWidgets
+    from livereact.core.frame_buffer import DmxFrameBuffer
+    from livereact.fixtures.profiles import MovingHead
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.fixture_test import FixtureTestPanel
+
+    rig = load_rig()
+    rig.description = "Josh's own notes on this room"
+    out = tmp_path / "home.json"
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a: (str(out), "JSON (*.json)")))
+    panel = FixtureTestPanel(rig, DmxFrameBuffer())
+    panel._save_home_position(next(fx for fx in rig.fixtures if isinstance(fx, MovingHead)))
+    assert json.loads(out.read_text(encoding="utf-8"))["description"] == rig.description
+    assert panel.rig_path == str(out)
+
+
+def test_an_unplaced_head_says_so_in_the_panel(qapp):
+    """UI_BUGS: an unplaced fixture showed the X/Y it is drawn at, yet SET AIM
+    refused with "Place the head first" -- nothing said the boxes were not
+    its real position."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    mh = app.rig.fixture("mh_l")
+    assert mh.position is None
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    assert "not placed" in tab.grp_place.title()
+    tab.cb_jog.setChecked(True)
+    tab.b_set_aim.click()
+    assert not mh.calibration.captured
+    assert "not placed" in tab.status.text() and "drawn" in tab.status.text()
+    tab.sb_z.setValue(9.0)                      # typing a value places it
+    assert mh.position is not None
+    assert "not placed" not in tab.grp_place.title()
+
+
+def test_reset_positions_restores_each_fixtures_side(qapp):
+    """UI_BUGS (side gets stuck): after Reset positions every fixture kept the
+    side last derived from its x, not the one the rig file declared."""
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rig = load_rig(os.path.join(root, "rigs", "josh_rig.json"))
+    declared = {fx.slot_id: fx.side for fx in rig.fixtures}
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    fx = next(f for f in rig.fixtures if f.side == "left")
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(fx.slot_id))
+    tab.sb_x.setValue(tab.sb_width.value() - 1.0)     # drag it to the right wall
+    assert fx.side == "right"
+    tab._reset_positions()
+    assert fx.position is None
+    assert {f.slot_id: f.side for f in rig.fixtures} == declared
+
+
+def test_moving_a_calibrated_head_warns_that_its_aim_was_captured_elsewhere(qapp):
+    """UI_BUGS (calibration not tied to what it was solved for): moving or
+    re-facing a head after SET AIM silently kept offsets solved for the old
+    geometry. Whether to re-solve is Josh's call; the tab must at least say so."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    assert "SET AIM" not in tab.status.text()          # not captured yet: nothing to warn about
+    tab.cb_jog.setChecked(True)
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    tab.sb_x.setValue(7.0)
+    assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()
+    tab.sb_facing.setValue(20.0)
+    assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()
+    # a drag on the plan warns too
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+
+    tab._mark_dirty()
+    view = tab.plan
+    view.resize(800, 900); view._fit()
+    p = view.mapFromScene(view._bodies["mh_l"].scenePos())
+    left, none = QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier
+    QTest.mousePress(view.viewport(), left, none, p)
+    for dx in (15, 30, 45, 60):
+        QTest.mouseMove(view.viewport(), QtCore.QPoint(p.x() + dx, p.y()))
+    QTest.mouseRelease(view.viewport(), left, none, QtCore.QPoint(p.x() + 60, p.y()))
+    assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()
+
+
+def test_room_box_edit_writes_only_its_dimension_and_warns_about_what_falls_outside(qapp):
+    """UI_BUGS: editing the room's width also rewrote length (rounded to 0.1 ft)
+    and height (into a file that had none), and fixtures/targets left outside
+    the shrunk room were not mentioned."""
+    from livereact.fixtures.geometry import Point3, Venue, ft_to_m
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.venue_tab import VenueTab
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rig = load_rig(os.path.join(root, "rigs", "josh_rig.json"))
+    w, l = ft_to_m(30.0), ft_to_m(40.33)
+    rig.venue = Venue(w, l, None, Venue.default_targets(w, l, None))
+    mh = rig.fixture("mh")
+    mh.position = Point3(ft_to_m(25), ft_to_m(2), ft_to_m(3))
+    rig.refresh_geometry()
+    tab = VenueTab(rig, None, on_pins=None, active=False)
+    tab.sb_width.setValue(20.0)
+    assert rig.venue.width_m == pytest.approx(ft_to_m(20.0))
+    assert rig.venue.length_m == l and rig.venue.height_m is None
+    assert "outside" in tab.status.text() and mh.label in tab.status.text()
+    tab.sb_width.setValue(30.0)
+    assert "outside" not in tab.status.text()
+
+
+def test_floor_plan_gets_the_left_columns_height_at_1280x800(qapp):
+    """UI_BUGS (layout): the targets grid under the plan took ~40% of the left
+    column, so a tall room was drawn ~330 px high with tiny captions."""
+    from PySide6 import QtWidgets
+    from livereact.fixtures.rig import load_rig
+    from livereact.ui.theme import apply_theme
+    from livereact.ui.venue_tab import VenueTab
+
+    apply_theme(qapp)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tab = VenueTab(load_rig(os.path.join(root, "rigs", "junior_crib.json")), None, on_pins=None, active=False)
+    tab.resize(1280, 800)
+    tab.show()
+    qapp.processEvents()
+    assert tab.plan.height() >= 0.75 * tab.height()
+    scroll = tab.findChild(QtWidgets.QScrollArea)
+    assert scroll.horizontalScrollBar().maximum() == 0          # the targets grid fits the panel too
+    tab.close()

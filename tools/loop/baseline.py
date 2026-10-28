@@ -36,6 +36,11 @@ def main() -> int:
                   on_track=lambda t: print(f"  {'holdout' if t.holdout else 'tuning '} {t.status:7} {t.compliance}  {t.track[:50]}"))
     d = ev.to_json()
     d["generated"] = datetime.now().isoformat(timespec="seconds")
+    # the code it describes (tools/agent/baseline_fresh.py regenerates it when engine code moved on)
+    import subprocess
+    got = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[2],
+                         capture_output=True, text=True)
+    d["commit"] = got.stdout.strip() if got.returncode == 0 else None
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(d, indent=2), encoding="utf-8")

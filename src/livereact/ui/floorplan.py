@@ -43,6 +43,7 @@ import math
 from typing import Callable
 
 from PySide6 import QtCore, QtGui, QtWidgets
+from shiboken6 import Shiboken
 
 from ..fixtures.geometry import (
     Point3,
@@ -245,7 +246,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self.rig = rig
         self.editable = editable
         self.on_changed = on_changed
-        self._scene = QtWidgets.QGraphicsScene()
+        self._scene = QtWidgets.QGraphicsScene(self)
         self.setScene(self._scene)
         self.setBackgroundBrush(QtGui.QColor(12, 12, 16))
         self.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
@@ -259,6 +260,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self._captions: dict[str, _Caption] = {}
         self._layout_dirty = False
         self._dragging: set[str] = set()
+        self._press_pos: dict[int, QtCore.QPointF] = {}
         self._scene.selectionChanged.connect(self._on_selection)
         self.refresh_layout()
 
@@ -340,11 +342,34 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             if j % 5 == 0:
                 t = self._scene.addSimpleText(f"{j}′"); t.setBrush(_TEXT); t.setPos(-_MARGIN + 2, y - 7)
         self._scene.addRect(0, 0, w_px, l_px, QtGui.QPen(_ROOM_EDGE, 2))
+        # the wall title goes under the x-axis numbers (not across them); the
+        # scene grows to fit it
         booth = self._scene.addSimpleText("DJ BOOTH WALL")
-        booth.setBrush(_ROOM_EDGE); booth.setPos(w_px / 2 - 44, l_px + 14)
+        booth.setBrush(_ROOM_EDGE)
+        tick_h = QtGui.QFontMetricsF(booth.font()).height()
+        booth.setPos(w_px / 2 - booth.boundingRect().width() / 2, l_px + 4 + tick_h)
+        r = self._scene.sceneRect()
+        r.setBottom(max(r.bottom(), booth.sceneBoundingRect().bottom() + 2))
+        self._scene.setSceneRect(r)
+        # the legend wraps onto as many lines as the scene's width needs (one
+        # line was cropped on rooms under ~33 ft); the top band grows to fit
         legend = self._scene.addSimpleText(_LEGEND)
         legend.setFont(QtGui.QFont("Arial", 7)); legend.setBrush(_TEXT)
-        legend.setPos(0, -_MARGIN - _LEGEND_H + 2)
+        fm = QtGui.QFontMetricsF(legend.font())
+        lines, cur = [], ""
+        for part in _LEGEND.split("    "):
+            cand = cur + "    " + part if cur else part
+            if cur and fm.horizontalAdvance(cand) > r.width() - 4:
+                lines.append(cur)
+                cand = part
+            cur = cand
+        legend.setText("\n".join(lines + [cur]))
+        extra = legend.boundingRect().height() - (_LEGEND_H - 2)
+        if extra > 0:
+            r.setTop(r.top() - extra)
+            self._scene.setSceneRect(r)
+        legend.setPos(r.left() + 2, r.top() + 2)
+        self._legend = legend
 
         movable = (QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsMovable
                    | QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
@@ -453,7 +478,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         reserved = [
             QtCore.QRectF(-_MARGIN, l_px + 1, w_px + 2 * _MARGIN, _MARGIN + 40),     # x axis + "DJ BOOTH WALL"
             QtCore.QRectF(-_MARGIN - 2, -_MARGIN - _LEGEND_H, _MARGIN + 1, l_px + 2 * _MARGIN + _LEGEND_H),  # y axis
-            QtCore.QRectF(-_MARGIN, -_MARGIN - _LEGEND_H, w_px + 2 * _MARGIN, _LEGEND_H - 1),            # legend
+            self._legend.sceneBoundingRect(),                                                            # legend
         ]
         obstacles = [c.item.sceneBoundingRect() for c in self._captions.values()]
         placed: list[QtCore.QRectF] = []
@@ -511,12 +536,16 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                         chosen = r
                         break
             if chosen is None:
-                # last resort (room smaller than its labels): below, ignoring the bands
-                chosen = slot_rect(0, 1)
-                for _ in range(40):
-                    if not any(chosen.intersects(o) for o in obstacles + placed):
-                        break
-                    chosen.translate(0, lh + 4)
+                # last resort (room smaller than its labels): the slot inside the
+                # scene that overlaps the least (bodies, captions AND the bands),
+                # nearest first. (It used to stack straight down, out of the
+                # scene and onto the wall title.)
+                def overlap(r: QtCore.QRectF) -> float:
+                    return sum(i.width() * i.height()
+                               for i in (r.intersected(o) for o in obstacles + placed + reserved))
+
+                cands = [slot_rect(*p_) for p_ in [*self._SLOTS, *ring]]
+                chosen = min([r for r in cands if scene_rect.contains(r)] or cands, key=overlap)
             cap.place(chosen)
             cap.leader_to(chosen if far else None)
             placed.append(chosen.adjusted(-3, -2, 3, 2))
@@ -530,6 +559,10 @@ class FloorPlanView(QtWidgets.QGraphicsView):
 
     # ------------------------------------------------------------ selection / drag
     def _on_selection(self) -> None:
+        # the scene being destroyed (tab closed, app exit) deletes the items
+        # first and then reports the selection change: nothing to select then
+        if not all(Shiboken.isValid(item) for item in self._bodies.values()):
+            return
         for key, item in self._bodies.items():
             if item.isSelected():
                 self.fixture_selected.emit(key)
@@ -542,17 +575,27 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             item.setSelected(key == slot_id)
         self._scene.blockSignals(False)
 
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        # where everything sat before this press: only what the drag moved is committed
+        self._press_pos = {id(i): i.pos() for i in (*self._bodies.values(), *self._targets.values())}
+        super().mousePressEvent(event)
+
+    def _moved(self, item: PlanItem) -> bool:
+        before = self._press_pos.get(id(item))
+        return item.isSelected() and before is not None and item.pos() != before
+
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (Qt override)
         super().mouseReleaseEvent(event)
         if not self.editable:
             return
         changed = False
         for key, item in self._bodies.items():
-            if item.isSelected():
+            if self._moved(item):
                 changed |= self._commit_fixture_drop(key, item)
         for name, item in self._targets.items():
-            if item.isSelected():
+            if self._moved(item):
                 changed |= self._commit_target_drop(name, item)
+        self._press_pos = {}
         if changed:
             self.rig.refresh_geometry()
             self._mark_stacks()

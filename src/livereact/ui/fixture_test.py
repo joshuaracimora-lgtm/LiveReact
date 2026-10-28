@@ -129,12 +129,14 @@ class FixtureTestPanel(QtWidgets.QMainWindow):
         try:
             # The shared serializer (fixtures/rig.py) keeps every other
             # field -- mount heights, positions, unknown keys -- intact.
-            save_rig(self.rig, path, "Home position saved via the fixture-test panel's Save as Home Position.")
+            save_rig(self.rig, path, self.rig.description
+                     or "Home position saved via the fixture-test panel's Save as Home Position.")
         except RigError as exc:
             self.status.setText(f"Not saved — {exc}")
             self.status.setStyleSheet("color:#c33;")
             return
         log.info("Saved %s home position (pan=%.3f tilt=%.3f) to %s", fx.label, pan01, tilt01, path)
+        self.rig_path = path
         self.status.setText(
             f"Saved {fx.label} home position (pan={pan01:.2f}, tilt={tilt01:.2f}) to {path} "
             f"— restart with --rig \"{path}\" to apply."

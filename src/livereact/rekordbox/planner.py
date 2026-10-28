@@ -25,11 +25,13 @@ plan loses authority.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from . import mapping
 from .look_notes import LookNotes
 from .pssi import PhraseTable, beat_to_seconds
+from .section_classes import ClassBook
+from .sections import section_features, track_profile
 from .waveform import ColorWaveform
 
 log = logging.getLogger(__name__)
@@ -87,6 +89,7 @@ class PlannedSection:
     strobe_allowed: bool = True
     laser_allowed: bool = True
     fill_beat: int | None = None      # rekordbox's fill-in flag (unused yet; the scorer's STRUCT-01 vocabulary)
+    cls: str = ""                     # section class (rekordbox/section_classes.py); "" = none matched
 
     @property
     def length(self) -> int:
@@ -183,7 +186,11 @@ def _pick(pool: dict[str, list[str]], bucket: str, seed: int) -> str:
 def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float = 0.0,
                grid: list[tuple[int, float, int]] | None = None, waveform: ColorWaveform | None = None,
                scene_pool: dict[str, list[str]] | None = None, rules: PlanRules | None = None,
-               look: LookNotes | None = None) -> TrackPlan:
+               look: LookNotes | None = None, classes: ClassBook | None = None) -> TrackPlan:
+    """``classes``: the section classes (section_classes.load()). Every section is tagged with its
+    class; only an APPROVED class changes the show (its scene replaces the bucket pick, unless a look
+    note names the track's hook scene), and an approved palette_by_profile picks the drop palette
+    from the track's frequency profile when no look note names one (D-23)."""
     rules = rules or PlanRules()
     pool = scene_pool or DEFAULT_SCENE_POOL
     seed = int(track_id) if track_id else 0
@@ -239,9 +246,27 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
         need = rules.min_build_beats if m["kind"] == "build" else rules.min_section_beats
         return (m["end_beat"] - m["beat"]) < need
 
+    # Exception (D-23, "a drop's look never carries into a break"): a short break-bucket section
+    # right after a drop is where the kick leaves (rekordbox "down" 3-4 bars, then "up"); absorbed
+    # backwards it would hold the drop look -- PEAK and the laser fan on the big one -- through the
+    # breakdown. It joins its successor instead (the build or outro starts where the drop ends);
+    # before another drop it stays absorbed into the drop as before.
+    def forward(i: int, m: dict) -> bool:
+        return (m["bucket"] == "break" and merged[i - 1]["kind"] == "drop"
+                and merged[i + 1]["kind"] != "drop")
+
     absorbed: list[dict] = []
+    carry: dict | None = None   # a short break waiting to be prepended to its successor
     for i, m in enumerate(merged):
-        if 0 < i < len(merged) - 1 and absorbed and too_short(m):
+        if carry is not None:
+            m = dict(m, beat=carry["beat"], phrases=m["phrases"] + carry["phrases"],
+                     energy=(carry["energy"] * (carry["end_beat"] - carry["beat"])
+                             + m["energy"] * (m["end_beat"] - m["beat"])) / max(1, m["end_beat"] - carry["beat"]))
+            carry = None
+        elif 0 < i < len(merged) - 1 and absorbed and too_short(m):
+            if forward(i, m):
+                carry = m
+                continue
             prev = absorbed[-1]
             prev["end_beat"] = m["end_beat"]
             prev["phrases"] += m["phrases"]
@@ -306,10 +331,32 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
             laser_allowed=laser_allowed,
             fill_beat=r["fill_beat"],
         ))
+    palette = (look.hook_palette or "") if look is not None else ""
+    if not palette and classes is not None:
+        palette = classes.palette_for(track_profile(waveform), seed)
     plan = TrackPlan(track_id=int(track_id), title=title, bpm=float(bpm), mood=table.mood, palette_seed=seed,
                      hook_scene=hook_scene, sections=tuple(sections),
                      big_moment_index=big_run[0] if big_run else None, rules=rules,
-                     palette=(look.hook_palette or "") if look is not None else "",
+                     palette=palette,
                      mood_words=tuple(look.mood) if look is not None else ())
+    if classes is not None and classes.classes:
+        plan = _apply_classes(plan, classes, table, grid=grid, waveform=waveform, bpm=bpm, look=look)
     log.debug("%s", plan.summary())
     return plan
+
+
+def _apply_classes(plan: TrackPlan, classes: ClassBook, table: PhraseTable, *, grid, waveform, bpm: float,
+                   look: LookNotes | None) -> TrackPlan:
+    feats = section_features(plan, table, grid=grid, waveform=waveform, bpm=bpm)
+    out = []
+    for s, f in zip(plan.sections, feats):
+        c = classes.classify(f)
+        if c is None:
+            out.append(s)
+            continue
+        scene = s.scene
+        look_hook = look is not None and look.hook_scene and s.kind == "drop"
+        if c.approved and c.scene and not look_hook:
+            scene = c.scene
+        out.append(replace(s, cls=c.name, scene=scene))
+    return replace(plan, sections=tuple(out))

@@ -34,10 +34,17 @@ def mode_mismatch(baseline: Evaluation, candidate: Evaluation) -> str | None:
             and baseline.analysis_fingerprint != candidate.analysis_fingerprint):
         return (f"rekordbox analysis of the scored tracks changed ({baseline.analysis_fingerprint} -> "
                 f"{candidate.analysis_fingerprint}); regenerate the baseline")
+    if (baseline.labels_fingerprint and candidate.labels_fingerprint
+            and baseline.labels_fingerprint != candidate.labels_fingerprint):
+        return (f"Josh's labels on the scored tracks changed (markers / drop classes / look notes: "
+                f"{baseline.labels_fingerprint} -> {candidate.labels_fingerprint}); regenerate the baseline")
     return None
 
 
-def compare(baseline: Evaluation, candidate: Evaluation) -> dict:
+def compare(baseline: Evaluation, candidate: Evaluation, min_improvement: float = MIN_IMPROVEMENT) -> dict:
+    """``min_improvement`` 0.0 = the no-regression gate (2026-10-26): a change that is not meant to
+    move the lighting score (a UI fix, a crash fix, a section-class rule) must leave the tuning set
+    no worse; every other reject reason applies unchanged."""
     reasons: list[str] = []
     notes: list[str] = []
     b, c = baseline.summary(), candidate.summary()
@@ -54,9 +61,10 @@ def compare(baseline: Evaluation, candidate: Evaluation) -> dict:
                        "simulate both from the same seed")
 
     bt, ct = b["tuning"], c["tuning"]
-    improved = ct["compliance"] is not None and bt["compliance"] is not None and ct["compliance"] >= bt["compliance"] + MIN_IMPROVEMENT
+    improved = ct["compliance"] is not None and bt["compliance"] is not None         and ct["compliance"] >= bt["compliance"] + min_improvement - 1e-9
     if not improved:
-        reasons.append(f"tuning compliance {bt['compliance']} -> {ct['compliance']} (needs +{MIN_IMPROVEMENT})")
+        reasons.append(f"tuning compliance {bt['compliance']} -> {ct['compliance']} "
+                       + (f"(needs +{min_improvement})" if min_improvement > 0 else "(may not fall)"))
 
     bh, ch = b["holdout"], c["holdout"]
     if bh["n"] and ch["compliance"] is not None and bh["compliance"] is not None and ch["compliance"] < bh["compliance"] - 1e-9:

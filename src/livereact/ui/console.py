@@ -121,7 +121,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         # and are cleared the moment the operator leaves the tab.
         self.venue_tab = VenueTab(app.rig, rig_path,
                                   on_pins=lambda pins: setattr(app.manual, "calibration", pins),
-                                  is_frozen=lambda: app.manual.freeze)
+                                  is_frozen=lambda: app.manual.freeze, active=False)
         tabs = QtWidgets.QTabWidget()
         tabs.addTab(show, "Show")
         # Laser Show tab (2026-10-08): only for rigs on the `show` laser
@@ -141,7 +141,9 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self._install_shortcuts()
 
     def _tab_changed(self, idx: int) -> None:
-        if self.tabs.widget(idx) is not self.venue_tab:
+        if self.tabs.widget(idx) is self.venue_tab:
+            self.venue_tab.activate()
+        else:
             self.venue_tab.deactivate()
             self.venue_tab.plan.select("")
         # the Venue plan is rebuilt on edits; the Show mini-map shares the

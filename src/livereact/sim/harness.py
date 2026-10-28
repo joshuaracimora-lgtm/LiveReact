@@ -210,7 +210,11 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
     # metronome's drop (Metronome.note_roll). Missing until 2026-10-22, so the
     # sim never had a roll-armed drop and STRUCT-03 under-read the live engine.
     reactive = ReactiveLayerEngine(clock, roll_sink=metronome.note_roll)
-    phrase = PhraseEngine()
+    # the live app's catalog and section classes (app.py), so the gate scores what the show plays
+    from ..rekordbox import section_classes
+    from ..scenes.catalog import show_catalog
+    classes = section_classes.load()
+    phrase = PhraseEngine(show_catalog(extra=classes.approved_scenes()))
     laser_engine = LaserEngine(clock)
     transition = TransitionEngine()
     frame_buffer = DmxFrameBuffer()
@@ -240,7 +244,8 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
             # built HERE, after params.apply ran (run_sim's `params`), so planner knobs reach every trial
             from ..rekordbox.planner import plan_track
             plan = plan_track(phrases, track_id=track_id, title=str(track), bpm=timeline.bpm, grid=grid,
-                              waveform=waveform, look=look)
+                              waveform=waveform, look=look, scene_pool=phrase.catalog.names_by_bucket(),
+                              classes=classes)
         if drive:
             metronome.phrases_mode = "drive"
         shared_queue.put(TrackPhraseMessage(timestamp=0.0, player=1, track_id=track_id, title=str(track),

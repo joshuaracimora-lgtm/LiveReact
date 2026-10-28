@@ -29,7 +29,7 @@ wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'LiveReact nightly 
    `git push`): `echo "Run exactly: git push --dry-run origin harness . Then quote the tool's response verbatim." | claude -p --dangerously-skip-permissions --disallowedTools "Bash(git push:*)" --output-format text`
    must show the command being refused, not a dry-run result. If it ran, stop and report.
 4. Dry run of the orchestrator, short budget, no search, so Josh sees the whole shape once:
-   `powershell -ExecutionPolicy Bypass -File tools/windows/nightly_agent.ps1 -Hours 0.25 -SearchHours 0`
+   `powershell -ExecutionPolicy Bypass -File tools/windows/nightly_agent.ps1 -UiHours 0.25 -Hours 0.25 -SearchHours 0`
    Expect in the log (`results/nightly/<date>-agent.log`): `job: kill-on-close job object held`, `power: ...held`, `claude: <version>`,
    `code: <harness tip>`, `1 passed` for the determinism test, `branch: agent/<date>`, `agent: starting`, then
    after ~15 min either `agent: exited 0` or `agent: deadline reached`. `results/agent/<date>/` must
@@ -42,7 +42,7 @@ wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'LiveReact nightly 
    delete `results/agent/<date>/`, and delete `results/agent/state.json` so the first real night starts
    fresh.
 6. Re-register the task for the agent:
-   `powershell -ExecutionPolicy Bypass -File tools/windows/register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-Hours 4 -SearchHours 1.5"`
+   `powershell -ExecutionPolicy Bypass -File tools/windows/register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-UiHours 1.5 -Hours 3 -SearchHours 1.5" -LimitHours 10`
    Add ` -Push` inside the `-ScriptArgs` string only if Josh says he wants each night's branch and
    reports pushed to GitHub (then pushing must already work here without a prompt: test
    `git push --dry-run origin harness`).
@@ -52,8 +52,8 @@ wrapped: `powershell -Command "Start-ScheduledTask -TaskName 'LiveReact nightly 
    `powershell -Command "Stop-ScheduledTask -TaskName 'LiveReact nightly search'"`, and repeat step 5's cleanup
    for the branch and folder it created (kill any leftover `claude`/`node` process from the test first:
    `tasklist | grep -i -E "claude|node"`).
-8. Confirm the task: enabled, daily 1:00 AM, wake-to-run on, execution limit 8 h, action shows
-   `nightly_agent.ps1 -Hours 4 -SearchHours 1.5` (plus ` -Push` if chosen). Note for Josh: the task runs only while his user is
+8. Confirm the task: enabled, daily 1:00 AM, wake-to-run on, execution limit 10 h, action shows
+   `nightly_agent.ps1 -UiHours 1.5 -Hours 3 -SearchHours 1.5` (plus ` -Push` if chosen). Note for Josh: the task runs only while his user is
    logged on (locked is fine). If Windows Update reboots the PC overnight and nobody logs back in, the
    night is skipped — tell him, so he can decide on auto-login or "run whether user is logged on or not".
 9. Report: Claude Code version, whether login succeeded, the dry run's `NIGHT.md`, the task's action
@@ -83,7 +83,7 @@ without that merge, and each night starts from `harness`, so an unmerged night's
 
 Do not push `harness`. Do not run the search in the foreground. If a step needs Josh's input, ask.
 
-## Power: the PC must stay up from 1:00 to 8:00 (added 2026-10-24)
+## Power: the PC must stay up for the whole run (added 2026-10-24; the task starts 4:00 PM since 10-25 and runs ~7.2 h with two agents since 10-26)
 
 Two nights in a row were lost to sleep (10-23 the 1 AM run was killed after 25 trials; 10-24 the PC slept
 03:22-11:29 in the middle of the agent's run, power events 42/107/1, and the agent got 15 minutes of work).
@@ -103,7 +103,7 @@ the PC sleeps normally in the day). `-Check` reads without changing.
 Then re-register the task so the new settings file is used (same command as before):
 
 ```powershell
-.\tools\windows\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-Hours 4 -SearchHours 1.5"
+.\tools\windows\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-UiHours 1.5 -Hours 3 -SearchHours 1.5" -LimitHours 10
 ```
 
 What the nightly now does on its own: holds a thread execution state AND a kernel power request (visible while it
@@ -118,7 +118,7 @@ What "regardless of power state" can and cannot mean:
 - **Rebooted by Windows Update, nobody signed in:** the task is registered "only while logged on" and will NOT run.
   Either set Windows Update active hours to cover 1-8 AM (Settings > Windows Update > Advanced options), or register
   with a stored password so it runs without a sign-in: `.\register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs
-  "-Hours 4 -SearchHours 1.5" -RunWhenLoggedOff` (prompts for the Windows password; re-run after a password change).
+  "-UiHours 1.5 -Hours 3 -SearchHours 1.5" -LimitHours 10 -RunWhenLoggedOff` (prompts for the Windows password; re-run after a password change).
   Untested on the desktop as of 10-24: do a 15-minute dry run after registering this way, since Claude Code's and
   git's stored credentials must still be readable from that logon session.
 - **Shut down:** nothing in Windows can wake it. Use the BIOS/UEFI "Power On By RTC Alarm" (name varies by board)

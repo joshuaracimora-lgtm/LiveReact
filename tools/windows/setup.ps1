@@ -36,7 +36,7 @@ Step "python is 3.12+ ($pyver)" ($pyver -match "3\.1[2-9]") "winget install Pyth
 if (-not (Test-Path ".venv\Scripts\python.exe")) { python -m venv .venv }
 $py = ".\.venv\Scripts\python.exe"
 & $py -m pip install --quiet --upgrade pip
-& $py -m pip install --quiet -e ".[sim,dev]"
+& $py -m pip install --quiet -e ".[sim,dev,ui]"   # ui: PySide6, the console + its tests (the UI agent needs them)
 Step "venv + livereact[sim,dev] installed" ($LASTEXITCODE -eq 0) "see pip output above"
 
 # --- 4. tracks present

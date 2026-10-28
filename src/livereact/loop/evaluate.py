@@ -134,8 +134,28 @@ def rules_fingerprint() -> str:
     threshold (2026-10-25, D4/D5) must force a baseline regeneration just like a new rule does, or the
     gate would report the scorer's own change as track flips."""
     ids = "|".join(f"{r}:{s}" for r, s, _ in RULES)
-    src = (Path(__file__).resolve().parents[1] / "sim" / "score.py").read_bytes()
+    sim = Path(__file__).resolve().parents[1] / "sim"
+    # drop_class.py decides which class an ear drop is: part of what gets measured (2026-10-26)
+    src = (sim / "score.py").read_bytes() + b"\n" + (sim / "drop_class.py").read_bytes()
     return hashlib.sha256(ids.encode() + b"\n" + src).hexdigest()[:12]
+
+
+def labels_fingerprint(items: list) -> str:
+    """Identifies what Josh told the scorer about the scored tracks: every marker (with its drop class,
+    explicit or inferred) and the look notes. ``items``: (track name, Timeline, LookNotes | None).
+    Josh confirming a class or editing a look note changes verdicts without any engine change, so the
+    gate must treat it as a new baseline, not as an agent's win or loss (2026-10-26)."""
+    from ..sim.drop_class import infer_drop_class
+    h = hashlib.sha256()
+    for name, tl, look in sorted(items, key=lambda x: unicodedata.normalize("NFC", x[0])):
+        h.update(unicodedata.normalize("NFC", name).encode() + f"|{tl.bpm}|{tl.first_downbeat_s}".encode())
+        for m in tl.markers:
+            d = m.to_dict()
+            if m.kind == "drop":
+                d["class"] = infer_drop_class(m, tl.bpm, tl.beats_per_bar)
+            h.update(json.dumps(d, sort_keys=True).encode())
+        h.update(repr(look).encode())
+    return h.hexdigest()[:12]
 
 
 @dataclass
@@ -146,6 +166,7 @@ class Evaluation:
     seed_range: list | None = None   # the normalizer seed the runs started from; None = older baseline (pre 2026-10-24)
     mode: str = "classifier"         # "classifier" | "drive" (the rekordbox plan ran the sections)
     analysis_fingerprint: str | None = None   # rekordbox analysis of the SCORED tracks (usb_export.analysis_fingerprint)
+    labels_fingerprint: str | None = None     # Josh's markers + drop classes + look notes on the SCORED tracks
     sweep: list[TrackEval] = field(default_factory=list)   # the generalisation sample (marker-free rules)
     sweep_set: str | None = None
 
@@ -182,7 +203,8 @@ class Evaluation:
 
     def to_json(self) -> dict:
         return {"params": self.params, "rules": self.rules, "seed_range": self.seed_range, "mode": self.mode,
-                "analysis_fingerprint": self.analysis_fingerprint, "sweep_set": self.sweep_set,
+                "analysis_fingerprint": self.analysis_fingerprint, "labels_fingerprint": self.labels_fingerprint,
+                "sweep_set": self.sweep_set,
                 "summary": self.summary(),
                 "tracks": [t.__dict__ for t in self.tracks], "sweep": [t.__dict__ for t in self.sweep]}
 
@@ -190,7 +212,7 @@ class Evaluation:
     def from_json(cls, d: dict) -> "Evaluation":
         ev = cls(params=d["params"], rules=d.get("rules", "unknown"), seed_range=d.get("seed_range"),
                  mode=d.get("mode", "classifier"), analysis_fingerprint=d.get("analysis_fingerprint"),
-                 sweep_set=d.get("sweep_set"))
+                 labels_fingerprint=d.get("labels_fingerprint"), sweep_set=d.get("sweep_set"))
         ev.tracks = [TrackEval.from_dict(t) for t in d["tracks"]]
         ev.sweep = [TrackEval.from_dict(t) for t in d.get("sweep", [])]
         return ev
@@ -243,6 +265,7 @@ def evaluate(params: dict | None, tracks: list[Path] | None = None, rig: str = "
                     mode="drive" if drive else "classifier")
     rig_obj = load_rig(rig)
     scored_uts = []
+    labels = []
     for p in tracks:
         tl = ear_timeline_for(p, usb, tracks_dir)
         phrases = grid = wave = None
@@ -254,6 +277,7 @@ def evaluate(params: dict | None, tracks: list[Path] | None = None, rig: str = "
                 phrases, grid, wave = usb.load_analysis(ut)
                 track_id = ut.info.id
         look = load_look_notes(look_notes_path_for(p.stem, tracks_dir))   # ValueError on a bad file: loud on purpose
+        labels.append((p.name, tl, look))
         driven = bool(drive and phrases is not None)
         r = run_sim(p, tl, rig, gestures=gestures, seed_range=seed_range, params=params, audio=_audio(p),
                     phrases=phrases, drive=driven, grid=grid, waveform=wave, track_id=track_id or 1, look=look)
@@ -263,6 +287,7 @@ def evaluate(params: dict | None, tracks: list[Path] | None = None, rig: str = "
             on_track(te)
     if usb is not None and scored_uts:
         ev.analysis_fingerprint = usb.analysis_fingerprint(scored_uts)
+    ev.labels_fingerprint = labels_fingerprint(labels) if labels else None
     for ut in sweep_tracks or []:
         phrases, grid, wave = usb.load_analysis(ut)
         tl = usb.timeline(ut, grid)

@@ -11,9 +11,21 @@ used by the scorer, never by the engine.
 from __future__ import annotations
 
 import json
+import logging
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+# The marker vocabulary (Marker's docstring). Loading is lenient -- an unknown kind,
+# class or key is logged, never raised: one bad file must not take down a night's
+# evaluation. tests/test_timeline_vocab.py holds every tracks/ file to it instead.
+MARKER_KINDS = ("drop", "fill", "breakdown", "build", "groove", "whiteout", "outro")
+# Drop classes (Josh 2026-10-26: "snare rolls a classification of a drop"). Only drops
+# carry one; empty = inferred by sim/drop_class.py.
+DROP_CLASSES = ("snare_roll", "full", "clap", "atmospheric")
+_MARKER_KEYS = ("t", "kind", "note", "end", "class")
 
 
 @dataclass
@@ -29,11 +41,34 @@ class Marker:
                   (STRUCT-07); ``end`` is where it cuts
     whiteout   -- drums cut while the track stays intense (stabs/synths carry it):
                   the rig goes white, moving heads to the DJ (STRUCT-04)
-    ``note`` starting with "est:" means unverified machine guess."""
+    outro      -- the track winding down (a kind of break, D-22)
+    ``note`` starting with "est:" means unverified machine guess.
+    ``cls`` (JSON ``"class"``) is a drop's class from DROP_CLASSES, set by Josh;
+    empty means "infer it" (sim/drop_class.py)."""
     t: float
     kind: str
     note: str = ""
     end: float | None = None
+    cls: str = ""
+
+    def to_dict(self) -> dict:
+        d = {"t": self.t, "kind": self.kind, "note": self.note, "end": self.end}
+        if self.cls:
+            d["class"] = self.cls
+        return d
+
+    @classmethod
+    def from_dict(cls, m: dict, where: str = "") -> "Marker":
+        extra = sorted(set(m) - set(_MARKER_KEYS))
+        if extra:
+            log.warning("timeline%s: marker at %s has unknown keys %s (ignored)", where, m.get("t"), extra)
+        mk = cls(t=m["t"], kind=m["kind"], note=m.get("note", ""), end=m.get("end"), cls=m.get("class", "") or "")
+        if mk.kind not in MARKER_KINDS:
+            log.warning("timeline%s: marker at %s has unknown kind %r", where, mk.t, mk.kind)
+        if mk.cls and (mk.kind != "drop" or mk.cls not in DROP_CLASSES):
+            log.warning("timeline%s: marker at %s has class %r (classes are for drops: %s)",
+                        where, mk.t, mk.cls, ", ".join(DROP_CLASSES))
+        return mk
 
 
 @dataclass
@@ -68,17 +103,18 @@ class Timeline:
 
     def to_json(self) -> str:
         d = asdict(self)
+        d["markers"] = [m.to_dict() for m in self.markers]
         return json.dumps(d, indent=2)
 
     @classmethod
-    def from_json(cls, text: str) -> "Timeline":
+    def from_json(cls, text: str, where: str = "") -> "Timeline":
         d = json.loads(text)
-        d["markers"] = [Marker(**m) for m in d.get("markers", [])]
+        d["markers"] = [Marker.from_dict(m, where) for m in d.get("markers", [])]
         return cls(**d)
 
     @classmethod
     def load(cls, path: str | Path) -> "Timeline":
-        return cls.from_json(Path(path).read_text(encoding="utf-8"))
+        return cls.from_json(Path(path).read_text(encoding="utf-8"), where=f" {Path(path).name}")
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(self.to_json(), encoding="utf-8")

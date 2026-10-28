@@ -63,3 +63,16 @@ def test_a_regression_on_an_nfc_named_track_is_still_caught():
     v = compare(base, cand)
     assert not v["accept"]
     assert any("rule regressions" in r for r in v["reasons"])
+
+
+def test_the_no_regression_gate_accepts_level_and_rejects_any_loss():
+    """2026-10-26: a UI / crash / class-rule change is not meant to move the score; it may not lower it."""
+    base = _ev(_t("a.mp3", 0.30), _t("b.mp3", 0.30))
+    same = _ev(_t("a.mp3", 0.30), _t("b.mp3", 0.30))
+    assert not compare(base, same)["accept"]                              # the normal gate wants +0.005
+    assert compare(base, same, min_improvement=0.0)["accept"]
+    worse = _ev(_t("a.mp3", 0.29), _t("b.mp3", 0.30))
+    v = compare(base, worse, min_improvement=0.0)
+    assert not v["accept"] and any("may not fall" in r for r in v["reasons"])
+    flipped = _ev(_t("a.mp3", 0.40, "FAIL"), _t("b.mp3", 0.30))           # higher score, but a rule regressed
+    assert not compare(_ev(_t("a.mp3", 0.30), _t("b.mp3", 0.30)), flipped, min_improvement=0.0)["accept"]

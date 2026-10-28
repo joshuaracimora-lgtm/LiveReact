@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "_doc": "Section classes (src/livereact/rekordbox/section_classes.py). The Track Classifier agent refines the rules; only Josh sets approved/scene. A rule of null names a class that is not defined yet. Nothing here changes the show until a class is approved.",
+  "classes": [
+    {"name": "drop_snare_roll", "kind": "drop", "rule": {"bars": [0, 7.75]}, "scene": null, "approved": false,
+     "notes": "Josh 2026-10-26: snare rolls are a class of drop (3-7 bars on his labels). The planner absorbs drops under MIN_SECTION_BEATS today, so this matches nothing until rolls are planned as their own sections."},
+    {"name": "drop_full", "kind": "drop", "rule": {"bars": [7.75, 10000]}, "scene": null, "approved": false,
+     "notes": "the groove/bass hit; at least 8 bars (Josh 2026-10-26)"},
+    {"name": "drop_clap", "kind": "drop", "rule": null, "scene": null, "approved": false,
+     "notes": "claps/crashes carry it, no real roll: soft strobe at most"},
+    {"name": "drop_atmospheric", "kind": "drop", "rule": null, "scene": null, "approved": false,
+     "notes": "brightens and pulses, no strobe"},
+    {"name": "build_from_drop", "kind": "build", "rule": {"energy_delta": [-1.0, -0.1]}, "scene": null, "approved": false,
+     "notes": "Claude 2026-10-26: the drop falls away (the kick leaves) and the build starts from there. Library: builds between two drops have energy_delta p10/p50/p90 -0.39/-0.22/-0.06 (216 sections, 126 tracks); after a breakdown -0.07/+0.05/+0.19, after an intro -0.04/+0.08/+0.26. On the tuning tracks 6 of 10 such builds start on an ear breakdown or whiteout marker, 0 of 8 risers do: a power-off (STRUCT-05) then the ramp."},
+    {"name": "build_riser", "kind": "build", "rule": {"energy_delta": [-0.1, 1.0]}, "scene": null, "approved": false,
+     "notes": "Claude 2026-10-26: a build out of a quiet section (intro, breakdown): already dark, so it only ramps."},
+    {"name": "breakdown_kick_out", "kind": "breakdown", "rule": {"energy_delta": [-1.0, -0.1]}, "scene": null, "approved": false,
+     "notes": "Claude 2026-10-26: a breakdown entered from a loud section (energy_delta p50 -0.27 after a drop, 121 sections). Every tuning-track planned breakdown is in it (-0.35..-0.52); the ear breakdowns there are power-offs (STRUCT-05) and 2-fixture static washes (TIME-06)."}
+  ],
+  "palette_by_profile": {
+    "approved": false,
+    "high": ["acid_yellow", "warm_white", "deep_amber", "toxic_green"],
+    "mid": ["deep_blue", "cyan_ice", "cold_steel"],
+    "low": ["blood_red", "uv_violet", "hot_magenta"]
+  }
+}

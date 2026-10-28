@@ -125,7 +125,8 @@ def bucket_for_energy_with_hysteresis(
 
 
 class SceneCatalog:
-    def __init__(self, scenes: list[Scene] | None = None, full: bool = False) -> None:
+    def __init__(self, scenes: list[Scene] | None = None, full: bool = False,
+                 reserved: list[Scene] | None = None) -> None:
         """Defaults to `library.CORE_SCENES` (one look per bucket, 2026-09-15
         -- see that list's comment); `full=True` rotates the whole
         `ALL_SCENES` catalog instead; an explicit `scenes` list wins over
@@ -137,6 +138,11 @@ class SceneCatalog:
         for scene in instances:
             self._by_bucket[scene.bucket].append(scene)
         self._rr_index: dict[EnergyBucket, int] = {b: 0 for b in EnergyBucket}
+        # 2026-10-26: looks a track plan may name (an approved section class's scene) that the
+        # rotation never hands out on its own -- find() sees them, pick()/names_by_bucket() don't,
+        # so approving a class changes only the sections of that class.
+        names = {s.name for b in self._by_bucket.values() for s in b}
+        self._reserved: list[Scene] = [r for r in (reserved or []) if r.name not in names]
 
     def bucket(self, bucket: EnergyBucket) -> list[Scene]:
         return self._by_bucket[bucket]
@@ -147,6 +153,9 @@ class SceneCatalog:
             for s in scenes:
                 if s.name == name:
                     return s
+        for s in self._reserved:
+            if s.name == name:
+                return s
         return None
 
     def names_by_bucket(self) -> dict[str, list[str]]:
@@ -255,3 +264,20 @@ class SceneCatalog:
                 if type(s) is scene_type:
                     return s
         return None
+
+
+def show_catalog(full: bool = False, extra: "list[str] | tuple[str, ...]" = ()) -> SceneCatalog:
+    """The catalog the show plays from -- the SAME call in the live app (app.py) and the simulator
+    (sim/harness.py), so the gate scores exactly what the show plays (2026-10-26). ``extra``: scene
+    names a track plan may use beyond the rotation (section_classes.ClassBook.approved_scenes()),
+    added as reserved scenes."""
+    import logging
+    by_name = {cls.name: cls for cls in ALL_SCENES}
+    reserved = []
+    for name in extra:
+        cls = by_name.get(name)
+        if cls is None:
+            logging.getLogger(__name__).warning("show catalog: no scene named %r (section class); ignored", name)
+            continue
+        reserved.append(cls())
+    return SceneCatalog(full=full, reserved=reserved)

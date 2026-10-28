@@ -55,7 +55,12 @@ def main() -> int:
     p.add_argument("--drive", dest="drive", action="store_true", default=None, help="the track plan runs the sections (default when a USB export is found)")
     p.add_argument("--no-drive", dest="drive", action="store_false", help="classifier mode even with a USB export")
     p.add_argument("--sweep-n", type=int, default=None, help="size of the marker-free USB sample (default 20 with a USB export, else 0)")
+    p.add_argument("--no-regress", action="store_true",
+                   help="no-regression gate: the tuning set may not fall (instead of +0.005); never writes the baseline")
     a = p.parse_args()
+    if a.no_regress and a.write_baseline:
+        print("--no-regress never writes the baseline (a no-regression change is not a new reference); ignoring --write-baseline")
+        a.write_baseline = False
     from livereact.loop.evaluate import Evaluation, evaluate, labeled_tracks, resolve_usb, sweep_sample
     from livereact.loop.gate import compare, mode_mismatch
     usb = resolve_usb(a.usb)
@@ -90,7 +95,7 @@ def main() -> int:
     if mm:
         print(f"MODE/USB CHANGED: {mm}")
         return 2
-    verdict = compare(base, cand)
+    verdict = compare(base, cand, min_improvement=0.0) if a.no_regress else compare(base, cand)
     cj = cand.to_json()
     fl = flips(base_json, cj)
     bs, cs = base.summary(), cand.summary()

@@ -17,7 +17,7 @@ run; set the AC sleep *and* unattended-sleep timeouts to never as well (same doc
 
 Both nightly scripts dot-source `common.ps1`: UTF-8 python environment (Windows console is not UTF-8;
 `status.py` died on an accented track name), the wake request, and a kill-on-close job object so a
-stopped task (`Stop-ScheduledTask`, the 8 h limit) kills the agent's `claude.exe` tree too, not just the script.
+stopped task (`Stop-ScheduledTask`, the task's time limit: 10 h for the two-agent night) kills the agent's `claude.exe` tree too, not just the script.
 Before that they dot-source `self_update.ps1`: it pulls harness first and, if it moved, re-runs the script
 from the pulled tree (log line `self-update: pulled harness <old> -> <new>`), so a fix pushed from the Mac
 runs the same night instead of the next one.
@@ -26,9 +26,23 @@ runs the same night instead of the next one.
 
 - `nightly.ps1` — knob search only (random perturbation of `tunable` params, gated). Cheap; useful right
   after an engine change lands, pointless night after night on an unchanged engine.
-- `nightly_agent.ps1` — the **engine agent**: a headless Claude Code session works one scorer rule family
-  for `-Hours` on a branch `agent/<date>` (brief: `docs/AGENT_BRIEF.md`), the orchestrator re-runs the gate
-  itself against harness's baseline (`tools/agent/gate_head.py`), then spends `-SearchHours` on the knob
-  search around the accepted code. Nothing reaches `harness` until Josh merges the branch. Setup:
-  `docs/HANDOFF_windows_agent_setup.md`. Morning read: `results\agent\<date>\NIGHT.md` then `REPORT.md`.
-  Switch the task with `register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-Hours 4 -SearchHours 1.5"`.
+- `nightly_agent.ps1` — the **three nightly agents** (2026-10-27), one after the other, each a headless Claude
+  Code session on its own branch cut from harness and verified by the orchestrator, never by itself:
+  1. **Bugs & UI** (`docs/AGENT_BRIEF_UI.md`, `-UiHours`, branch `agent/<date>-ui`): sweep crashes first,
+     then `docs/UI_BUGS.md` (the Venue tab); gated by `tools/agent/gate_ui.py`.
+  2. **App** (`docs/AGENT_BRIEF_APP.md`, `-AppHours`, branch `agent/<date>-app`): the publishable app --
+     fixture definitions, rig manager, presets, Manual Override panel, packaging -- from
+     `docs/APP_ROADMAP.md`, never touching the show; gated by `tools/agent/gate_app.py` (offline tests,
+     UI checks, show unchanged).
+  3. **Track Classifier** (`docs/AGENT_BRIEF.md`, `-Hours`, branch `agent/<date>`): classes of sections
+     across the whole USB library, scene proposals for Josh, then one planner improvement; gated by
+     `tools/agent/gate_head.py` against harness's baseline.
+  Then `-SearchHours` of knob search around the Track Classifier's accepted code. `-HardStop` (default
+  `23:30`) cuts every agent's deadline and the search to that clock time. Nothing reaches `harness`
+  until Josh merges a branch (NIGHT.md flags files changed on more than one branch). Before the agents the
+  baseline is regenerated if the pull changed code, scorer or labels (`tools/agent/baseline_fresh.py`).
+  Setup: `docs/HANDOFF_windows_agent_setup.md`. Morning read: `results\agent\<date>\NIGHT.md`, then
+  `ui\REPORT.md`, `app\REPORT.md`, `tracks\REPORT.md`, `tracks\SCENE_PROPOSALS.md`. Register (from an
+  administrator PowerShell) with
+  `register_task.ps1 -Script nightly_agent.ps1 -ScriptArgs "-UiHours 1.5 -AppHours 2.5 -Hours 2.5 -SearchHours 1 -Push" -At "2:00PM" -LimitHours 10`
+  (about 9 h from 2 PM: sweep 0.7 + UI 1.5 + app 2.5 + tracks 2.5 + search 1 + gates; done by about 23:15).

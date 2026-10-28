@@ -7,7 +7,12 @@ state.json shape:
   {"family": <int|null>,            # the family the agent is working on (status.py's next_family if null)
    "subgoal": "<free text>",         # what to continue tomorrow
    "open_questions": ["..."],        # things only Josh can answer; the agent appends, Josh clears
-   "nights": [{"date","branch","commits","gate","tests","family","note"}]}
+   "nights": [{"date","branch","role","commits","gate","tests","family","note"}],
+   "roles": {"ui": {...}, "app": {...}}}       # each {"family", "subgoal", "open_questions"}
+
+Three agents run each night (2026-10-27): the Track Classifier (role "tracks") keeps the top-level
+family/subgoal/open_questions, as before; the Bugs & UI agent (role "ui") and the App agent (role
+"app") have their own under roles.<role>, so none can steer another's next night.
 """
 from __future__ import annotations
 
@@ -23,6 +28,16 @@ def load(path: Path) -> dict:
     return {"family": None, "subgoal": "", "open_questions": [], "nights": []}
 
 
+ROLES = ("tracks", "ui", "app")
+
+
+def role_state(state: dict, role: str) -> dict:
+    """The dict holding a role's family / subgoal / open_questions (the top level for "tracks")."""
+    if role == "tracks":
+        return state
+    return state.setdefault("roles", {}).setdefault(role, {"family": None, "subgoal": "", "open_questions": []})
+
+
 def record(state: dict, **night) -> dict:
     """Merge one record into the night keyed by (date, branch).
 
@@ -31,6 +46,8 @@ def record(state: dict, **night) -> dict:
     fields. Non-empty values win, notes are concatenated.
     """
     questions = night.pop("questions", None) or []
+    role = night.get("role") or "tracks"
+    night["role"] = role
     nights = state.setdefault("nights", [])
     prev = next((n for n in nights if n.get("date") == night["date"] and n.get("branch") == night["branch"]), None)
     if prev is None:
@@ -42,13 +59,14 @@ def record(state: dict, **night) -> dict:
                     prev["note"] = f"{prev['note']}; {v}" if prev.get("note") else v
             elif v not in (None, ""):
                 prev[k] = v
+    rs = role_state(state, role)
     if night.get("family") is not None:
-        state["family"] = night["family"]
+        rs["family"] = night["family"]
     if night.get("subgoal"):
-        state["subgoal"] = night["subgoal"]
+        rs["subgoal"] = night["subgoal"]
     for q in questions:
-        if q not in state.setdefault("open_questions", []):
-            state["open_questions"].append(q)
+        if q not in rs.setdefault("open_questions", []):
+            rs["open_questions"].append(q)
     state["updated"] = datetime.now().isoformat(timespec="seconds")
     return state
 
@@ -65,12 +83,13 @@ def main() -> int:
     p.add_argument("--subgoal", default="")
     p.add_argument("--note", default="")
     p.add_argument("--question", action="append", default=[])
+    p.add_argument("--role", choices=ROLES, default="tracks")
     a = p.parse_args()
     sp = Path(a.state)
     sp.parent.mkdir(parents=True, exist_ok=True)
-    st = record(load(sp), date=a.date, branch=a.branch, commits=a.commits, gate=a.gate, tests=a.tests,
-                family=a.family, subgoal=a.subgoal, note=a.note, questions=a.question)
-    sp.write_text(json.dumps(st, indent=1), encoding="utf-8")
+    st = record(load(sp), date=a.date, branch=a.branch, role=a.role, commits=a.commits, gate=a.gate,
+                tests=a.tests, family=a.family, subgoal=a.subgoal, note=a.note, questions=a.question)
+    sp.write_text(json.dumps(st, indent=1, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(st["nights"][-1]))
     return 0
 

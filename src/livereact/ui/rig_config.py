@@ -154,7 +154,7 @@ class RigConfigTab(QtWidgets.QWidget):
             if base.get("fixture_type") != edited["fixture_type"]:
                 base = {}  # a different fixture class: its geometry/calibration no longer applies
             slots.append({**base, **edited})
-        data = rig_to_dict(self.rig, "Edited via the LiveReact console's Rig Config tab.")
+        data = rig_to_dict(self.rig, self.rig.description or "Edited via the LiveReact console's Rig Config tab.")
         data["slots"] = slots
         return data
 
@@ -181,5 +181,6 @@ class RigConfigTab(QtWidgets.QWidget):
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2)
         log.info("Saved rig config to %s", path)
+        self.rig_path = path
         self.status.setText(f"Saved to {path} — restart with --rig \"{path}\" to apply.")
         self.status.setStyleSheet("color:#3c6;")

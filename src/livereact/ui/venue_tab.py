@@ -31,6 +31,7 @@ movement slew limit still apply to a pinned fixture. Leaving the tab clears ever
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 from typing import Callable
@@ -56,6 +57,10 @@ from .theme import MUTED
 log = logging.getLogger(__name__)
 
 _MAX_FT = 500.0
+
+
+_NOT_PLACED = ("{} is not placed yet: the X / Y shown is only where it is drawn. "
+               "Type its X, Y and Height (or drag it) first.")
 
 
 def _ft_box(value_m: float, decimals: int = 1, step: float = 0.5, lo: float = 0.0, hi: float = _MAX_FT) -> QtWidgets.QDoubleSpinBox:
@@ -105,7 +110,7 @@ class VenueTab(QtWidgets.QWidget):
 
     def __init__(self, rig: Rig, rig_path: str | None,
                  on_pins: Callable[[CalibrationPins | None], None] | None = None,
-                 is_frozen: Callable[[], bool] | None = None) -> None:
+                 is_frozen: Callable[[], bool] | None = None, active: bool = True) -> None:
         super().__init__()
         self.rig = rig
         self.rig_path = rig_path
@@ -113,10 +118,19 @@ class VenueTab(QtWidgets.QWidget):
         self.is_frozen = is_frozen or (lambda: False)
         self._selected: str = ""
         self._loading = False
+        # 2026-10-26: pins (full-white beam, jog, laser probe) only while this tab is
+        # on screen. Built hidden inside the console, selecting the first fixture at
+        # construction used to light a moving head and hold off the auto-blackout
+        # from launch; the console now passes active=False and calls activate().
+        self._active = active
         if self.rig.venue is None:
             w, l, h = (ft_to_m(v) for v in DEFAULT_VENUE_FT)
             self.rig.venue = Venue(w, l, h, Venue.default_targets(w, l, h))
             self.rig.refresh_geometry()
+
+        # Rig.refresh_geometry only ever overwrites `side` from x: keep the sides
+        # the rig came with, so Reset positions can give them back
+        self._loaded_sides = {getattr(fx, "slot_id", fx.label): fx.side for fx in rig.fixtures}
 
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 8)
@@ -129,8 +143,7 @@ class VenueTab(QtWidgets.QWidget):
         left = QtWidgets.QWidget()
         lv = QtWidgets.QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
-        lv.addWidget(self.plan, 1)
-        lv.addWidget(self._build_targets())
+        lv.addWidget(self.plan, 1)              # the whole column: the targets grid lives in the panel
         split.addWidget(left)
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -174,24 +187,29 @@ class VenueTab(QtWidgets.QWidget):
         self.b_save = QtWidgets.QPushButton("Save rig…")
         h.addWidget(self.b_reset)
         h.addWidget(self.b_save)
-        self.sb_width.valueChanged.connect(self._venue_changed)
-        self.sb_length.valueChanged.connect(self._venue_changed)
-        self.sb_height.valueChanged.connect(self._venue_changed)
+        for b, dim in ((self.sb_width, "width_m"), (self.sb_length, "length_m"), (self.sb_height, "height_m")):
+            b.valueChanged.connect(lambda v, d=dim: self._venue_changed(d, v))
         self.b_reset.clicked.connect(self._reset_positions)
         self.b_save.clicked.connect(self._save)
         return box
 
-    def _venue_changed(self) -> None:
+    def _venue_changed(self, dim: str, value_ft: float) -> None:
         if self._loading:
             return
         v = self.rig.venue
-        v.width_m = ft_to_m(self.sb_width.value())
-        v.length_m = ft_to_m(self.sb_length.value())
-        v.height_m = ft_to_m(self.sb_height.value())
+        # only the edited dimension: the boxes show 0.1 ft, and a file with no
+        # ceiling keeps none until the Ceiling box itself is edited
+        setattr(v, dim, ft_to_m(value_ft))
         self.rig.refresh_geometry()
         self.plan.refresh_layout()
         self._refresh_targets()
-        self._mark_dirty()
+        eps = 1e-6
+        outside = [fx.label for fx in self.rig.fixtures if fx.position is not None
+                   and not (-eps <= fx.position.x <= v.width_m + eps and -eps <= fx.position.y <= v.length_m + eps)]
+        outside += [n for n, p in v.targets.items()
+                    if not (-eps <= p.x <= v.width_m + eps and -eps <= p.y <= v.length_m + eps)]
+        self._mark_dirty(f"Now outside the room: {', '.join(outside)} — move them back in (or enlarge the room)."
+                         if outside else "")
 
     # ------------------------------------------------------------------ targets
     def _build_targets(self) -> QtWidgets.QWidget:
@@ -216,14 +234,18 @@ class VenueTab(QtWidgets.QWidget):
             boxes = (_ft_box(p.x), _ft_box(p.y), _ft_box(p.z))
             for col, b in enumerate(boxes, start=1):
                 self._targets_form.addWidget(b, row, col)
-                b.valueChanged.connect(lambda _v, n=name: self._target_edited(n))
+                b.valueChanged.connect(lambda v, n=name, a="xyz"[col - 1]: self._target_edited(n, a, v))
+                if hasattr(self, "_wheel_guard"):   # rebuilt boxes scroll the panel too, like the first ones
+                    b.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+                    b.installEventFilter(self._wheel_guard)
             self._target_boxes[name] = boxes
 
-    def _target_edited(self, name: str) -> None:
+    def _target_edited(self, name: str, axis: str, value_ft: float) -> None:
         if self._loading:
             return
-        bx, by, bz = self._target_boxes[name]
-        self.rig.venue.targets[name] = Point3(ft_to_m(bx.value()), ft_to_m(by.value()), ft_to_m(bz.value()))
+        # only the edited axis: the boxes show 0.1 ft, the file keeps more
+        p = self.rig.venue.targets[name]
+        self.rig.venue.targets[name] = dataclasses.replace(p, **{axis: ft_to_m(value_ft)})
         self.plan.refresh_layout()
         self._update_laser_readout()
         self._mark_dirty()
@@ -235,7 +257,7 @@ class VenueTab(QtWidgets.QWidget):
         v.setContentsMargins(0, 0, 0, 0)
 
         # fixture picker + placement
-        place = QtWidgets.QGroupBox("Fixture")
+        place = self.grp_place = QtWidgets.QGroupBox("Fixture")
         form = QtWidgets.QFormLayout(place)
         self.cb_fixture = QtWidgets.QComboBox()
         for fx in self.rig.fixtures:
@@ -250,14 +272,15 @@ class VenueTab(QtWidgets.QWidget):
         form.addRow("Y (out into the crowd)", self.sb_y)
         form.addRow("Height (lens above floor)", self.sb_z)
         form.addRow("Facing (0 = into the crowd)", self.sb_facing)
-        for b in (self.sb_x, self.sb_y, self.sb_z, self.sb_facing):
-            b.valueChanged.connect(self._placement_edited)
+        for b, axis in ((self.sb_x, "x"), (self.sb_y, "y"), (self.sb_z, "z"), (self.sb_facing, "facing")):
+            b.valueChanged.connect(lambda v, a=axis: self._placement_edited(a, v))
         v.addWidget(place)
 
         # moving head: calibrate
         self.grp_head = QtWidgets.QGroupBox("Calibrate (moving head)")
         hf = QtWidgets.QFormLayout(self.grp_head)
-        self.cb_light = QtWidgets.QCheckBox("Light the selected head — open white at full, so you can see the beam")
+        self.cb_light = QtWidgets.QCheckBox("Light the selected head — open white at full,\n"
+                                         "so you can see the beam")
         self.cb_light.setChecked(True)
         self.cb_jog = QtWidgets.QCheckBox("Jog live — pins the REAL head to the sliders")
         self.s_pan = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal); self.s_pan.setRange(0, 65535); self.s_pan.setValue(32768)
@@ -271,7 +294,10 @@ class VenueTab(QtWidgets.QWidget):
         inv = QtWidgets.QHBoxLayout(); inv.addWidget(self.cb_invert_pan); inv.addWidget(self.cb_invert_tilt); inv.addStretch(1)
         self.b_set_aim = QtWidgets.QPushButton("SET AIM — the head is on this target now")
         self.b_set_aim.setObjectName("cue")
-        self.b_set_aim2 = QtWidgets.QPushButton("ADD 2ND POINT — the head is on a DIFFERENT target now (solves direction + range)")
+        # two-line labels (this, Light, ADD BOUND POINT): on one line they made the
+        # panel wider than its column at 1280 x 800 (labels cut, help text off the edge)
+        self.b_set_aim2 = QtWidgets.QPushButton("ADD 2ND POINT — the head is on a DIFFERENT\n"
+                                                "target now (solves direction + range)")
         self.b_aim = QtWidgets.QPushButton("Aim at target (verify)")
         self.b_home = QtWidgets.QPushButton("Set home = target")
         self.l_cal = QtWidgets.QLabel("Not captured")
@@ -291,7 +317,7 @@ class VenueTab(QtWidgets.QWidget):
         # can see, ADD BOUND POINT each time; every scene then stays inside.
         self.l_bounds = QtWidgets.QLabel("Motion box: none — the head sweeps its full travel")
         self.l_bounds.setWordWrap(True)
-        self.b_bound_add = QtWidgets.QPushButton("ADD BOUND POINT — the beam is on an edge now")
+        self.b_bound_add = QtWidgets.QPushButton("ADD BOUND POINT —\nthe beam is on an edge now")
         self.b_bound_add.setObjectName("cue")
         self.b_bound_clear = QtWidgets.QPushButton("Clear box")
         brow = QtWidgets.QHBoxLayout(); brow.addWidget(self.b_bound_add, 1); brow.addWidget(self.b_bound_clear)
@@ -340,6 +366,7 @@ class VenueTab(QtWidgets.QWidget):
         self.s_hoff.valueChanged.connect(self._laser_edited)
         self.cb_probe.toggled.connect(self._probe_toggled)
 
+        v.addWidget(self._build_targets())
         v.addStretch(1)
         return panel
 
@@ -376,6 +403,7 @@ class VenueTab(QtWidgets.QWidget):
             o = self.plan.fixture_origin(fx)
             self.sb_x.setValue(m_to_ft(o.x)); self.sb_y.setValue(m_to_ft(o.y)); self.sb_z.setValue(m_to_ft(o.z))
             self.sb_facing.setValue(fx.facing_deg)
+            self._update_place_title()
             is_head, is_laser = isinstance(fx, MovingHead), isinstance(fx, Laser)
             self.grp_head.setVisible(is_head)
             self.grp_laser.setVisible(is_laser)
@@ -403,31 +431,57 @@ class VenueTab(QtWidgets.QWidget):
             self._loading = False
 
     # ------------------------------------------------------------------ placement
-    def _placement_edited(self) -> None:
+    def _placement_edited(self, axis: str, value: float) -> None:
         if self._loading:
             return
         fx = self._fx()
         if fx is None:
             return
-        fx.position = Point3(ft_to_m(self.sb_x.value()), ft_to_m(self.sb_y.value()), ft_to_m(self.sb_z.value()))
-        fx.facing_deg = self.sb_facing.value()
+        # only the edited axis: the boxes show 0.1 ft, the file keeps more
+        p = self.plan.fixture_origin(fx)
+        if axis == "facing":
+            fx.facing_deg = value
+            fx.position = p
+        else:
+            fx.position = dataclasses.replace(p, **{axis: ft_to_m(value)})
         self.rig.refresh_geometry()
         self.plan.set_fixture_position(self._selected, fx.position)
         self.plan.refresh_layout()
         self.plan.select(self._selected)
+        self._update_place_title()
         self._update_laser_readout()
-        self._mark_dirty()
+        self._mark_dirty(self._captured_warning(fx))
+
+    @staticmethod
+    def _captured_warning(fx) -> str:
+        """A SET AIM capture is solved against the position/facing it was
+        taken at (geometry.calibrate_from_capture); after a move it is kept
+        as is -- right if the head was re-hung the same way, wrong if the old
+        numbers were a typo. Say so; don't guess."""
+        if not isinstance(fx, MovingHead) or not fx.calibration.captured:
+            return ""
+        return (f"{fx.label}'s aim was captured at its old position/facing: check it with "
+                "Aim at target, and SET AIM again if the beam misses.")
+
+    def _update_place_title(self) -> None:
+        fx = self._fx()
+        self.grp_place.setTitle("Fixture" if fx is None or fx.position is not None else
+                                "Fixture — not placed yet")
 
     def _plan_changed(self) -> None:
         """A drag on the plan moved a fixture or a target."""
         fx = self._fx()
+        note = ""
         if fx is not None:
             self._loading = True
             try:
                 o = self.plan.fixture_origin(fx)
+                if abs(self.sb_x.value() - m_to_ft(o.x)) > 0.05 or abs(self.sb_y.value() - m_to_ft(o.y)) > 0.05:
+                    note = self._captured_warning(fx)      # the drag moved the selected head
                 self.sb_x.setValue(m_to_ft(o.x)); self.sb_y.setValue(m_to_ft(o.y))
             finally:
                 self._loading = False
+            self._update_place_title()
         self._loading = True
         try:
             for name, (bx, by, bz) in self._target_boxes.items():
@@ -437,13 +491,14 @@ class VenueTab(QtWidgets.QWidget):
         finally:
             self._loading = False
         self._update_laser_readout()
-        self._mark_dirty()
+        self._mark_dirty(note)
 
     def _reset_positions(self) -> None:
         self._clear_pins()
         for fx in self.rig.fixtures:
             fx.position = None
             fx.facing_deg = 0.0
+            fx.side = self._loaded_sides.get(getattr(fx, "slot_id", fx.label), fx.side)
         self.rig.refresh_geometry()
         self.plan.refresh_layout()
         if self._selected:
@@ -476,7 +531,7 @@ class VenueTab(QtWidgets.QWidget):
         ticked, and even then the no-music auto-blackout -- core/show_engine.py
         -- blacked it out; now the pins hold that failsafe off.)"""
         fx = self._fx()
-        if not isinstance(fx, MovingHead) or self.on_pins is None:
+        if not isinstance(fx, MovingHead) or self.on_pins is None or not self._active:
             return
         light = self.cb_light.isChecked()
         jog = self.cb_jog.isChecked()
@@ -508,13 +563,26 @@ class VenueTab(QtWidgets.QWidget):
         p = self.rig.venue.targets.get(name)
         return (name, p) if p is not None else None
 
+    def _head_is_live(self) -> bool:
+        """A capture stores the sliders: only true of the real head while
+        Jog live pins it there (and Freeze is not holding the output)."""
+        if not self.cb_jog.isChecked():
+            self.status.setText("Tick Jog live first: the sliders only move the real head while it is on.")
+            return False
+        if self.is_frozen():
+            self.status.setText("Freeze is on — unfreeze (F) so the head is where the sliders say.")
+            return False
+        return True
+
     def _set_aim(self) -> None:
         fx = self._fx()
         tp = self._target_point()
         if not isinstance(fx, MovingHead) or tp is None:
             return
+        if not self._head_is_live():
+            return
         if fx.position is None:
-            self.status.setText("Place the head first (X / Y / Height).")
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01 = self._pan_tilt01()
@@ -523,8 +591,7 @@ class VenueTab(QtWidgets.QWidget):
             invert_pan=self.cb_invert_pan.isChecked(), invert_tilt=self.cb_invert_tilt.isChecked(),
             target_name=name)
         self._update_cal_label()
-        self.status.setText(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
-        self._mark_dirty()
+        self._mark_dirty(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
 
     def _set_aim_second(self) -> None:
         """Second capture: the head is now on a DIFFERENT target. Together
@@ -535,8 +602,10 @@ class VenueTab(QtWidgets.QWidget):
         tp = self._target_point()
         if not isinstance(fx, MovingHead) or tp is None:
             return
+        if not self._head_is_live():
+            return
         if fx.position is None:
-            self.status.setText("Place the head first (X / Y / Height).")
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         c: HeadCalibration = fx.calibration
         if not c.captured or c.pan01 is None or c.tilt01 is None or c.target not in self.rig.venue.targets:
@@ -565,8 +634,7 @@ class VenueTab(QtWidgets.QWidget):
         msg = f"Solved {fx.label} from {c.target} + {name_b}. Now 'Aim at target' with a third target to verify."
         if weak:
             msg += f"  ({'/'.join(weak)} barely moved between the two points — kept the profile's range for it; pick points further apart.)"
-        self.status.setText(msg)
-        self._mark_dirty()
+        self._mark_dirty(msg)
 
     def _aim_at_target(self) -> None:
         fx = self._fx()
@@ -588,36 +656,35 @@ class VenueTab(QtWidgets.QWidget):
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
         fx.home_pan, fx.home_tilt = pan01, tilt01
-        self.status.setText(f"Home = {name} (pan {pan01:.3f}, tilt {tilt01:.3f})" + ("" if ok else " — clamped"))
         self._update_cal_label()
-        self._mark_dirty()
+        self._mark_dirty(f"Home = {name} (pan {pan01:.3f}, tilt {tilt01:.3f})" + ("" if ok else " — clamped")
+                         + ("  — unused while a motion box is set (Clear box to use it)"
+                            if fx.bounds is not None else ""))
 
     # --- raw motion box (2026-10-10) ---
     def _bound_add(self) -> None:
         fx = self._fx()
-        if not isinstance(fx, MovingHead):
+        if not isinstance(fx, MovingHead) or not self._head_is_live():
             return
         pan01, tilt01 = self._pan_tilt01()
         fx.bounds = (fx.bounds.include(pan01, tilt01) if fx.bounds is not None
                      else MotionBounds.point(pan01, tilt01))
-        self._update_bounds_label()
+        self._update_cal_label()
         b = fx.bounds
         if b.pan_max - b.pan_min < 0.01 and b.tilt_max - b.tilt_min < 0.01:
-            self.status.setText(f"{fx.label}: first edge stored (pan {pan01:.3f} / tilt {tilt01:.3f}). "
-                                "Jog to the opposite edge and ADD BOUND POINT again.")
+            self._mark_dirty(f"{fx.label}: first edge stored (pan {pan01:.3f} / tilt {tilt01:.3f}). "
+                             "Jog to the opposite edge and ADD BOUND POINT again.")
         else:
-            self.status.setText(f"{fx.label} motion box: pan {b.pan_min:.3f}–{b.pan_max:.3f}, "
-                                f"tilt {b.tilt_min:.3f}–{b.tilt_max:.3f}. Add more edges or Save rig…")
-        self._mark_dirty()
+            self._mark_dirty(f"{fx.label} motion box: pan {b.pan_min:.3f}–{b.pan_max:.3f}, "
+                             f"tilt {b.tilt_min:.3f}–{b.tilt_max:.3f}. Add more edges or Save rig…")
 
     def _bound_clear(self) -> None:
         fx = self._fx()
         if not isinstance(fx, MovingHead):
             return
         fx.bounds = None
-        self._update_bounds_label()
-        self.status.setText(f"{fx.label}: motion box cleared — full travel again.")
-        self._mark_dirty()
+        self._update_cal_label()
+        self._mark_dirty(f"{fx.label}: motion box cleared — full travel again.")
 
     def _update_bounds_label(self) -> None:
         fx = self._fx()
@@ -637,6 +704,7 @@ class VenueTab(QtWidgets.QWidget):
         self._update_bounds_label()
         c: HeadCalibration = fx.calibration
         home = (f"  ·  home {fx.home_pan:.2f}/{fx.home_tilt:.2f}"
+                + (" (unused: the motion box wins)" if fx.bounds is not None else "")
                 if fx.home_pan is not None and fx.home_tilt is not None else "")
         if c.captured:
             two = (f"  ·  2-point ({c.target2}): pan travel {c.pan_range_deg:.0f}°, tilt travel {c.tilt_range_deg:.0f}°"
@@ -678,7 +746,7 @@ class VenueTab(QtWidgets.QWidget):
 
     def _push_laser_pins(self) -> None:
         fx = self._fx()
-        if not isinstance(fx, Laser) or self.on_pins is None:
+        if not isinstance(fx, Laser) or self.on_pins is None or not self._active:
             return
         from ..merge.merge import Contribution
         c = Contribution()
@@ -687,8 +755,11 @@ class VenueTab(QtWidgets.QWidget):
         self.on_pins(CalibrationPins(channels=channels, laser_open=True))
 
     # ------------------------------------------------------------------ save
-    def _mark_dirty(self) -> None:
-        self.status.setText("Unsaved changes — Save rig… writes them to the rig file.")
+    def _mark_dirty(self, note: str = "") -> None:
+        """Flag unsaved edits; ``note`` is the action's own message, kept in
+        front (it used to be overwritten the moment it was set)."""
+        self.status.setText((note + "  ·  " if note else "")
+                            + "Unsaved changes — Save rig… writes them to the rig file.")
         self.status.setStyleSheet(f"color:{MUTED};")
 
     def _save(self) -> None:
@@ -697,14 +768,27 @@ class VenueTab(QtWidgets.QWidget):
         if not path:
             return
         try:
-            save_rig(self.rig, path, "Venue layout + calibration edited in the LiveReact console's Venue tab.")
+            # the rig's own description survives; the stock line only fills an empty one
+            save_rig(self.rig, path, self.rig.description
+                     or "Venue layout + calibration edited in the LiveReact console's Venue tab.")
         except RigError as exc:
             self.status.setText(f"Not saved — {exc}")
             self.status.setStyleSheet("color:#c33;")
             return
+        self.rig_path = path                    # the next Save offers the file just written
         self.status.setText(f"Saved to {path}. Positions/calibration are already live; fixture patching needs a restart.")
         self.status.setStyleSheet("color:#3c6;")
 
+    def activate(self) -> None:
+        """Called by the console when the operator opens this tab: re-light the
+        selected head (its pins were cleared on leaving) and re-highlight it."""
+        self._active = True
+        if self._selected:
+            self.plan.select(self._selected)
+            if isinstance(self._fx(), MovingHead) and self.cb_light.isChecked():
+                self._push_head_pins()
+
     def deactivate(self) -> None:
         """Called by the console when the operator leaves this tab."""
+        self._active = False
         self._clear_pins()

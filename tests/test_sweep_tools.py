@@ -78,3 +78,22 @@ def test_propose_markers_build_on_a_synthetic_export(tmp_path):
     assert sc["_todo"] is True and sc["track"] == "Other"
     assert not (tdir / "Lift.look.json").exists()
     assert not list(tdir.glob("Other.timeline.json"))         # never writes a timeline
+
+
+def test_classify_library_counts_classes_and_caches(tmp_path):
+    cl = _load("classify_library")
+    from livereact.rekordbox import section_classes
+    usb = _export(tmp_path, [(4, "Lift", "Lift.mp3"), (5, "Other", "Other.mp3")])
+    tdir = tmp_path / "tracks"
+    tdir.mkdir()
+    book = section_classes.from_dict({"schema": 1, "classes": [
+        {"name": "drop_full", "kind": "drop", "rule": {"bars": [7.75, 10000]}},
+        {"name": "drop_clap", "kind": "drop", "rule": None}]})
+    cache = tmp_path / "cache"
+    lines, data = cl.build(usb, book, tdir, cache)
+    text = "\n".join(lines)
+    assert data["tracks"] == 2 and data["classes"]["drop_full"] >= 2 and data["classes"]["drop_clap"] == 0
+    assert "### drop_full" in text and "not defined yet" in text and "## Not matched by any class" in text
+    assert len(list(cache.glob("*.json"))) == 2
+    _, again = cl.build(usb, book, tdir, cache)                # second run reads the cache
+    assert again["classes"] == data["classes"]

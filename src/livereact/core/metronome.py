@@ -59,6 +59,7 @@ PLAN_ROLL_WINDOW_BEATS = 32    # a snare-roll start this close before a planned 
                                # the live roll detector (core/roll_period.py) is allowed to pull the look forward.
 PSSI_BEAT_OFFSET = 0           # status beat_count -> phrase-table beat index correction; a Gate-1 hardware
                                # measurement (plan: lets-start-building-this-shimmering-knuth.md). ear-tuned.
+_BACKDATE_EPS_S = 1e-3         # a cue's back-dated base sits this far past its dwell floor (float rounding), not a knob
 
 # Loops (2026-10-26). The deck's status packet says when it is looping (play_state
 # "looping"); the beat counter then cycles inside the loop every pass. A loop is the
@@ -1213,10 +1214,13 @@ class Metronome(threading.Thread):
         else:
             self._base_committed = base
             self._base_committed_since = now
+        # back-dated a hair PAST the floor (2026-10-26, TIME-11): exactly on it, float rounding
+        # can read `now - since` a few 1e-15 s short of the dwell (132 BPM at 238.26 s), and
+        # the first tick of a planned OUTRO showed BREAK for one tick before the overlay agreed
         if bucket == EnergyBucket.PEAK:
-            self._base_committed_since = now - self._dwell_s(EnergyBucket.DROP)
+            self._base_committed_since = now - self._dwell_s(EnergyBucket.DROP) - _BACKDATE_EPS_S
         elif bucket == EnergyBucket.OUTRO:
-            self._base_committed_since = now - self._dwell_s(EnergyBucket.BREAK)
+            self._base_committed_since = now - self._dwell_s(EnergyBucket.BREAK) - _BACKDATE_EPS_S
             self._last_drop_or_peak_t = now  # "after a recent drop" -- the operator says so
         self._apply_bucket_overlay(now, peak_allowed=peak_allowed, outro_allowed=outro_allowed)
         if bucket == EnergyBucket.PEAK and self._bucket_committed != EnergyBucket.PEAK:
@@ -2039,6 +2043,10 @@ class Metronome(threading.Thread):
                 self._build_cue_until = now + beats_left * (60.0 / (self._bpm if self._bpm > 0 else NOMINAL_BPM))
                 self._build_cue_source = "rekordbox"
                 self._apply_bucket_overlay(now, peak_allowed=False, outro_allowed=False)
+            elif bucket == "outro" and self._bucket_committed == EnergyBucket.BUILD:
+                # BUILD -> OUTRO is not a legal move (TIME-13; OUTRO is a version of BREAK, D-22):
+                # enter the break, and the overlay promotes it after BREAK's own dwell as usual
+                self._apply_manual_override(EnergyBucket.BREAK, now, peak_allowed=False, outro_allowed=True)
             elif bucket == "outro":
                 self._apply_manual_override(EnergyBucket.OUTRO, now, peak_allowed=False, outro_allowed=True)
             else:  # break (intro / breakdown / verse)
