@@ -96,6 +96,7 @@ class SectionState:
     laser_allowed: bool = True
     beats_to_drop: int = -1
     planned_hit: float = 0.0
+    roll_progress: float = -1.0       # inside a planned roll lead-in: 0..1 through it; -1 = not in a roll
     # the deck is looping: track_beat (and everything above) is pinned at loop_pin_beat
     looping: bool = False
     loop_pin_beat: int = 0
@@ -1960,6 +1961,8 @@ class Metronome(threading.Thread):
             laser_allowed=ps.laser_allowed if ps is not None else True,
             beats_to_drop=plan.beats_to_drop(track_beat) if plan is not None else -1,
             planned_hit=ps.hit if ps is not None else 0.0,
+            roll_progress=(min(1.0, max(0.0, (track_beat - ps.beat) / max(1, ps.end_beat - ps.beat)))
+                           if ps is not None and ps.roll else -1.0),
             looping=looping, loop_pin_beat=loop_pin_beat,
         )
         if self.phrases_mode != "drive":
@@ -2197,6 +2200,8 @@ class Metronome(threading.Thread):
             planned_strobe_allowed=self._section.strobe_allowed,
             planned_laser_allowed=self._section.laser_allowed,
             beats_to_drop=self._section.beats_to_drop,
+            planned_roll_progress=self._section.roll_progress if self._section.plan_active else -1.0,
+            planned_hit=self._section.planned_hit if self._section.plan_active else 0.0,
             in_transition=now < self._transition_until,
             free_running=not self._is_pdl_fresh(now),
             pdl_fresh=self._is_pdl_fresh(now),

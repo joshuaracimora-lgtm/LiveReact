@@ -125,3 +125,17 @@ def test_audio_loss_goes_dark():
     clock.advance(0.05)
     c = eng.tick(_snap(bucket="drop", bar=12, audio_fresh=False), rig)
     assert not eng.active
+
+
+def test_a_planned_roll_holds_the_fan_for_the_bass_hit_after_it():
+    """2026-10-28: the roll is the start of the drop, but the fan belongs to the hit after the roll."""
+    eng, clock, rig = _engine()
+    _run(eng, clock, rig, _snap(bucket="build", bar=10), 2 * BAR_S)
+    roll = dict(bucket="drop", drop_start_bar=12, plan_active=True, section_kind="drop", planned_laser_allowed=True)
+    for i, p in enumerate((0.0, 0.25, 0.5, 0.75)):
+        clock.advance(0.05)
+        c = eng.tick(_snap(bar=12 + 2 * i, planned_roll_progress=p, **roll), rig)
+        assert not eng.active and c.values[rig.fixture("laser_l").offset] == 0
+    clock.advance(0.05)
+    eng.tick(_snap(bar=20, planned_roll_progress=-1.0, **roll), rig)        # the chorus: the bass is back
+    assert eng.active and eng.trigger == "drop"
