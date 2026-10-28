@@ -106,6 +106,16 @@ class RigConfigTab(QtWidgets.QWidget):
         v.addWidget(self.status)
         self.check_overlaps()
 
+    def reload_definitions(self) -> None:
+        """Pick up definitions added to the user library since the tab was built."""
+        for d in _user_definitions():
+            if d.id not in self.definitions:
+                self.definitions[d.id] = d
+                for r in range(self.table.rowCount()):
+                    tc = self.table.cellWidget(r, C_TYPE)
+                    if isinstance(tc, QtWidgets.QComboBox):
+                        tc.addItem(f"{d.manufacturer} {d.model} ({d.id})", _DEF + d.id)
+
     # ------------------------------------------------------------------ rows
     def _type_key(self, ftype: str) -> str:
         """A row's type combo key for a rig ``type_name`` (native type or ``id@mode``)."""

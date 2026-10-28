@@ -55,8 +55,6 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-36. **P2 fixtures menu.** Open `FixtureLibraryBrowser` from the console (a "Fixtures" menu next to "Rig") and
-    refresh the Rig Config tab's type list after a fixture is added. Accept: UI test.
 37. [JOSH] **P3 check the OFL URLs + data license.** `fixtures/ofl.py` `REGISTER_URL`, `MANUFACTURERS_URL`,
     `FIXTURE_URL` point at OFL's GitHub `master` branch and were not checked by hand (the agent has no
     internet). Confirm them (or OFL's own API), and decide the `license` string the wizard passes to
@@ -247,3 +245,7 @@ Hard rules for every item, whoever does it:
   `AboutDialog`: version (package metadata) and notices (PySide6/Qt, Anthropic SDK, platformdirs, pypdf,
   keyring from their metadata; prodj-link and OFL marked "to confirm"), plus OFL attribution per imported
   fixture. Tests: `tests/test_app_first_run.py`. Showing them at start-up / in a Help menu is item 40.
+- **36. P2 fixtures menu** (2026-10-28). The console has a Fixtures menu: "Fixture library…" opens
+  `FixtureLibraryBrowser` (which now emits `library_changed`), "Anthropic API key…" opens the key dialog
+  (item 38). `RigConfigTab.reload_definitions()` adds newly saved definitions to every row's type list.
+  Tests: `tests/test_app_fixtures_menu.py`.

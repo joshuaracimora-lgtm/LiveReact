@@ -132,7 +132,8 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             self.laser_show_tab = self._build_laser_show_tab()
             tabs.addTab(self.laser_show_tab, "Laser Show")
         tabs.addTab(self.venue_tab, "Venue")
-        tabs.addTab(RigConfigTab(app.rig, rig_path), "Rig Config")
+        self.rig_config = RigConfigTab(app.rig, rig_path)
+        tabs.addTab(self.rig_config, "Rig Config")
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
         self.setCentralWidget(tabs)
@@ -140,6 +141,10 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.rig_manager = None
         rig_menu = self.menuBar().addMenu("&Rig")
         rig_menu.addAction("Rig manager…", self.open_rig_manager)
+        self.fixture_library = None
+        fx_menu = self.menuBar().addMenu("&Fixtures")
+        fx_menu.addAction("Fixture library…", self.open_fixture_library)
+        fx_menu.addAction("Anthropic API key…", self.open_api_key)
         self.resize(1280, 800)
 
         self._install_shortcuts()
@@ -423,6 +428,21 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.rig_manager.rig_chosen.connect(self._rig_chosen)
         self.rig_manager.show()
         return self.rig_manager
+
+    def open_fixture_library(self):
+        from .fixture_library import FixtureLibraryBrowser
+        self.fixture_library = FixtureLibraryBrowser()
+        self.fixture_library.setWindowTitle("Fixture library")
+        # a fixture added or confirmed there shows up in Rig Config's type list
+        self.fixture_library.library_changed.connect(self.rig_config.reload_definitions)
+        self.fixture_library.show()
+        return self.fixture_library
+
+    def open_api_key(self):
+        from .api_key import ApiKeyDialog
+        dlg = ApiKeyDialog(self)
+        dlg.show()
+        return dlg
 
     def _rig_chosen(self, path: str) -> None:
         """Switch live when the app can (App.switch_rig, roadmap item 4); until then the

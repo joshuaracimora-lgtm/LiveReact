@@ -23,6 +23,7 @@ def origin_label(origin: str, source_kind: str) -> str:
 
 
 class FixtureLibraryBrowser(QtWidgets.QWidget):
+    library_changed = QtCore.Signal()
     def __init__(self, parent: QtWidgets.QWidget | None = None, save=None) -> None:
         super().__init__(parent)
         self._save = save
@@ -52,6 +53,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
 
     def reload(self) -> None:
         self.entries = list_definitions()
+        self.library_changed.emit()
         self.table.setRowCount(0)
         for e in self.entries:
             d = e.definition
