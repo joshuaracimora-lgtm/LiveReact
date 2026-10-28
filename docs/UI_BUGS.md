@@ -104,7 +104,8 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 - **Reset positions left every fixture on the side last derived from its x** (a left head dragged right
   stayed "right" with no position). The Venue tab keeps the sides the rig had when it opened and Reset
-  positions gives them back. UI-only; the centre-line case in `Rig.refresh_geometry` is still open. Test:
+  positions gives them back. (2026-10-28: now done by `Rig.refresh_geometry` itself, which gives an
+  unplaced fixture its declared side; the tab's own copy was removed.) Test:
   `tests/test_console.py::test_reset_positions_restores_each_fixtures_side` (2026-10-26).
 
 - **An unplaced fixture showed X/Y, yet SET AIM said "Place the head first"**: the boxes show where it
