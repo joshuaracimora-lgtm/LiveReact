@@ -1,0 +1,129 @@
+# Build LiveReact installers (docs/APP_ROADMAP.md item 32): Windows x64, macOS arm64, macOS x86_64.
+# Runs on a version tag or by hand. Signing / notarization steps run only when their secrets are
+# configured (item 34); without them the artifacts are unsigned.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: macos-14
+            target: macos-arm64
+          - os: macos-13
+            target: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    env:
+      HAS_WINDOWS_SIGNING: ${{ secrets.AZURE_SIGNING_ACCOUNT != '' }}
+      HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[ui,net,hardware,app]" pyinstaller
+
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          [[ "$GITHUB_REF_TYPE" == "tag" ]] || v="0.0.0-dev"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: PyInstaller (one folder)
+        run: pyinstaller packaging/livereact.spec --noconfirm
+
+      # ---------------------------------------------------------------- Windows
+      - name: Sign the executable (Azure Trusted Signing)
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_SIGNING == 'true'
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: dist/LiveReact
+          files-folder-filter: exe,dll,pyd
+          files-folder-recurse: true
+
+      - name: Installer (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" "/DAppVersion=${{ steps.version.outputs.version }}" packaging\windows\livereact.iss
+
+      - name: Sign the installer
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_SIGNING == 'true'
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: dist/installer
+          files-folder-filter: exe
+
+      # ------------------------------------------------------------------ macOS
+      - name: Codesign (hardened runtime)
+        if: runner.os == 'macOS' && env.HAS_APPLE_SIGNING == 'true'
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+          rm cert.p12
+          codesign --deep --force --options runtime --timestamp \
+            --entitlements packaging/macos/entitlements.plist \
+            --sign "$APPLE_SIGNING_IDENTITY" dist/LiveReact.app
+
+      - name: Disk image
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist/installer
+          hdiutil create -volname LiveReact -srcfolder dist/LiveReact.app -ov -format UDZO \
+            "dist/installer/LiveReact-${{ steps.version.outputs.version }}-${{ matrix.target }}.dmg"
+
+      - name: Notarize
+        if: runner.os == 'macOS' && env.HAS_APPLE_SIGNING == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit dist/installer/*.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/installer/*.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiveReact-${{ steps.version.outputs.version }}-${{ matrix.target }}
+          path: dist/installer/*
+          if-no-files-found: error

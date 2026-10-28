@@ -1,0 +1,52 @@
+{
+  "$comment": "Written for LiveReact's tests in Open Fixture Library's format; not an OFL fixture.",
+  "name": "Test Spot 60",
+  "categories": ["Moving Head", "Color Changer"],
+  "meta": {"authors": ["LiveReact tests"]},
+  "physical": {"focus": {"type": "Spot", "panMax": 540, "tiltMax": 270}},
+  "wheels": {
+    "Color Wheel": {"slots": [{"type": "Open"}, {"type": "Color", "name": "Red", "colors": ["#FF0000"]},
+                              {"type": "Color", "name": "Blue", "colors": ["#0000ff"]}]},
+    "Gobo Wheel": {"slots": [{"type": "Open"}, {"type": "Gobo", "name": "Dots"}]}
+  },
+  "availableChannels": {
+    "Pan": {"fineChannelAliases": ["Pan fine"], "defaultValue": "50%", "capability": {"type": "Pan", "angleStart": "0deg", "angleEnd": "540deg"}},
+    "Tilt": {"fineChannelAliases": ["Tilt fine", "Tilt fine^2"], "defaultValue": 128, "capability": {"type": "Tilt", "angleStart": "0deg", "angleEnd": "270deg"}},
+    "Pan/Tilt Speed": {"capability": {"type": "PanTiltSpeed", "speedStart": "fast", "speedEnd": "slow"}},
+    "Dimmer": {"capability": {"type": "Intensity"}},
+    "Shutter": {
+      "defaultValue": 8,
+      "capabilities": [
+        {"dmxRange": [0, 7], "type": "ShutterStrobe", "shutterEffect": "Closed"},
+        {"dmxRange": [8, 15], "type": "ShutterStrobe", "shutterEffect": "Open"},
+        {"dmxRange": [16, 255], "type": "ShutterStrobe", "shutterEffect": "Strobe", "speedStart": "1Hz", "speedEnd": "20Hz"}
+      ]
+    },
+    "Color Wheel": {
+      "capabilities": [
+        {"dmxRange": [0, 9], "type": "WheelSlot", "slotNumber": 1},
+        {"dmxRange": [10, 19], "type": "WheelSlot", "slotNumber": 2},
+        {"dmxRange": [20, 29], "type": "WheelSlot", "slotNumber": 3},
+        {"dmxRange": [30, 255], "type": "WheelRotation", "speedStart": "slow CW", "speedEnd": "fast CW"}
+      ]
+    },
+    "Gobo Wheel": {
+      "capabilities": [
+        {"dmxRange": [0, 9], "type": "WheelSlot", "slotNumber": 1},
+        {"dmxRange": [10, 255], "type": "WheelSlot", "slotNumber": 2}
+      ]
+    },
+    "Zoom": {"capability": {"type": "Zoom", "angleStart": "10deg", "angleEnd": "30deg"}},
+    "Iris": {"capability": {"type": "Iris", "openPercentStart": "closed", "openPercentEnd": "open"}},
+    "Reset": {
+      "capabilities": [
+        {"dmxRange": [0, 199], "type": "NoFunction"},
+        {"dmxRange": [200, 255], "type": "Maintenance", "comment": "Reset all", "hold": "3s"}
+      ]
+    }
+  },
+  "modes": [
+    {"name": "Basic", "shortName": "9ch", "channels": ["Pan", "Tilt", "Pan/Tilt Speed", "Dimmer", "Shutter", "Color Wheel", "Gobo Wheel", "Zoom", "Reset"]},
+    {"name": "Extended", "shortName": "13ch", "channels": ["Pan", "Pan fine", "Tilt", "Tilt fine", "Tilt fine^2", "Pan/Tilt Speed", "Dimmer", "Shutter", "Color Wheel", "Gobo Wheel", "Zoom", "Iris", "Reset"]}
+  ]
+}

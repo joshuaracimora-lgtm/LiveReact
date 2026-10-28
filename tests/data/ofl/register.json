@@ -1,0 +1,13 @@
+{
+  "$comment": "A small register in Open Fixture Library's format, written for LiveReact's tests.",
+  "filesystem": {
+    "test-maker/test-par-rgbw": {"name": "Test Par RGBW", "lastActionDate": "2026-01-01", "lastAction": "created"},
+    "test-maker/test-spot-60": {"name": "Test Spot 60", "lastActionDate": "2026-01-01", "lastAction": "created"},
+    "other-co/beam-laser": {"name": "Test Beam Laser", "lastActionDate": "2026-01-01", "lastAction": "created"},
+    "other-co/old-name": {"redirectTo": "other-co/beam-laser", "reason": "FixtureRenamed"}
+  },
+  "manufacturers": {
+    "test-maker": ["test-par-rgbw", "test-spot-60"],
+    "other-co": ["beam-laser", "wash-bar-12"]
+  }
+}

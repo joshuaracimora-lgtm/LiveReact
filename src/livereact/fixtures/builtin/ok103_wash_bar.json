@@ -1,0 +1,50 @@
+{
+ "schema": "livereact-fixture/1",
+ "id": "ok103_wash_bar",
+ "manufacturer": "OK",
+ "model": "OK-103-288WL Wash Bar",
+ "category": "wash_bar",
+ "source": {
+  "kind": "builtin",
+  "attribution": "LiveReact (fixtures/profiles.py)",
+  "confirmed": true,
+  "confirmed_at": "2026-08-31"
+ },
+ "modes": [
+  {
+   "name": "6ch",
+   "channels": [
+    {
+     "offset": 0,
+     "function": "dimmer",
+     "default": 0
+    },
+    {
+     "offset": 1,
+     "function": "strobe",
+     "default": 0
+    },
+    {
+     "offset": 2,
+     "function": "red",
+     "default": 0
+    },
+    {
+     "offset": 3,
+     "function": "green",
+     "default": 0
+    },
+    {
+     "offset": 4,
+     "function": "blue",
+     "default": 0
+    },
+    {
+     "offset": 5,
+     "function": "white",
+     "default": 0
+    }
+   ]
+  }
+ ]
+}

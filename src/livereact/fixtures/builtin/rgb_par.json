@@ -1,0 +1,40 @@
+{
+ "schema": "livereact-fixture/1",
+ "id": "rgb_par",
+ "manufacturer": "Generic",
+ "model": "RGB Par 4ch",
+ "category": "par",
+ "source": {
+  "kind": "builtin",
+  "attribution": "LiveReact (fixtures/profiles.py)",
+  "confirmed": true,
+  "confirmed_at": "2026-08-31"
+ },
+ "modes": [
+  {
+   "name": "4ch",
+   "channels": [
+    {
+     "offset": 0,
+     "function": "dimmer",
+     "default": 0
+    },
+    {
+     "offset": 1,
+     "function": "red",
+     "default": 0
+    },
+    {
+     "offset": 2,
+     "function": "green",
+     "default": 0
+    },
+    {
+     "offset": 3,
+     "function": "blue",
+     "default": 0
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,274 @@
+{
+ "schema": "livereact-fixture/1",
+ "id": "shehds_3w_laser",
+ "manufacturer": "SHEHDS",
+ "model": "3W RGB Laser",
+ "category": "laser",
+ "source": {
+  "kind": "builtin",
+  "attribution": "LiveReact (fixtures/profiles.py)",
+  "confirmed": false
+ },
+ "physical": {
+  "laser": {
+   "power_mw": 3000
+  }
+ },
+ "modes": [
+  {
+   "name": "12ch",
+   "channels": [
+    {
+     "offset": 0,
+     "function": "mode",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        41
+       ],
+       "type": "no_function",
+       "label": "laser off"
+      },
+      {
+       "range": [
+        42,
+        83
+       ],
+       "type": "mode",
+       "label": "manual patterns"
+      },
+      {
+       "range": [
+        168,
+        251
+       ],
+       "type": "mode",
+       "label": "sound active (never used)"
+      }
+     ]
+    },
+    {
+     "offset": 1,
+     "function": "laser_pattern",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        96,
+        127
+       ],
+       "type": "laser_pattern",
+       "label": "dotted line group"
+      }
+     ]
+    },
+    {
+     "offset": 2,
+     "function": "laser_pattern",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        255
+       ],
+       "type": "laser_pattern",
+       "label": "sub-pattern"
+      }
+     ]
+    },
+    {
+     "offset": 3,
+     "function": "laser_rotate",
+     "default": 0
+    },
+    {
+     "offset": 4,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        255
+       ],
+       "type": "generic",
+       "label": "horizontal flip (unverified)"
+      }
+     ]
+    },
+    {
+     "offset": 5,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        255
+       ],
+       "type": "generic",
+       "label": "vertical flip (unverified)"
+      }
+     ]
+    },
+    {
+     "offset": 6,
+     "function": "laser_x",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        127
+       ],
+       "type": "laser_x",
+       "label": "static position (unverified)"
+      },
+      {
+       "range": [
+        128,
+        255
+       ],
+       "type": "laser_x",
+       "label": "sweep speed"
+      }
+     ]
+    },
+    {
+     "offset": 7,
+     "function": "laser_y",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        127
+       ],
+       "type": "laser_y",
+       "label": "vertical position (unverified)"
+      }
+     ]
+    },
+    {
+     "offset": 8,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        0
+       ],
+       "type": "generic",
+       "label": "scale static (only safe value)"
+      }
+     ]
+    },
+    {
+     "offset": 9,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        255
+       ],
+       "type": "generic",
+       "label": "painting speed (unverified)"
+      }
+     ]
+    },
+    {
+     "offset": 10,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        127
+       ],
+       "type": "generic",
+       "label": "scan speed (untested)"
+      },
+      {
+       "range": [
+        128,
+        255
+       ],
+       "type": "generic",
+       "label": "pattern lattice (dots)"
+      }
+     ]
+    },
+    {
+     "offset": 11,
+     "function": "laser_color",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        8,
+        15
+       ],
+       "type": "laser_color",
+       "label": "white"
+      },
+      {
+       "range": [
+        16,
+        23
+       ],
+       "type": "laser_color",
+       "label": "red"
+      },
+      {
+       "range": [
+        24,
+        31
+       ],
+       "type": "laser_color",
+       "label": "yellow"
+      },
+      {
+       "range": [
+        32,
+        39
+       ],
+       "type": "laser_color",
+       "label": "green"
+      },
+      {
+       "range": [
+        40,
+        47
+       ],
+       "type": "laser_color",
+       "label": "cyan"
+      },
+      {
+       "range": [
+        48,
+        55
+       ],
+       "type": "laser_color",
+       "label": "blue"
+      },
+      {
+       "range": [
+        56,
+        63
+       ],
+       "type": "laser_color",
+       "label": "purple"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

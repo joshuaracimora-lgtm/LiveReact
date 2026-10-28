@@ -61,6 +61,9 @@ class FixtureTestPanel(QtWidgets.QMainWindow):
         box = QtWidgets.QGroupBox(f"{fx.label}  (addr {fx.address}, {fx.type_name})")
         form = QtWidgets.QFormLayout(box)
         kinds = fx.channel_kinds()
+        # a definition-driven fixture (fixtures/generic.py) names each channel's function
+        chans = getattr(fx, "chans", None)
+        names = [c.function.replace("_", " ") for c in chans] if chans else [k.name.lower() for k in kinds]
         for local, ch in enumerate(fx.channels()):
             row = QtWidgets.QWidget()
             hl = QtWidgets.QHBoxLayout(row)
@@ -73,7 +76,7 @@ class FixtureTestPanel(QtWidgets.QMainWindow):
             self._sliders[ch] = slider
             hl.addWidget(slider)
             hl.addWidget(value)
-            form.addRow(f"ch {ch} · {kinds[local].name.lower()}", row)
+            form.addRow(f"ch {ch} · {names[local]}", row)
         flash = QtWidgets.QPushButton(f"Flash {fx.label}")
         flash.clicked.connect(lambda _=False, f=fx: self._flash(f))
         form.addRow(flash)

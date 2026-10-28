@@ -48,59 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-6. **P1 fixture definition format.** `src/livereact/fixtures/definition.py`: dataclasses +
-   `load_definition()` / `validate()` / `kind_of()` for schema `livereact-fixture/1`:
-   - `id`, `manufacturer`, `model`, `category` (par, wash_bar, moving_head, strobe, dimmer, laser, other)
-   - `source{kind: builtin|ofl|manual_ai|user, ofl_key, license, attribution, pdf_sha256, confirmed, confirmed_at}`
-   - `physical{pan_deg, tilt_deg, pan_max_deg_s, laser{class, power_mw}}`
-   - `modes[{name, channels[{offset, function, default, fine_of, capabilities[{range, type, color, speed_hz, label, confidence, source_page}]}]}]`
-   - `laser_intents{blank, line_static, fan, chop_channel}`.
-
-   `function` and capability `type` mirror Open Fixture Library's vocabulary (dimmer, red, green, blue,
-   white, amber, uv, color_wheel, pan, pan_fine, tilt, tilt_fine, pan_tilt_speed, shutter, strobe, gobo,
-   prism, focus, zoom, macro, mode, reset, laser_pattern, laser_x, laser_y, laser_rotate, laser_color,
-   generic). `kind_of()` maps a function to the existing `profiles.ChannelKind`. `validate()` rejects:
-   gaps or duplicates in offsets, ranges that overlap or fall outside 0-255, an unpaired fine channel, and
-   a default inside a maintenance/reset range.
-   Accept: `tests/test_app_fixture_definition.py`.
-7. **P1 the four built-in models as definitions.** `src/livereact/fixtures/builtin/*.json` for
-   `shehds_180w_mh`, `shehds_3w_laser`, `rgb_par`, `ok103_wash_bar`, read from `profiles.py`
-   (documentation and patch-UI source; the native classes stay what the show runs). Accept: a test that
-   each definition's channel count, `kind_of()` per channel and boot defaults equal the native class's.
-8. **P1 fixture traits.** `src/livereact/fixtures/traits.py` `traits_of(fx) -> frozenset`: `rgb_wash`,
-   `pan_tilt`, `color_wheel`, `strobe_channel`, `dimmer`, `laser`. Native classes map by class (Par/WashBar
-   -> rgb_wash, MovingHead -> pan_tilt + color_wheel, Laser -> laser); definition-driven fixtures map from
-   their channel functions. Does NOT edit `profiles.py` or any scene (item 15 does the swap). Accept: test.
-9. **P1 user data folder module.** `src/livereact/userdata.py`: `paths()` uses `platformdirs` to return
-   `%LOCALAPPDATA%\LiveReact` (Windows) or `~/Library/Application Support/LiveReact` (macOS), with the
-   layout `settings.json, config.json, midi_map.json, rigs/, fixtures/, manuals/, events/, recordings/,
-   logs/`. Directories are created on first use. `LIVEREACT_HOME` overrides it; `dev_mode()` (a source
-   checkout: `pyproject.toml` beside the package, or `--dev`) returns the old working-folder paths.
-   `settings.py` holds a small JSON settings store (recent rigs, last event, onboarding done). Not wired
-   into the app (item 3). Accept: tests with `LIVEREACT_HOME=tmp_path`.
-10. **P1 GenericFixture.** `src/livereact/fixtures/generic.py` `GenericFixture(definition, mode)`, a
-    `profiles.Fixture` subclass:
-    - `channel_kinds()` and `boot_defaults()` come from the definition (shutter open, dimmer 0).
-    - `set_intensity` drives the dimmer channel, or scales RGB when the fixture has no dimmer.
-    - `set_color` mixes RGB(+W/A/UV), or picks the nearest wheel slot by capability colour.
-    - `set_strobe` maps into the strobe range; `visual_state()` is implemented too.
-    Accept: tests over a par, an RGBW bar and a wheel-only fixture definition.
-11. **P1 GenericMovingHead.** Adds 8/16-bit pan/tilt, a slew limit from `physical.pan_max_deg_s` (a
-    conservative default when missing), and home position. Accept: tests.
-12. **P1 GenericLaser.** Driven only through `laser_intents` (blank, line_static, fan). Every channel is
-    LASER kind. It outputs all zeros while `source.confirmed` is false, and it inherits the existing
-    `apply_safety` / `apply_laser_gate` behaviour. Accept: tests, including that an unconfirmed laser stays
-    dark with `laser_enable=True`.
-13. **P1 definition library.** `src/livereact/fixtures/library.py`: resolve `"<id>@<mode>"` from the rig's
-    embedded `definitions`, then the user folder (`userdata.paths().fixtures`), then `builtin/`; list all;
-    save a user definition. Accept: tests with `LIVEREACT_HOME`.
-14. **P1 rig file v2.** `rig.py`:
-    - A slot may say `"fixture": "<id>@<mode>"` instead of `fixture_type`.
-    - The rig embeds a top-level `"definitions": {id: {...}}` snapshot, so the file is self-contained and
-      shareable.
-    - Load builds a Generic* fixture through item 13; save round-trips it.
-    - Every existing v1 rig loads and saves byte-for-byte as before.
-    Accept: tests, and the lighting gate (rig.py is on the show path).
 15. [JOSH] [BLOCKED: item 1] **P1 swap isinstance checks for traits.** `scenes/base.py`,
     `scenes/library.py`, `engines/reactive.py`, `engines/transition.py`, `scenes/movement.py`, `rig.py`
     `dj_pose`, `ui/visualizer.py`, `sim/score.py` (wash bar by name, `PAN_MAX_DEG_PER_S`). Each commit
@@ -108,79 +55,10 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-17. **P5 presets.** `src/livereact/presets/`: a pure `resolve(event) -> PresetEffect(manual: dict,
-    catalog_kwargs: dict, palette: str | None)` plus JSON preset data.
-    - **Colour scheme**: Auto, Warm, Ice, Neon, Sunset, Mono, plus the rekordbox lighting banks (cool,
-      natural, hot, subtle, warm, vivid, club1, club2).
-    - **Genre**: Auto, Techno, House, UK Garage, Drum & Bass, Open format, Latin.
-    - **Event type**: Club, Bar, House party, Wedding, Corporate, Festival. Event type sets ceilings:
-      `master_brightness` max, `strobe_cap` max, `lasers_allowed`, movement on/off.
-    - Precedence: event ceilings, then genre, then scheme. "Auto" everywhere resolves to exactly today's
-      `ManualParams` defaults and an empty `catalog_kwargs`.
-    - Named events load and save under `userdata.paths().events`.
-    Accept: tests (Auto is a no-op; Wedding forbids lasers and caps strobe).
-18. **P5 Manual Override panel (widget).** `src/livereact/ui/override_panel.py`, a standalone widget bound
-    to `app.manual`:
-    - **Lasers block**: arm/disarm button with status (armed, blocked by event, disarmed).
-    - **Manual Override group**, collapsed by default: CUE BUILD, ARM DROP, STROBE BURST, SKIP, Tap, Laser
-      Cue (K), Laser Hit (J), Laser Show follow/rotate/hold + look grid when the rig has them.
-    - **Presets block**: Colour scheme / Genre / Event type combos + Save/Load event.
-    It calls the same methods the Show tab calls today; hotkeys unchanged. Preset changes call
-    `app.apply_preset(effect)` only if the app has it (item 4), else just store the choice. Accept: offscreen
-    UI tests.
-19. **P5 put the panel in the console.** Replace the Show tab's cue / laser / override groups in
-    `ui/console.py` with the panel. Every existing console test stays green (hotkeys, pins, laser
-    checkbox behaviour). Accept: `gate_app` with the UI checks.
-20. **P2 rig manager dialog.** `src/livereact/ui/rig_manager.py`: New (empty), Open (file dialog in
-    `userdata` rigs), Recent (from `settings.py`), Demo rig (packaged `default_rig.json`, read-only; "Save
-    as" copies it to the user folder). Emits `rig_chosen(path)`. A Rig menu entry in the console opens it;
-    switching rigs live waits for item 4 (until then: "restart to apply"). Accept: UI tests.
-21. **P2 patch view.** Extend `ui/rig_config.py`:
-    - The fixture type list includes library definitions (item 13), with a mode picker.
-    - DMX address auto-assigns the next free block; overlap is shown inline (from `rig.py` validation).
-    - Role/side editors and an "address set on the fixture" checklist column.
-    Accept: UI tests.
-22. **P2 channel-test screen.** Extend `ui/fixture_test.py` for a definition-driven fixture:
-    - one slider per channel, labelled by function (not just kind);
-    - a capability picker ("Red: 10-19", click to send);
-    - a pass/fail mark per channel and a **Confirm** button that sets `source.confirmed` + `confirmed_at`
-      and saves through item 13;
-    - for lasers, the user picks the values for blank / static line / fan into `laser_intents`.
-    Accept: UI tests (Confirm writes the definition; an unconfirmed laser cannot be marked confirmed without
-    all three intents).
-23. **P2 fixture library browser + add-fixture wizard.** `ui/fixture_library.py` (browse builtin / user /
-    imported definitions) and `ui/fixture_wizard.py` with three pages: Search Open Fixture Library (item 25),
-    Upload manual (item 28), Enter by hand (a channel table editor producing a `user` definition). Every
-    page ends on the channel-test screen. Pages whose backend is not built yet say so. Accept: UI tests.
-24. **P3 OFL converter.** `src/livereact/fixtures/ofl.py`: a pure function from OFL fixture JSON to a
-    definition. Covers `availableChannels`, `modes`, fine channel aliases, capability
-    `dmxRange`/`type`/`color`/speed, and `physical`. Unknown capability types become `generic`. Test data:
-    small OFL-format files written for the tests under `tests/data/ofl/` (not copied from OFL). Accept: tests.
-25. **P3 OFL search + fetch service.** A cached copy of OFL's fixture register (manufacturer/model index)
-    in the user folder, fuzzy search, and on-demand fetch of one fixture's JSON, all in a `QThread` worker
-    with timeouts. Offline it reports "Open Fixture Library unavailable" and the wizard offers the other
-    two pages. OFL data is fetched per user, never bundled; attribution is stored on each definition and
-    listed in About. The exact register/fetch URLs are a constant to check by hand (mark it in the
-    report). Accept: tests with a recorded register and a fake transport (no network).
-26. **P4 manual page finder.** `src/livereact/fixtures/manual_reader/extract.py`:
-    - Per-page text with `pypdf`, then score pages for DMX charts ("DMX", "CH1", "channel", value ranges
-      like `000-255`, "mode").
-    - Flag scanned pages (sparse text), and write a trimmed PDF of the best pages (at most 15) to
-      `manuals/<sha256>/`.
-    Accept: tests on a small generated PDF.
-27. **P4 manual reader client (mocked).** `manual_reader/schema.py` (the JSON schema Claude must fill: a
-    definition subset plus per-capability `confidence` and `source_page`) and `manual_reader/client.py`:
-    - Anthropic Python SDK, model constant `claude-opus-5-5`.
-    - The trimmed PDF goes as a base64 `document` block; the output must validate against the schema.
-    - A cost estimate is shown before sending; typed errors.
-    - The API key comes from `keyring` (Windows Credential Manager / macOS Keychain), else
-      `ANTHROPIC_API_KEY`; it is never written to a file or a log.
-    Accept: tests with a recorded response; the tests must not read a real key.
-28. **P4 manual reader worker + review.** `manual_reader/worker.py` (`QThread`, cancellable, result cached
-    by PDF sha256 so a manual is never paid for twice) and `review.py`: validate, save a `manual_ai` draft
-    (`confirmed: false`), open the channel-test screen with low-confidence cells highlighted and the source
-    page shown. Upload page of the wizard: one-time consent ("the PDF is sent to Anthropic"); greyed out
-    with no key or offline. Accept: UI tests with a fake client.
+37. [JOSH] **P3 check the OFL URLs + data license.** `fixtures/ofl.py` `REGISTER_URL`, `MANUFACTURERS_URL`,
+    `FIXTURE_URL` point at OFL's GitHub `master` branch and were not checked by hand (the agent has no
+    internet). Confirm them (or OFL's own API), and decide the `license` string the wizard passes to
+    `import_fixture()` (OFL data license; see Decisions). Then list OFL attribution in About (item 33).
 29. [JOSH] **P4 manual reader evaluation (costs money).** `tools/eval_manual_reader.py` against the three
     known manuals (SHEHDS 180W, SHEHDS 3W laser, OK103), scored per channel against `builtin/`.
 30. [JOSH] [BLOCKED: items 2, 4] **P5 automatic lasers.** New `"auto"` laser profile built on
@@ -193,18 +71,13 @@ Hard rules for every item, whoever does it:
     - Update the conformance rows.
 31. [JOSH] [SHOW-CHANGE] [BLOCKED: item 30] **P5 make auto the default** laser profile; colour-scheme hook
     in `engines/palette.py pick()`; genre catalog hook via `show_catalog()`; the sim takes `--preset`.
-32. **P6 packaging files.** `packaging/livereact.spec` (PyInstaller `--onedir`):
-    - Exclude PyQt5/PyOpenGL and unused Qt modules.
-    - Collect `fixtures/builtin/*.json`, `default_rig.json` and the icons.
-    Also `packaging/windows/livereact.iss` (Inno Setup) and `packaging/macos/entitlements.plist`
-    (network client/server for DJ Link UDP 50000-50002 and Art-Net, microphone, not sandboxed, so USB serial
-    works). Add `.github/workflows/release.yml` building Windows, macOS arm64 and macOS x86_64 artifacts;
-    signing steps are present but skipped without secrets. Accept: a test that parses the spec/workflow for
-    the excludes and data files (nothing is built nightly).
-33. **P6 first-run setup + About.** `ui/first_run.py`: output (Enttec / Art-Net / sACN / demo), audio
-    device, DJ Link network interface, then demo rig or "add my fixtures"; `settings.py` remembers it is
-    done. `ui/about.py`: version + third-party notices (PySide6/Qt LGPL, prodj-link, OFL attribution,
-    Anthropic SDK). Accept: UI tests.
+39. [JOSH] **P6 first build.** Run the release workflow once by hand (or `pyinstaller packaging/livereact.spec`
+    locally), add icons under `src/livereact/ui/icons/` (`livereact.ico`, `livereact.icns`), pick the macOS
+    `bundle_identifier` (placeholder `org.livereact.app`), and check `macos-13` (x86_64) is still a GitHub
+    runner.
+40. [JOSH] **P6 show first-run + About.** `__main__` opens `FirstRunDialog` when `needs_first_run()` and
+    maps `settings.extra["setup"]` onto `AppConfig` (output backend, `audio_device`, `pdl_interface`; item 3);
+    a Help -> About entry in the console.
 34. [JOSH] **P6 signing + clean-machine tests.** Apple Developer account and notarization; Windows Azure
     Trusted Signing or an OV certificate; CI secrets; install on a clean Windows PC and a clean Mac.
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
@@ -225,4 +98,155 @@ Hard rules for every item, whoever does it:
 
 ## Done
 
-(none yet)
+- **6. P1 fixture definition format** (2026-10-28). `fixtures/definition.py`: frozen dataclasses,
+  `load_definition()` (dict or JSON file), `validate()`, `kind_of(function, category)`, `to_dict()`
+  round-trip. Offsets are 0-based per mode; a laser's every channel is LASER; capability types add
+  `maintenance` and `no_function` to the function list; `validate()` also checks `laser_intents`
+  offsets/values and duplicate mode names. Tests: `tests/test_app_fixture_definition.py`.
+- **7. P1 the four built-in models as definitions** (2026-10-28). `fixtures/builtin/{shehds_180w_mh,
+  shehds_3w_laser,rgb_par,ok103_wash_bar}.json`, generated once from `profiles.py` (wheel slots, laser
+  colour bands, MH ranges/speed). Par and wash bar are `confirmed` (verified on hardware 2026-08-31);
+  the MH and the laser are not (the laser has no `laser_intents`, so a definition-driven laser built
+  from it stays dark). Tests: `tests/test_app_builtin_definitions.py` (count, `kind_of()` per channel
+  and boot defaults equal the native class).
+- **8. P1 fixture traits** (2026-10-28). `fixtures/traits.py` `traits_of(fx, mode=None)`: native classes
+  by class (Par -> rgb_wash+dimmer, WashBar -> rgb_wash+dimmer+strobe_channel, MovingHead -> pan_tilt+
+  color_wheel+dimmer+strobe_channel, Laser -> laser), equal to their builtin definitions' traits;
+  definitions (or a fixture carrying `.definition`) from channel functions; a laser is only ever
+  `laser`. Nothing on the show path reads it (item 15). Tests: `tests/test_app_traits.py`.
+- **9. P1 user data folder module** (2026-10-28). `userdata.paths()` (platformdirs, %LOCALAPPDATA% not
+  Roaming; directories created, files not), `LIVEREACT_HOME` override (wins over dev mode),
+  `dev_mode()` (`pyproject.toml` two levels above the package, or `--dev`) -> the working folder.
+  `settings.py` `Settings`: recent rigs (10, most recent first), last event, onboarding done; corrupt
+  file -> defaults, unknown keys kept, atomic save. Not wired (item 3). Tests: `tests/test_app_userdata.py`.
+- **10. P1 GenericFixture** (2026-10-28). `fixtures/generic.py` `GenericFixture(definition, mode,
+  address, label, role, side)`: refuses an invalid definition; boot = definition defaults with dimmer 0
+  and shutter at its "open" capability; intensity through the native gamma+floor curve, or RGB scaling
+  when there is no dimmer (the fixture remembers the last colour/level for that); RGB(+W) with W folded
+  in when absent, amber/UV held at 0; nearest wheel slot (middle of its range); strobe into the strobe
+  capability range (0 = open); master brightness, strobe cap, colour bias, `visual_state()`.
+  Tests: `tests/test_app_generic_fixture.py` (par, RGBW bar, wheel-only).
+- **11. P1 GenericMovingHead** (2026-10-28). 16-bit pan/tilt when the definition pairs fine channels
+  (8-bit otherwise), `set_aim` marking absolute movement, home-position remap, and a slew limit from
+  `physical.pan_max_deg_s` (tilt uses the same deg/s over its own range; default 180 deg/s, slower
+  than the native 260 placeholder; ranges default 540/270). `make_fixture()` picks the class. No motion
+  box (`bounds`) or aim calibration yet. Tests: `tests/test_app_generic_moving_head.py`.
+- **12. P1 GenericLaser** (2026-10-28). Driven only by `set_intent(buf, blank|line_static|fan)`; not a
+  GenericFixture, so wash/dimmer/strobe setters cannot light it; every channel LASER. `ready` needs
+  `source.confirmed` AND all three intents; until then every write, boot and `apply_safety` (even with
+  `laser_enabled=True`) leaves the head at zero. Disarmed zeroes everything; the gate writes `blank`
+  (only the `chop_channel` when one is set, like the native CH1-only gate).
+  Tests: `tests/test_app_generic_laser.py`.
+- **13. P1 definition library** (2026-10-28). `fixtures/library.py`: `parse_ref`, `resolve(ref,
+  embedded)` (rig snapshot, user folder, builtin; a builtin id always resolves to the packaged model, so
+  neither a user file nor a rig snapshot can redefine it), `list_definitions()` (bad user files
+  skipped), `save_user_definition()` (validated, safe lowercase ids, atomic), `refs()`.
+  Tests: `tests/test_app_fixture_library.py`.
+- **14. P1 rig file v2** (2026-10-28). `rig.py`: a slot's `"fixture": "<id>@<mode>"` builds a Generic*
+  fixture through the library; save writes `fixture` (not `fixture_type`) for it and embeds a top-level
+  `definitions` snapshot of every non-builtin definition used; both keys on one slot, an unknown ref or
+  an invalid definition are `RigError`s. v1 rigs: every `rigs/*.json` and the default rig save
+  byte-for-byte as before (expected output hashes in `tests/data/rig_v1_save_hashes.json`, no names).
+  Left for later: motion box / aim calibration / `dj_pan_tilt` for GenericMovingHead slots (MovingHead-only
+  today). Tests: `tests/test_app_rig_v2.py`, lighting gate no-regress.
+- **17. P5 presets** (2026-10-28). `presets/__init__.py` + `presets/presets.json`: pure
+  `resolve(PresetEvent) -> PresetEffect(manual, catalog_kwargs, palette, + ceilings: master_brightness_max,
+  strobe_cap_max, lasers_allowed, movement)`; `PresetEffect.apply_to(ManualParams)` applies and only ever
+  lowers (brightness, strobe cap) or disarms; no preset ever arms lasers. Auto is a no-op (empty
+  overrides). Named events save/load/list under `userdata.paths().events`. `userdata.paths(create=False)`
+  added for read-only lookups. The numbers in presets.json (biases, ceilings, which event types forbid
+  lasers) are design defaults for Josh to tune; genre only sets a `catalog_kwargs` token until item 31.
+  Tests: `tests/test_app_presets.py`.
+- **18. P5 Manual Override panel (widget)** (2026-10-28). `ui/override_panel.py` `OverridePanel(app)`:
+  Lasers block (arm/disarm writes `manual.laser_enable`; status armed / disarmed / blocked by event; an
+  event that forbids lasers disarms and blocks arming), Manual Override group collapsed by default (CUE
+  BUILD, ARM DROP, STROBE BURST, SKIP, Tap, Laser Cue, Laser Hit, and Laser Show follow/rotate/hold + look
+  grid on `show` rigs), Presets block (three combos, Save/Load event). Calls `app.apply_preset(effect)`
+  only when the app has it, else stores the choice. Tests: `tests/test_app_override_panel.py`.
+- **19. P5 put the panel in the console** (2026-10-28). The Show tab's Cues group and the "Arm lasers"
+  checkbox are replaced by the override panel; `b_cue`, `b_arm`, `b_burst`, `b_skip`, `b_tap`,
+  `b_laser_cue`, `b_laser_hit` and `cb_laser` are the panel's widgets, so every hotkey (C, D, Space, ->,
+  T, K, J, L) and every console test is unchanged; tap tempo and strobe burst share the console's
+  handlers; `refresh()` mirrors the panel. The console opens the Manual Override group expanded (the
+  widget's default is collapsed) so cues stay one press away mid-set: a question for Josh. The `manual`
+  laser profile's scene grid, Blackout/Freeze and Feel stay where they were. Tests: `tests/test_console.py`
+  (all green), gate UI checks.
+- **20. P2 rig manager dialog** (2026-10-28). `ui/rig_manager.py` `RigManagerDialog`: New (an empty rig in
+  the user's rigs folder), Open (file picker there), Recent (settings.py, missing files hidden), Demo rig
+  (packaged `default_rig.json`, read-only) and "Save demo rig as…" (a copy in the user folder). A chosen rig
+  is validated through the loader, remembered, and emitted as `rig_chosen(path)`. The console has a Rig menu
+  -> "Rig manager…"; it calls `app.switch_rig(path)` when the app has it (item 4), else says "restart to
+  apply". Tests: `tests/test_app_rig_manager.py`.
+- **21. P2 patch view** (2026-10-28). `ui/rig_config.py`: the type list adds the user's (and the rig's
+  embedded) definitions with a Mode column; "Add fixture" takes the next free DMX block that fits; rows whose
+  blocks collide or run past 512 are marked inline, with the loader's `RigError` on the status line; an
+  "Address set" checklist column is saved as the slot's `address_set` (unticked = v1 slot unchanged);
+  definition rows save as v2 `fixture` slots with the `definitions` snapshot. The channel reference lists a
+  definition's channels. Tests: `tests/test_app_patch_view.py`.
+- **22. P2 channel-test screen** (2026-10-28). `ui/channel_test.py` `ChannelTestPanel(definition, mode,
+  address, frame_buffer, save)`: a slider per channel labelled by function, a capability picker ("Red: 10-19",
+  sends the middle of the range), a pass/fail mark per channel, and Confirm (every channel pass; sets
+  `confirmed` + `confirmed_at`, saves through the library). For lasers: capture blank / static line / fan from
+  the sliders into `laser_intents`; Confirm needs all three. Laser channels send zeros unless "Enable laser
+  output on this screen" is ticked (this screen is outside the show's arm switch). `ui/fixture_test.py` labels
+  definition fixtures' channels by function. Tests: `tests/test_app_channel_test.py`.
+- **23. P2 fixture library browser + add-fixture wizard** (2026-10-28). `ui/fixture_library.py`
+  `FixtureLibraryBrowser` (built-in / yours / imported, confirmed or not; Add fixture…, Test / confirm…) and
+  `ui/fixture_wizard.py` `FixtureWizard`: three routes (OFL, manual, by hand), the hand-entry page (manufacturer,
+  model, category, mode, a channel table; fine channels paired automatically) producing a `user` definition,
+  every route ending on the channel-test screen. Tests: `tests/test_app_fixture_wizard.py`. Not yet in a
+  console menu (item 36).
+- **24. P3 OFL converter** (2026-10-28). `fixtures/ofl.py` `ofl_to_definition(ofl, key, manufacturer=None,
+  license=None)`: `availableChannels`, `modes` (shortName), first-level fine aliases (`pan_fine`/`tilt_fine`, or
+  the coarse function with `fine_of`), capability `dmxRange` / type / colour (wheel slots resolved through
+  `wheels`) / Hz speeds, `defaultValue` (number or %), `physical.focus` pan/tilt, categories; unknown types,
+  OFL nulls, matrix inserts and deeper fine bytes become `generic`. Unconfirmed, `source.kind = ofl`,
+  attribution with the OFL key and authors; `license` is left to the caller (Josh's decision). Test data:
+  `tests/data/ofl/test-*.json`, written for the tests. Tests: `tests/test_app_ofl.py`.
+- **25. P3 OFL search + fetch service** (2026-10-28). `fixtures/ofl.py` `OflService(cache_dir, transport)`:
+  the register (+ manufacturer names) cached under `fixtures/ofl_cache/` in the user folder, refresh falling
+  back to the cache, `search()` (every word, then close spellings), `fetch(key)` (cached, strict key format),
+  `import_fixture()`; any network or parse failure is `OflUnavailable`. `ui/ofl_worker.py`: a `QThread`
+  worker and the wizard's search page ("Open Fixture Library unavailable" offline, attribution line).
+  Tests: `tests/test_app_ofl_search.py` (recorded register, fake transport), wizard route tests.
+- **26. P4 manual page finder** (2026-10-28). `fixtures/manual_reader/extract.py`: per-page text (pypdf),
+  `score_text()` (DMX, CHn, channel, mode/personality, nCH, 0-255 ranges), pages under 40 characters flagged
+  scanned, `choose_pages()` (best text pages, at most 15; scanned pages fill in when text finds fewer than
+  two), `find_dmx_pages()` writes `manuals/<sha256>/trimmed.pdf` + `pages.json` (page map back to the
+  original). Tests: `tests/test_app_manual_extract.py` (a PDF generated by the test).
+- **27. P4 manual reader client (mocked)** (2026-10-28). `manual_reader/schema.py` (`MANUAL_SCHEMA`, strict:
+  every object closed and fully required; `check()`; `to_definition()` -> unconfirmed `manual_ai` with
+  per-capability confidence and original `source_page`) and `manual_reader/client.py` (`ManualReader`:
+  `claude-opus-5-5`, base64 PDF `document` block, `output_config.format` json_schema, effort high, server-side
+  refusal fallback `fallbacks="default"`; `estimate()` via token counting at $4/$20 per MTok; key from
+  keyring else `ANTHROPIC_API_KEY`, never written or logged; typed errors). Tests:
+  `tests/test_app_manual_client.py` (recorded response, fake client and keyring).
+- **28. P4 manual reader worker + review** (2026-10-28). `manual_reader/worker.py` (`read_manual()` +
+  `ManualReaderWorker` QThread: cancel before the paid call, answer cached by PDF sha256 so a manual is never
+  paid for twice), `review.py` (`draft()`, `save_draft()` refuses confirmed, `doubts()` below 0.6 confidence),
+  `ui/manual_upload.py` (the wizard's upload page: greyed out without a key or offline, checked only when
+  shown; one-time consent remembered in settings; page list + cost estimate before sending). The channel-test
+  screen flags low-confidence rows with their manual page. Tests: `tests/test_app_manual_review.py`.
+  An API key entry in Settings is not built yet (item 38).
+- **32. P6 packaging files** (2026-10-28). `packaging/livereact.spec` (PyInstaller one-folder from
+  `packaging/launch.py`; excludes PyQt5/PyQt6/OpenGL/tkinter and unused Qt modules; collects
+  `fixtures/builtin/*.json`, `default_rig.json`, `presets/presets.json` and `ui/icons/` when it exists;
+  macOS bundle with microphone / local-network usage strings), `packaging/windows/livereact.iss` (per-user
+  Inno Setup install of `dist/LiveReact`, user data left on uninstall), `packaging/macos/entitlements.plist`
+  (not sandboxed; network client/server, audio input; library-validation keys for the bundled Python),
+  `.github/workflows/release.yml` (windows-x64, macos-arm64, macos-x86_64; Azure Trusted Signing / codesign /
+  notarize only when their secrets exist). Nothing is built nightly. Tests: `tests/test_app_packaging.py`.
+- **33. P6 first-run setup + About** (2026-10-28). `ui/first_run.py` `FirstRunDialog`: output (Enttec /
+  Art-Net / sACN / demo), audio input, DJ Link interface (device lists injectable), demo rig or add my
+  fixtures; Finish saves `settings.extra["setup"]` and `onboarding_done`; `needs_first_run()`. `ui/about.py`
+  `AboutDialog`: version (package metadata) and notices (PySide6/Qt, Anthropic SDK, platformdirs, pypdf,
+  keyring from their metadata; prodj-link and OFL marked "to confirm"), plus OFL attribution per imported
+  fixture. Tests: `tests/test_app_first_run.py`. Showing them at start-up / in a Help menu is item 40.
+- **36. P2 fixtures menu** (2026-10-28). The console has a Fixtures menu: "Fixture library…" opens
+  `FixtureLibraryBrowser` (which now emits `library_changed`), "Anthropic API key…" opens the key dialog
+  (item 38). `RigConfigTab.reload_definitions()` adds newly saved definitions to every row's type list.
+  Tests: `tests/test_app_fixtures_menu.py`.
+- **38. P4 API key settings** (2026-10-28). `ui/api_key.py` `ApiKeyDialog`: save / replace (password
+  field, cleared after saving) and remove the key in the OS keychain through `store_api_key()`; shows only
+  whether a key is saved; keychain errors are reported without the key. Tests: `tests/test_app_api_key.py`
+  (fake keyring).

@@ -132,11 +132,20 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             self.laser_show_tab = self._build_laser_show_tab()
             tabs.addTab(self.laser_show_tab, "Laser Show")
         tabs.addTab(self.venue_tab, "Venue")
-        self.rig_config_tab = RigConfigTab(app.rig, rig_path)
-        tabs.addTab(self.rig_config_tab, "Rig Config")
+        self.rig_config = RigConfigTab(app.rig, rig_path)
+        self.rig_config_tab = self.rig_config   # the UI agent's name for it (side sync on open)
+        tabs.addTab(self.rig_config, "Rig Config")
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
         self.setCentralWidget(tabs)
+        # Rig menu (2026-10-28, ui/rig_manager.py): pick the rig instead of --rig <path>.
+        self.rig_manager = None
+        rig_menu = self.menuBar().addMenu("&Rig")
+        rig_menu.addAction("Rig manager…", self.open_rig_manager)
+        self.fixture_library = None
+        fx_menu = self.menuBar().addMenu("&Fixtures")
+        fx_menu.addAction("Fixture library…", self.open_fixture_library)
+        fx_menu.addAction("Anthropic API key…", self.open_api_key)
         self.resize(1280, 800)
 
         self._install_shortcuts()
@@ -254,34 +263,19 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(8)
 
-        # --- CUES: what Josh reaches for mid-set --------------------------
-        cues = QtWidgets.QGroupBox("Cues")
-        cl = QtWidgets.QGridLayout(cues)
-        cl.setSpacing(8)
-        # DJ build cue (2026-09-16, core/metronome.py's cue_build): BUILD now,
-        # held until the drop lands (or 32 bars, or a second press cancels).
-        self.b_cue = _button("CUE BUILD\n(C)", "cue")
-        # DJ drop arm (2026-09-17, core/metronome.py's arm_drop): the next
-        # drop-level kick commits the drop instantly. Pressed again while
-        # armed (2026-09-19): the drop CUTS on the next downbeat regardless.
-        self.b_arm = _button("ARM DROP\n(D)", "cue")
-        self.b_burst = _button("STROBE BURST\n(Space)", "cue")
-        self.b_skip = _button("SKIP SCENE\n(→)", "cue")
-        # Manual laser cue (2026-09-30, engines/laser.py MANUAL CUE): held
-        # (checkable), the dotted line shows with its sweep speed following
-        # the mids + highs. Also drivable from a MIDI-learned "laser_cue"
-        # control (inputs/midi_map.py); refresh() mirrors that back here.
-        self.b_laser_cue = _button("CUE LASER\n(K)", "cue", checkable=True)
-        self.b_laser_cue.setChecked(m.laser_cue)
-        # 2026-10-06 (trigger profile): one laser moment NOW -- the operator's
-        # "manual scene button" for the lasers. A counter on ManualParams.
-        self.b_laser_hit = _button("LASER HIT\n(J)", "cue")
-        self.b_tap = _button("Tap tempo (T)")
-        cl.addWidget(self.b_cue, 0, 0); cl.addWidget(self.b_arm, 0, 1)
-        cl.addWidget(self.b_burst, 1, 0); cl.addWidget(self.b_skip, 1, 1)
-        cl.addWidget(self.b_laser_cue, 2, 0); cl.addWidget(self.b_tap, 2, 1)
-        cl.addWidget(self.b_laser_hit, 3, 0)
-        v.addWidget(cues)
+        # --- LASERS / MANUAL OVERRIDE / PRESETS (ui/override_panel.py, 2026-10-28) --
+        # The cue buttons (C/D/Space/->/K/J/T) and the laser arm switch (L) live in
+        # the panel now; the attribute names below are kept so the hotkeys and
+        # everything else that finds them by name are unchanged. Its Manual
+        # Override group opens expanded here so the cues stay one press away.
+        from .override_panel import OverridePanel
+        self.override_panel = OverridePanel(self.app, on_tap=self._do_tap, on_burst=self._strobe_burst)
+        self.override_panel.b_overrides.setChecked(True)
+        p = self.override_panel
+        self.b_cue, self.b_arm, self.b_burst, self.b_skip = p.b_cue, p.b_arm, p.b_burst, p.b_skip
+        self.b_laser_cue, self.b_laser_hit, self.b_tap = p.b_laser_cue, p.b_laser_hit, p.b_tap
+        self.cb_laser = p.b_laser_arm   # the arm switch: writes manual.laser_enable, as the checkbox did
+        v.addWidget(self.override_panel)
 
         # --- LASER SCENES (laser profile "manual", 2026-10-10, Junior Crib) --
         # Sophia's Laser Show look buttons, on the Show tab: press a scene to
@@ -316,13 +310,8 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         sl.setSpacing(8)
         self.b_black = _button("BLACKOUT (B)", "danger", checkable=True)
         self.b_freeze = _button("FREEZE (F)", "danger", checkable=True)
-        # Arming is per run, per track (2026-09-16): never persisted, off at
-        # every launch -- Josh picks the tunes that get the laser, since the
-        # software can't (see engines/laser.py). L toggles it.
-        self.cb_laser = QtWidgets.QCheckBox("Arm lasers (L) — off at launch, arm per track")
-        self.cb_laser.setChecked(m.laser_enable)
+        # Arming lasers (L) is the override panel's arm switch above.
         sl.addWidget(self.b_black, 0, 0); sl.addWidget(self.b_freeze, 0, 1)
-        sl.addWidget(self.cb_laser, 1, 0, 1, 2)
         v.addWidget(safe)
 
         # --- FEEL: biases/caps, never overrides ---------------------------
@@ -346,17 +335,9 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.s_bright.valueChanged.connect(lambda x: setattr(m, "master_brightness", x / 100))
         self.s_strobe.valueChanged.connect(lambda x: setattr(m, "strobe_cap", x / 100))
         self.s_warm.valueChanged.connect(lambda x: setattr(m, "warm_cool_bias", x / 100))
-        self.cb_laser.toggled.connect(lambda on: setattr(m, "laser_enable", on))
-        self.b_laser_cue.toggled.connect(lambda on: setattr(m, "laser_cue", on))
-        self.b_laser_hit.clicked.connect(lambda: setattr(m, "laser_hit", m.laser_hit + 1))
         self.cb_synth.toggled.connect(lambda on: setattr(m, "synth_sync", on))
         self.b_black.toggled.connect(self._set_blackout)
         self.b_freeze.toggled.connect(lambda on: setattr(m, "freeze", on))
-        self.b_skip.clicked.connect(self.app.phrase_engine.skip)
-        self.b_tap.clicked.connect(self._do_tap)
-        self.b_burst.clicked.connect(self._strobe_burst)
-        self.b_cue.clicked.connect(self.app.metronome.cue_build)
-        self.b_arm.clicked.connect(self.app.metronome.arm_drop)
         return w
 
     def _build_laser_show_tab(self) -> QtWidgets.QWidget:
@@ -445,6 +426,38 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         sc(QtCore.Qt.Key.Key_Space, self._strobe_burst)
 
     # ------------------------------------------------------------------ actions
+    def open_rig_manager(self):
+        from .rig_manager import RigManagerDialog
+        self.rig_manager = RigManagerDialog(self)
+        self.rig_manager.rig_chosen.connect(self._rig_chosen)
+        self.rig_manager.show()
+        return self.rig_manager
+
+    def open_fixture_library(self):
+        from .fixture_library import FixtureLibraryBrowser
+        self.fixture_library = FixtureLibraryBrowser()
+        self.fixture_library.setWindowTitle("Fixture library")
+        # a fixture added or confirmed there shows up in Rig Config's type list
+        self.fixture_library.library_changed.connect(self.rig_config.reload_definitions)
+        self.fixture_library.show()
+        return self.fixture_library
+
+    def open_api_key(self):
+        from .api_key import ApiKeyDialog
+        dlg = ApiKeyDialog(self)
+        dlg.show()
+        return dlg
+
+    def _rig_chosen(self, path: str) -> None:
+        """Switch live when the app can (App.switch_rig, roadmap item 4); until then the
+        choice is remembered (recent rigs) and applies at the next start."""
+        switch = getattr(self.app, "switch_rig", None)
+        if callable(switch):
+            switch(path)
+            self.statusBar().showMessage(f"Switched to {path}", 8000)
+        else:
+            self.statusBar().showMessage(f"Rig chosen: {path} — restart LiveReact with this rig to apply it.")
+
     def _set_blackout(self, on: bool) -> None:
         self.app.manual.blackout = on
 
@@ -462,6 +475,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------ refresh
     def refresh(self) -> None:
         snap = self.app.show_state.snapshot()
+        self.override_panel.refresh()   # arm switch / laser cue changed by hotkeys or MIDI
         latest = self.app.frame_buffer.latest()
         if self.tabs.currentWidget() is self.venue_tab:
             self.venue_tab.plan.update_from_universe(latest)   # see the jogged head move
