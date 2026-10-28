@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the notarized LiveReact.app (docs/APP_ROADMAP.md item 32).
+  Not sandboxed: the app opens USB serial DMX interfaces (Enttec) directly.
+  network.client / network.server: Pro DJ Link (UDP 50000-50002), Art-Net / sACN, Open Fixture
+  Library and the manual reader. audio-input: the microphone / DJ mixer's USB audio.
+  The two cs.* keys let the bundled Python load its own (separately signed) libraries.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

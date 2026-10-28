@@ -76,14 +76,10 @@ Hard rules for every item, whoever does it:
     - Update the conformance rows.
 31. [JOSH] [SHOW-CHANGE] [BLOCKED: item 30] **P5 make auto the default** laser profile; colour-scheme hook
     in `engines/palette.py pick()`; genre catalog hook via `show_catalog()`; the sim takes `--preset`.
-32. **P6 packaging files.** `packaging/livereact.spec` (PyInstaller `--onedir`):
-    - Exclude PyQt5/PyOpenGL and unused Qt modules.
-    - Collect `fixtures/builtin/*.json`, `default_rig.json` and the icons.
-    Also `packaging/windows/livereact.iss` (Inno Setup) and `packaging/macos/entitlements.plist`
-    (network client/server for DJ Link UDP 50000-50002 and Art-Net, microphone, not sandboxed, so USB serial
-    works). Add `.github/workflows/release.yml` building Windows, macOS arm64 and macOS x86_64 artifacts;
-    signing steps are present but skipped without secrets. Accept: a test that parses the spec/workflow for
-    the excludes and data files (nothing is built nightly).
+39. [JOSH] **P6 first build.** Run the release workflow once by hand (or `pyinstaller packaging/livereact.spec`
+    locally), add icons under `src/livereact/ui/icons/` (`livereact.ico`, `livereact.icns`), pick the macOS
+    `bundle_identifier` (placeholder `org.livereact.app`), and check `macos-13` (x86_64) is still a GitHub
+    runner.
 33. **P6 first-run setup + About.** `ui/first_run.py`: output (Enttec / Art-Net / sACN / demo), audio
     device, DJ Link network interface, then demo rig or "add my fixtures"; `settings.py` remembers it is
     done. `ui/about.py`: version + third-party notices (PySide6/Qt LGPL, prodj-link, OFL attribution,
@@ -238,3 +234,11 @@ Hard rules for every item, whoever does it:
   shown; one-time consent remembered in settings; page list + cost estimate before sending). The channel-test
   screen flags low-confidence rows with their manual page. Tests: `tests/test_app_manual_review.py`.
   An API key entry in Settings is not built yet (item 38).
+- **32. P6 packaging files** (2026-10-28). `packaging/livereact.spec` (PyInstaller one-folder from
+  `packaging/launch.py`; excludes PyQt5/PyQt6/OpenGL/tkinter and unused Qt modules; collects
+  `fixtures/builtin/*.json`, `default_rig.json`, `presets/presets.json` and `ui/icons/` when it exists;
+  macOS bundle with microphone / local-network usage strings), `packaging/windows/livereact.iss` (per-user
+  Inno Setup install of `dist/LiveReact`, user data left on uninstall), `packaging/macos/entitlements.plist`
+  (not sandboxed; network client/server, audio input; library-validation keys for the bundled Python),
+  `.github/workflows/release.yml` (windows-x64, macos-arm64, macos-x86_64; Azure Trusted Signing / codesign /
+  notarize only when their secrets exist). Nothing is built nightly. Tests: `tests/test_app_packaging.py`.
