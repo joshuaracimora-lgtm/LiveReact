@@ -55,9 +55,6 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-19. **P5 put the panel in the console.** Replace the Show tab's cue / laser / override groups in
-    `ui/console.py` with the panel. Every existing console test stays green (hotkeys, pins, laser
-    checkbox behaviour). Accept: `gate_app` with the UI checks.
 20. **P2 rig manager dialog.** `src/livereact/ui/rig_manager.py`: New (empty), Open (file dialog in
     `userdata` rigs), Recent (from `settings.py`), Demo rig (packaged `default_rig.json`, read-only; "Save
     as" copies it to the user folder). Emits `rig_chosen(path)`. A Rig menu entry in the console opens it;
@@ -217,3 +214,11 @@ Hard rules for every item, whoever does it:
   BUILD, ARM DROP, STROBE BURST, SKIP, Tap, Laser Cue, Laser Hit, and Laser Show follow/rotate/hold + look
   grid on `show` rigs), Presets block (three combos, Save/Load event). Calls `app.apply_preset(effect)`
   only when the app has it, else stores the choice. Tests: `tests/test_app_override_panel.py`.
+- **19. P5 put the panel in the console** (2026-10-28). The Show tab's Cues group and the "Arm lasers"
+  checkbox are replaced by the override panel; `b_cue`, `b_arm`, `b_burst`, `b_skip`, `b_tap`,
+  `b_laser_cue`, `b_laser_hit` and `cb_laser` are the panel's widgets, so every hotkey (C, D, Space, ->,
+  T, K, J, L) and every console test is unchanged; tap tempo and strobe burst share the console's
+  handlers; `refresh()` mirrors the panel. The console opens the Manual Override group expanded (the
+  widget's default is collapsed) so cues stay one press away mid-set: a question for Josh. The `manual`
+  laser profile's scene grid, Blackout/Freeze and Feel stay where they were. Tests: `tests/test_console.py`
+  (all green), gate UI checks.
