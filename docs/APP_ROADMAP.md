@@ -83,7 +83,21 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
+41. **P2 the channel-test screen needs the console's laser arm switch.** Josh, 2026-10-28 (answering the
+    App night's question): laser channels on `ui/channel_test.py` stay at zero unless BOTH its own "Enable
+    laser output" box is ticked AND the console's arm switch (`laser_enable`, L) is on. Two keys for a
+    laser. Test both orders, and that disarming in the console zeroes the screen's laser channels.
+42. **P6 console Help menu.** Help -> About (`ui/about.py`) and Help -> "Run first-time setup again"
+    (`FirstRunDialog`, saving only; wiring the choices into `AppConfig` stays item 40).
+
 ## Decisions only Josh can make (each blocks the items named)
+
+- **Answered 2026-10-28** (the App night's "could not decide" list; Josh: "go with your suggestions"):
+  the Manual Override group opens expanded; the ARM/DISARM button wording stays; an event type that bans
+  lasers disarms them at once; preset numbers are accepted as first guesses; the builtin par and wash bar
+  stay confirmed, the head and laser not; a builtin id can't be redefined by a rig file; amber/UV held at 0;
+  generic head slew 180 deg/s; the manual reader on claude-opus-5-5 with the user's own key; the channel
+  test needs the arm switch too (item 41); `/fixtures/`, `/manuals/`, `/events/` are git-ignored.
 
 - **Laser liability** (30, 35): checklist + EULA wording; whether audio-only users (no Pro DJ Link)
   get lasers at all; whether lasers ship as "experimental" in 1.0.

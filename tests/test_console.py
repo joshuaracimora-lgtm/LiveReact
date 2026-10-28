@@ -816,13 +816,14 @@ def test_rig_config_side_column_follows_a_venue_tab_move(qapp):
     so after a Venue-tab move it still showed -- and Save wrote back -- the
     side the head had at launch. A placed head's side comes from its x, so
     the column shows that side and can't be edited to disagree with it."""
+    from livereact.ui import rig_config as rc
     from livereact.ui.console import ConsoleWindow
 
     app = _app()
     win = ConsoleWindow(app)
     cfg = win.rig_config_tab
-    row = next(r for r in range(cfg.table.rowCount()) if cfg.table.item(r, 0).text() == "mh_l")
-    side_combo = cfg.table.cellWidget(row, 5)
+    row = next(r for r in range(cfg.table.rowCount()) if cfg.table.item(r, rc.C_SLOT).text() == "mh_l")
+    side_combo = cfg.table.cellWidget(row, rc.C_SIDE)
     assert side_combo.currentText() == "left"
 
     tab = win.venue_tab

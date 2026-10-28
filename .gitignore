@@ -30,6 +30,10 @@ Thumbs.db
 .vscode/
 .idea/
 logs/
+# the app's per-user data in a source checkout (src/livereact/userdata.py dev mode)
+/fixtures/
+/manuals/
+/events/
 # Josh's song data (audio, ear timelines, look notes, review notes) -- never in the public repo;
 # it travels between machines with tools/private_bundle.py
 tracks/*
