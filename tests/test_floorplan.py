@@ -291,3 +291,20 @@ def test_axis_numbers_are_not_drawn_under_a_body(qapp, rig_name):
     assert all(scene.contains(t.sceneBoundingRect()) for t in texts if t.text())
     booth = next(t for t in texts if t.text() == "DJ BOOTH WALL")
     assert not [t.text() for t in ticks if t.sceneBoundingRect().intersects(booth.sceneBoundingRect())]
+
+
+def test_tooltips_follow_a_drag(qapp):
+    """UI_BUGS (labels): after dragging a fixture or a target its tooltip
+    still gave the old position in feet (only refresh_layout rebuilt them)."""
+    from livereact.fixtures.geometry import m_to_ft
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    view = FloorPlanView(rig, editable=True)
+    _click(view, view._bodies["mh"], drag_px=(60, 0))
+    mh = rig.fixture("mh")
+    assert mh.position.x > ft_to_m(5.5)
+    assert f"{m_to_ft(mh.position.x):.1f} ft along the booth wall" in view._bodies["mh"].toolTip()
+    _click(view, view._targets["dj_booth"], drag_px=(0, -60))
+    p = rig.venue.targets["dj_booth"]
+    assert f"{m_to_ft(p.y):.1f} ft out" in view._targets["dj_booth"].toolTip()

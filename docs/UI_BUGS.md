@@ -19,7 +19,7 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
    - leader lines, beams and wedges are not obstacles;
-   - captions don't follow a drag until release; tooltips are never refreshed after a drop;
+   - captions don't follow a drag until release (tooltips after a drop: fixed below);
    - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
@@ -31,6 +31,11 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **A fixture's or target's tooltip kept its old position after a drag** (only `refresh_layout` set
+  tooltips; a drop does not rebuild the plan). The drop commits and the placement-box path now rewrite
+  the tooltip from the new position. Test: `tests/test_floorplan.py::test_tooltips_follow_a_drag`
+  (2026-10-28).
 
 - **Axis numbers were drawn under bodies**: a fixture on the booth wall (testing_setup's wash bar) hung
   over the x-axis "15′"/"20′", and a target on the left wall over the y-axis "25′" (junior_crib); the

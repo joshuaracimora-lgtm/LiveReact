@@ -389,8 +389,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             item.fill = QtGui.QColor(0, 0, 0); item.edge = _TARGET; item.edge_w = 2
             item.setPos(self.to_scene(p.x, p.y))
             item.setZValue(4.5 if is_ceiling else 5)      # the hollow ceiling diamond sits under a floor one
-            item.setToolTip(f"{name}\n{m_to_ft(p.x):.1f} ft along the booth wall, "
-                            f"{m_to_ft(p.y):.1f} ft out, {m_to_ft(p.z):.1f} ft up")
+            item.setToolTip(self._target_tip(name, p))
             if self.editable:
                 item.setFlags(movable)
                 item.setCursor(QtCore.Qt.CursorShape.OpenHandCursor)
@@ -409,9 +408,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             o = self.fixture_origin(fx)
             placed = fx.position is not None
             item.setPos(self.to_scene(o.x, o.y))
-            where = (f"{m_to_ft(o.x):.1f} ft along the booth wall, {m_to_ft(o.y):.1f} ft out, "
-                     f"{m_to_ft(o.z):.1f} ft up" if placed else "not placed yet -- drag it to where it hangs")
-            item.setToolTip(f"{fx.label}\n{fx.type_name} @ DMX {fx.address}\n{where}")
+            item.setToolTip(self._fixture_tip(fx))
             if self.editable:
                 item.setFlags(movable | QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
                 item.setCursor(QtCore.Qt.CursorShape.OpenHandCursor)
@@ -436,6 +433,18 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self._layout_dirty = True
         self._fit()
         self.update_from_universe(self.rig.boot_universe())
+
+    def _fixture_tip(self, fx) -> str:
+        o = self.fixture_origin(fx)
+        where = (f"{m_to_ft(o.x):.1f} ft along the booth wall, {m_to_ft(o.y):.1f} ft out, "
+                 f"{m_to_ft(o.z):.1f} ft up" if fx.position is not None
+                 else "not placed yet -- drag it to where it hangs")
+        return f"{fx.label}\n{fx.type_name} @ DMX {fx.address}\n{where}"
+
+    @staticmethod
+    def _target_tip(name: str, p: Point3) -> str:
+        return (f"{name}\n{m_to_ft(p.x):.1f} ft along the booth wall, "
+                f"{m_to_ft(p.y):.1f} ft out, {m_to_ft(p.z):.1f} ft up")
 
     def _clear_axis_numbers(self, x_ticks: list, y_ticks: list, booth) -> None:
         """The axis numbers sit at a fixed offset from the room edge; a body
@@ -645,6 +654,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         z = old.z if old is not None else 1.0
         fx.position = Point3(x_m, y_m, z)
         item.setPos(self.to_scene(x_m, y_m))
+        item.setToolTip(self._fixture_tip(fx))
         cap = self._captions.get(key)
         if cap is not None:
             cap.set_text(fx.label, f"@{fx.address} · {m_to_ft(z):.0f}′ up")
@@ -660,6 +670,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         z = old.z if old is not None else 1.0
         v.targets[name] = Point3(x_m, y_m, z)
         item.setPos(self.to_scene(x_m, y_m))
+        item.setToolTip(self._target_tip(name, v.targets[name]))
         self._layout_dirty = True
         return old != v.targets[name]
 
@@ -668,6 +679,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         item = self._bodies.get(slot_id)
         if item is not None:
             item.setPos(self.to_scene(p.x, p.y))
+            item.setToolTip(self._fixture_tip(self.rig.fixture(slot_id)))
             cap = self._captions.get(slot_id)
             if cap is not None:
                 cap.set_text(cap.title.text(), f"@{self.rig.fixture(slot_id).address} · {m_to_ft(p.z):.0f}′ up")
