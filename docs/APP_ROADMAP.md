@@ -48,21 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-6. **P1 fixture definition format.** `src/livereact/fixtures/definition.py`: dataclasses +
-   `load_definition()` / `validate()` / `kind_of()` for schema `livereact-fixture/1`:
-   - `id`, `manufacturer`, `model`, `category` (par, wash_bar, moving_head, strobe, dimmer, laser, other)
-   - `source{kind: builtin|ofl|manual_ai|user, ofl_key, license, attribution, pdf_sha256, confirmed, confirmed_at}`
-   - `physical{pan_deg, tilt_deg, pan_max_deg_s, laser{class, power_mw}}`
-   - `modes[{name, channels[{offset, function, default, fine_of, capabilities[{range, type, color, speed_hz, label, confidence, source_page}]}]}]`
-   - `laser_intents{blank, line_static, fan, chop_channel}`.
-
-   `function` and capability `type` mirror Open Fixture Library's vocabulary (dimmer, red, green, blue,
-   white, amber, uv, color_wheel, pan, pan_fine, tilt, tilt_fine, pan_tilt_speed, shutter, strobe, gobo,
-   prism, focus, zoom, macro, mode, reset, laser_pattern, laser_x, laser_y, laser_rotate, laser_color,
-   generic). `kind_of()` maps a function to the existing `profiles.ChannelKind`. `validate()` rejects:
-   gaps or duplicates in offsets, ranges that overlap or fall outside 0-255, an unpaired fine channel, and
-   a default inside a maintenance/reset range.
-   Accept: `tests/test_app_fixture_definition.py`.
 7. **P1 the four built-in models as definitions.** `src/livereact/fixtures/builtin/*.json` for
    `shehds_180w_mh`, `shehds_3w_laser`, `rgb_par`, `ok103_wash_bar`, read from `profiles.py`
    (documentation and patch-UI source; the native classes stay what the show runs). Accept: a test that
@@ -225,4 +210,8 @@ Hard rules for every item, whoever does it:
 
 ## Done
 
-(none yet)
+- **6. P1 fixture definition format** (2026-10-28). `fixtures/definition.py`: frozen dataclasses,
+  `load_definition()` (dict or JSON file), `validate()`, `kind_of(function, category)`, `to_dict()`
+  round-trip. Offsets are 0-based per mode; a laser's every channel is LASER; capability types add
+  `maintenance` and `no_function` to the function list; `validate()` also checks `laser_intents`
+  offsets/values and duplicate mode names. Tests: `tests/test_app_fixture_definition.py`.
