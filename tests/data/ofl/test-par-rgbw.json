@@ -1,0 +1,25 @@
+{
+  "$comment": "Written for LiveReact's tests in Open Fixture Library's format; not an OFL fixture.",
+  "name": "Test Par RGBW",
+  "categories": ["Color Changer"],
+  "meta": {"authors": ["LiveReact tests"]},
+  "availableChannels": {
+    "Dimmer": {"capability": {"type": "Intensity"}},
+    "Red": {"capability": {"type": "ColorIntensity", "color": "Red"}},
+    "Green": {"capability": {"type": "ColorIntensity", "color": "Green"}},
+    "Blue": {"capability": {"type": "ColorIntensity", "color": "Blue"}},
+    "White": {"capability": {"type": "ColorIntensity", "color": "White"}},
+    "Lime": {"capability": {"type": "ColorIntensity", "color": "Lime"}},
+    "Strobe": {
+      "defaultValue": 0,
+      "capabilities": [
+        {"dmxRange": [0, 9], "type": "NoFunction"},
+        {"dmxRange": [10, 255], "type": "StrobeSpeed", "speedStart": "1Hz", "speedEnd": "25Hz"}
+      ]
+    }
+  },
+  "modes": [
+    {"name": "4-channel", "shortName": "4ch", "channels": ["Red", "Green", "Blue", "White"]},
+    {"name": "8-channel", "shortName": "8ch", "channels": ["Dimmer", "Red", "Green", "Blue", "White", "Lime", "Strobe", null]}
+  ]
+}

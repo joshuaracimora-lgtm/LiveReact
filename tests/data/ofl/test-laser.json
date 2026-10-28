@@ -1,0 +1,16 @@
+{
+  "$comment": "Written for LiveReact's tests in Open Fixture Library's format; not an OFL fixture.",
+  "name": "Test Beam Laser",
+  "categories": ["Laser", "Effect"],
+  "meta": {"authors": ["LiveReact tests"]},
+  "availableChannels": {
+    "Mode": {"capabilities": [
+      {"dmxRange": [0, 49], "type": "NoFunction", "comment": "Laser off"},
+      {"dmxRange": [50, 99], "type": "Effect", "effectName": "Manual"},
+      {"dmxRange": [100, 255], "type": "Effect", "effectName": "Sound active", "soundControlled": true}
+    ]},
+    "Pattern": {"capability": {"type": "Effect", "effectName": "Pattern"}},
+    "Dimmer": {"capability": {"type": "Intensity"}}
+  },
+  "modes": [{"name": "3-channel", "channels": ["Mode", "Pattern", "Dimmer"]}]
+}

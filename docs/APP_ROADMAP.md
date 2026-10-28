@@ -57,10 +57,6 @@ Hard rules for every item, whoever does it:
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
 36. **P2 fixtures menu.** Open `FixtureLibraryBrowser` from the console (a "Fixtures" menu next to "Rig") and
     refresh the Rig Config tab's type list after a fixture is added. Accept: UI test.
-24. **P3 OFL converter.** `src/livereact/fixtures/ofl.py`: a pure function from OFL fixture JSON to a
-    definition. Covers `availableChannels`, `modes`, fine channel aliases, capability
-    `dmxRange`/`type`/`color`/speed, and `physical`. Unknown capability types become `generic`. Test data:
-    small OFL-format files written for the tests under `tests/data/ofl/` (not copied from OFL). Accept: tests.
 25. **P3 OFL search + fetch service.** A cached copy of OFL's fixture register (manufacturer/model index)
     in the user folder, fuzzy search, and on-demand fetch of one fixture's JSON, all in a `QThread` worker
     with timeouts. Offline it reports "Open Fixture Library unavailable" and the wizard offers the other
@@ -228,3 +224,10 @@ Hard rules for every item, whoever does it:
   model, category, mode, a channel table; fine channels paired automatically) producing a `user` definition,
   every route ending on the channel-test screen. Tests: `tests/test_app_fixture_wizard.py`. Not yet in a
   console menu (item 36).
+- **24. P3 OFL converter** (2026-10-28). `fixtures/ofl.py` `ofl_to_definition(ofl, key, manufacturer=None,
+  license=None)`: `availableChannels`, `modes` (shortName), first-level fine aliases (`pan_fine`/`tilt_fine`, or
+  the coarse function with `fine_of`), capability `dmxRange` / type / colour (wheel slots resolved through
+  `wheels`) / Hz speeds, `defaultValue` (number or %), `physical.focus` pan/tilt, categories; unknown types,
+  OFL nulls, matrix inserts and deeper fine bytes become `generic`. Unconfirmed, `source.kind = ofl`,
+  attribution with the OFL key and authors; `license` is left to the caller (Josh's decision). Test data:
+  `tests/data/ofl/test-*.json`, written for the tests. Tests: `tests/test_app_ofl.py`.
