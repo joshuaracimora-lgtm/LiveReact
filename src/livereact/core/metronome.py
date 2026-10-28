@@ -97,6 +97,7 @@ class SectionState:
     beats_to_drop: int = -1
     planned_hit: float = 0.0
     roll_progress: float = -1.0       # inside a planned roll lead-in: 0..1 through it; -1 = not in a roll
+    style: object = None              # the plan's SongStyle (rekordbox/song_style.py); None = no plan
     # the deck is looping: track_beat (and everything above) is pinned at loop_pin_beat
     looping: bool = False
     loop_pin_beat: int = 0
@@ -1795,6 +1796,9 @@ class Metronome(threading.Thread):
             if plan.palette:   # D-23 / look notes: the song's colour and its one companion
                 self.palette, self.palette_spot = palette_mod.song_pair(bucket, plan.palette, self.palette,
                                                                         self.palette_spot)
+                if plan.style.spots == "split" and palette_mod.family(bucket) == "drop":
+                    # song_style.py: this song's heads carry its companion colour in the drop
+                    self.palette_spot = palette_mod.COMPANION.get(plan.palette, self.palette_spot)
             return
         self._derive_palette_auto()
 
@@ -1963,6 +1967,7 @@ class Metronome(threading.Thread):
             planned_hit=ps.hit if ps is not None else 0.0,
             roll_progress=(min(1.0, max(0.0, (track_beat - ps.beat) / max(1, ps.end_beat - ps.beat)))
                            if ps is not None and ps.roll else -1.0),
+            style=plan.style if plan is not None else None,
             looping=looping, loop_pin_beat=loop_pin_beat,
         )
         if self.phrases_mode != "drive":
@@ -2202,12 +2207,21 @@ class Metronome(threading.Thread):
             beats_to_drop=self._section.beats_to_drop,
             planned_roll_progress=self._section.roll_progress if self._section.plan_active else -1.0,
             planned_hit=self._section.planned_hit if self._section.plan_active else 0.0,
+            **self._style_fields(),
             in_transition=now < self._transition_until,
             free_running=not self._is_pdl_fresh(now),
             pdl_fresh=self._is_pdl_fresh(now),
             midi_fresh=self._is_midi_fresh(now),
             audio_fresh=self._is_audio_fresh(now),
         )
+
+    def _style_fields(self) -> dict:
+        """The snapshot's planned_* style fields: the plan's SongStyle in drive mode, else the defaults."""
+        st = self._section.style if self._section.plan_active else None
+        if st is None:
+            return {}
+        return dict(planned_strobe_style=st.strobe, planned_accent=st.accent, planned_spots=st.spots,
+                    planned_move_start=st.move_start, planned_move_speed=st.move_speed)
 
     def _maybe_log(self, now: float, snap: ShowSnapshot) -> None:
         if now - self._last_log >= self._log_interval:

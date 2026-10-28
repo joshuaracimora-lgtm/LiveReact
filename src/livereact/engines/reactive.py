@@ -222,6 +222,21 @@ STROBE_PHRASE_TAIL_BEATS = 2  # beats 3+4 of the phrase's last bar -- "strobe
                               # next downbeat. ~0.9s at 133bpm, under
                               # STROBE_MAX_BURST_S at anything above ~80bpm.
 
+# The song's own strobe rhythm (rekordbox/song_style.py, 2026-10-28). Every style is ONE moment per
+# phrase, so each stays inside the burst gate below (<= STROBE_MAX_BURST_S, then STROBE_MIN_SPACING_S
+# dark -- a 4-bar rhythm or two separate hits in a bar would be eaten by the 8 s spacing):
+# (phrase bars, bar of the phrase, beats that strobe). "tail" is the rule above; "stab" is beat 4
+# alone; "downbeat" lands ON the next phrase's first two beats instead of leading into them (never
+# on the drop's own first bar); "sparse" is the tail of every second phrase; "none" leaves the drop to
+# the wash and the heads (TIME-21 restraint). The build's count-in strobe is the same for every style.
+STROBE_STYLES: dict[str, tuple[int, int, tuple[int, ...]]] = {
+    "tail": (STROBE_PHRASE_BARS, STROBE_PHRASE_BARS - 1, (3, 4)),
+    "stab": (STROBE_PHRASE_BARS, STROBE_PHRASE_BARS - 1, (4,)),
+    "downbeat": (STROBE_PHRASE_BARS, 0, (1, 2)),
+    "sparse": (2 * STROBE_PHRASE_BARS, 2 * STROBE_PHRASE_BARS - 1, (3, 4)),
+    "none": (0, 0, ()),
+}
+
 # Continuous BUILD strobe (Josh, 2026-09-15, second live test of the day:
 # "the strobe should be strobing throughout the build up and the strobe
 # should slowly get faster throughout the build up but currently it is not
@@ -401,13 +416,20 @@ def _drop_held_level(drop_hit_intensity: float) -> float:
 BEAT4_FLASH_PEAK = 1.0          # the flash always peaks at full
 BEAT4_FLASH_DECAY_PHASE = 0.6   # fraction of beat 4 the flash takes to fall back to held
 
+# The song's own accent beat(s) (rekordbox/song_style.py, Josh 2026-10-28: "each song ... unique"):
+# beat 4 stays the default; brighter songs flash on the backbeat (2 and 4, where the claps are).
+# No downbeat option: a flash on 1 doubles the kick (the Bible's amateur kick-follow), and it moved
+# SWEETER's clap drop off its claps (STRUCT-09 PASS -> FAIL in the 2026-10-28 gate run).
+ACCENT_BEATS: dict[str, tuple[int, ...]] = {"4": (4,), "24": (2, 4)}
+
 
 def _beat4_flash(snap: ShowSnapshot, held: float) -> float:
-    """The wash level during beat 4: starts at BEAT4_FLASH_PEAK on the beat
+    """The wash level during the accent beat (beat 4, or the song's own
+    ACCENT_BEATS): starts at BEAT4_FLASH_PEAK on the beat
     and falls linearly back to `held` by BEAT4_FLASH_DECAY_PHASE of the
     beat, then stays at `held`. Returns `held` unchanged on any other
     beat."""
-    if snap.beat_in_bar != 4 or snap.beat_phase >= BEAT4_FLASH_DECAY_PHASE:
+    if snap.beat_in_bar not in ACCENT_BEATS.get(snap.planned_accent, (4,))             or snap.beat_phase >= BEAT4_FLASH_DECAY_PHASE:
         return held
     remaining = 1.0 - snap.beat_phase / BEAT4_FLASH_DECAY_PHASE
     return held + (BEAT4_FLASH_PEAK - held) * remaining
@@ -730,9 +752,10 @@ class ReactiveLayerEngine:
         if origin is None:
             return 0.0  # engine started mid-drop with no known downbeat to count from
         bars_in = snap.bar - origin
-        last_bar_of_phrase = (bars_in % STROBE_PHRASE_BARS) == STROBE_PHRASE_BARS - 1
-        in_tail = snap.beat_in_bar > 4 - STROBE_PHRASE_TAIL_BEATS
-        if not (last_bar_of_phrase and in_tail):
+        phrase_bars, bar_of_phrase, beats = STROBE_STYLES.get(snap.planned_strobe_style, STROBE_STYLES["tail"])
+        if not phrase_bars or bars_in < bar_of_phrase or (bar_of_phrase == 0 and bars_in < phrase_bars):
+            return 0.0   # no strobe in this song's drops (song_style.py), or the drop's own first bar
+        if not ((bars_in % phrase_bars) == bar_of_phrase and snap.beat_in_bar in beats):
             return 0.0
         # Always the ceiling (2026-09-15, session-20260915-140630): scaling
         # the tail burst by drop_hit_intensity gave the track's second drop

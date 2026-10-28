@@ -57,6 +57,10 @@ class PhraseService:
         # so the gate scored looks the live show never planned
         self.tracks_dir = Path(tracks_dir) if tracks_dir else None
         self._plans: dict[tuple[str, int], object] = {}   # (slot, track_id) -> TrackPlan
+        # song_style.py: each track's style differs from the track loaded before it; a reload of the
+        # same track keeps the predecessor it was first planned against, so its look never changes
+        self._last_style = None
+        self._style_prev: dict[tuple[str, int], object] = {}
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self.stats = {"requests": 0, "fetched": 0, "no_table": 0, "errors": 0}
@@ -218,7 +222,9 @@ class PhraseService:
             try:
                 plan = plan_track(table, track_id=track_id, title=track.title, bpm=track.bpm, grid=grid,
                                   waveform=wave, scene_pool=self.scene_pool, look=self._look(track),
-                                  classes=self.classes)
+                                  classes=self.classes,
+                                  previous_style=self._style_prev.setdefault((slot, track_id), self._last_style))
+                self._last_style = plan.style   # the next track loaded must differ from this one
                 log.info("phrase service: %s", plan.summary())
             except Exception:  # noqa: BLE001 - a plan is a bonus; the table alone is still useful
                 log.exception("phrase service: planning failed for track %d", track_id)

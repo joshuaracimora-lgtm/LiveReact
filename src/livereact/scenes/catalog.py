@@ -270,11 +270,13 @@ def show_catalog(full: bool = False, extra: "list[str] | tuple[str, ...]" = ()) 
     """The catalog the show plays from -- the SAME call in the live app (app.py) and the simulator
     (sim/harness.py), so the gate scores exactly what the show plays (2026-10-26). ``extra``: scene
     names a track plan may use beyond the rotation (section_classes.ClassBook.approved_scenes()),
-    added as reserved scenes."""
+    added as reserved scenes, as are the song-style looks (rekordbox/song_style.py)."""
     import logging
+    from ..rekordbox.song_style import BREAK_LOOKS, BUILD_LOOKS
     by_name = {cls.name: cls for cls in ALL_SCENES}
     reserved = []
-    for name in extra:
+    # a song's own build/break look (rekordbox/song_style.py) is named by its plan, never rotated
+    for name in (*BUILD_LOOKS, *BREAK_LOOKS, *extra):
         cls = by_name.get(name)
         if cls is None:
             logging.getLogger(__name__).warning("show catalog: no scene named %r (section class); ignored", name)

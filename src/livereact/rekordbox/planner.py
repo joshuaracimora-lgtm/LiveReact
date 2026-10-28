@@ -32,6 +32,7 @@ from .look_notes import LookNotes
 from .pssi import PhraseTable, beat_to_seconds
 from .section_classes import ClassBook
 from .sections import profile_position, section_features, track_profile
+from .song_style import DEFAULT_STYLE, SongStyle, choose as choose_style, song_features
 from .waveform import ColorWaveform
 
 log = logging.getLogger(__name__)
@@ -129,6 +130,7 @@ class TrackPlan:
     source: str = "rekordbox"
     palette: str = ""                      # look notes hook_palette: one hue for the drop family, else the seed walk
     mood_words: tuple[str, ...] = ()       # look notes mood, for the tools / report
+    style: SongStyle = DEFAULT_STYLE       # the song's own look set (song_style.py), held for the whole track
 
     def at_beat(self, beat: int) -> tuple[PlannedSection | None, PlannedSection | None]:
         if not self.sections:
@@ -163,8 +165,8 @@ class TrackPlan:
         for s in self.sections:
             tag = "**" if s.big_moment else ("*" if s.is_hook else "")
             parts.append(f"{s.label}={'roll' if s.roll else s.kind}{tag}@{s.beat}")
-        return (f"plan track {self.track_id} {self.title!r} palette_seed={self.palette_seed} hook={self.hook_scene!r}: "
-                + " > ".join(parts))
+        return (f"plan track {self.track_id} {self.title!r} palette_seed={self.palette_seed} hook={self.hook_scene!r} "
+                f"style[{self.style.summary()}]: " + " > ".join(parts))
 
 
 def _look_big_moment(look: LookNotes | None, raw: list[dict], runs: list[list[int]], *, grid, bpm: float) -> list[int] | None:
@@ -212,11 +214,14 @@ def _pick(pool: dict[str, list[str]], bucket: str, seed: int) -> str:
 def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float = 0.0,
                grid: list[tuple[int, float, int]] | None = None, waveform: ColorWaveform | None = None,
                scene_pool: dict[str, list[str]] | None = None, rules: PlanRules | None = None,
-               look: LookNotes | None = None, classes: ClassBook | None = None) -> TrackPlan:
+               look: LookNotes | None = None, classes: ClassBook | None = None,
+               previous_style: SongStyle | None = None) -> TrackPlan:
     """``classes``: the section classes (section_classes.load()). Every section is tagged with its
     class; only an APPROVED class changes the show (its scene replaces the bucket pick, unless a look
     note names the track's hook scene), and an approved palette_by_profile picks the drop palette
-    from the track's frequency profile when no look note names one (D-23)."""
+    from the track's frequency profile when no look note names one (D-23). ``previous_style``: the
+    style of the song before this one (song_style.py: this one differs from it in at least
+    MIN_DIFFERENCES ways)."""
     rules = rules or PlanRules()
     pool = scene_pool or DEFAULT_SCENE_POOL
     seed = int(track_id) if track_id else 0
@@ -403,6 +408,12 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
             fill_beat=r["fill_beat"],
             roll=bool(r.get("roll")),
         ))
+    # --- the song's own look set (song_style.py, 2026-10-28): its build and break looks replace the pool's ---
+    features = song_features(sections, seconds=seconds, waveform=waveform)
+    style = choose_style(features, previous_style)
+    if features is not None:
+        looks = {"build": style.build, "break": style.brk}
+        sections = [replace(s, scene=looks[s.bucket]) if s.bucket in looks else s for s in sections]
     palette = (look.hook_palette or "") if look is not None else ""
     if not palette and classes is not None:
         palette = classes.palette_for(track_profile(waveform), seed, profile_position(waveform))
@@ -410,7 +421,7 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
                      hook_scene=hook_scene, sections=tuple(sections),
                      big_moment_index=big_run[0] if big_run else None, rules=rules,
                      palette=palette,
-                     mood_words=tuple(look.mood) if look is not None else ())
+                     mood_words=tuple(look.mood) if look is not None else (), style=style)
     if classes is not None and classes.classes:
         plan = _apply_classes(plan, classes, table, grid=grid, waveform=waveform, bpm=bpm, look=look)
     log.debug("%s", plan.summary())

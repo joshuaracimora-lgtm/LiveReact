@@ -200,7 +200,8 @@ class DropStrobeStab(Scene):
         c = Contribution()
         r, g, b = scene_color(snap)
         paint_wash(c, rig, r, g, b)
-        paint_spots(c, rig, r, g, b, intensity)
+        sr, sg, sb = spot_color(snap)   # the wash colour, or the song's companion (song_style.py spots=split)
+        paint_spots(c, rig, sr, sg, sb, intensity)
         # 2026-10-05: no longer parked at 0.5/0.5 -- "after the drop is
         # when the moving heads should be moving more intense" (Josh,
         # first run with both heads). scenes/movement.py picks a

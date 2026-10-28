@@ -223,14 +223,16 @@ def block_index(snap: ShowSnapshot) -> int:
 
 
 def current_shape(snap: ShowSnapshot) -> MovementFn:
-    return DROP_SEQUENCE[block_index(snap) % len(DROP_SEQUENCE)]
+    # the song's own opening shape (rekordbox/song_style.py move_start), then the same order
+    return DROP_SEQUENCE[(block_index(snap) + int(snap.planned_move_start)) % len(DROP_SEQUENCE)]
 
 
 def drop_movement(snap: ShowSnapshot, side: str, a: Anchors = FALLBACK_ANCHORS,
                   peak: bool = False) -> tuple[float, float]:
     """The head position for a DROP (or PEAK) look this tick: the movement
     function for this 8-bar block, at double speed under PEAK."""
-    return current_shape(snap)(snap, side, a, PEAK_SPEED if peak else 1.0)
+    speed = (PEAK_SPEED if peak else 1.0) * float(snap.planned_move_speed)   # song_style.py move_speed
+    return current_shape(snap)(snap, side, a, speed)
 
 
 def drop_movement_name(snap: ShowSnapshot) -> str:
