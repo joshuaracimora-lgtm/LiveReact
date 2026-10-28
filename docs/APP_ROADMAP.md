@@ -48,13 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-10. **P1 GenericFixture.** `src/livereact/fixtures/generic.py` `GenericFixture(definition, mode)`, a
-    `profiles.Fixture` subclass:
-    - `channel_kinds()` and `boot_defaults()` come from the definition (shutter open, dimmer 0).
-    - `set_intensity` drives the dimmer channel, or scales RGB when the fixture has no dimmer.
-    - `set_color` mixes RGB(+W/A/UV), or picks the nearest wheel slot by capability colour.
-    - `set_strobe` maps into the strobe range; `visual_state()` is implemented too.
-    Accept: tests over a par, an RGBW bar and a wheel-only fixture definition.
 11. **P1 GenericMovingHead.** Adds 8/16-bit pan/tilt, a slew limit from `physical.pan_max_deg_s` (a
     conservative default when missing), and home position. Accept: tests.
 12. **P1 GenericLaser.** Driven only through `laser_intents` (blank, line_static, fan). Every channel is
@@ -216,3 +209,10 @@ Hard rules for every item, whoever does it:
   `dev_mode()` (`pyproject.toml` two levels above the package, or `--dev`) -> the working folder.
   `settings.py` `Settings`: recent rigs (10, most recent first), last event, onboarding done; corrupt
   file -> defaults, unknown keys kept, atomic save. Not wired (item 3). Tests: `tests/test_app_userdata.py`.
+- **10. P1 GenericFixture** (2026-10-28). `fixtures/generic.py` `GenericFixture(definition, mode,
+  address, label, role, side)`: refuses an invalid definition; boot = definition defaults with dimmer 0
+  and shutter at its "open" capability; intensity through the native gamma+floor curve, or RGB scaling
+  when there is no dimmer (the fixture remembers the last colour/level for that); RGB(+W) with W folded
+  in when absent, amber/UV held at 0; nearest wheel slot (middle of its range); strobe into the strobe
+  capability range (0 = open); master brightness, strobe cap, colour bias, `visual_state()`.
+  Tests: `tests/test_app_generic_fixture.py` (par, RGBW bar, wheel-only).
