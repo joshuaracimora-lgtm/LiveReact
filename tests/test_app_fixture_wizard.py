@@ -88,13 +88,15 @@ def test_three_routes_from_the_start_page(qapp):
     assert w.stack.currentIndex() == fw.PAGE_HAND and w.b_next.isVisibleTo(w)
 
 
-def test_pages_without_a_backend_say_so(qapp):
-    from PySide6 import QtWidgets
+def test_every_route_has_its_page(qapp):
     from livereact.ui import fixture_wizard as fw
-    w = fw.FixtureWizard()
-    for page in (fw.PAGE_MANUAL,):        # Open Fixture Library is built (item 25)
-        texts = [lbl.text() for lbl in w.stack.widget(page).findChildren(QtWidgets.QLabel)]
-        assert fw.NOT_BUILT in texts
+    from livereact.ui.manual_upload import UploadManualPage
+    from livereact.ui.ofl_worker import OflSearchPage
+    w = fw.FixtureWizard(ofl_service_factory=_offline_ofl, threaded=False,
+                         manual_page_kwargs={"key_provider": lambda: None, "online": lambda: True})
+    assert isinstance(w.stack.widget(fw.PAGE_OFL), OflSearchPage)
+    assert isinstance(w.stack.widget(fw.PAGE_MANUAL), UploadManualPage)
+    assert "API key" in w.manual_page.availability()
 
 
 def test_hand_entry_needs_names_and_channels(qapp):

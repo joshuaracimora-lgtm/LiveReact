@@ -61,11 +61,9 @@ Hard rules for every item, whoever does it:
     `FIXTURE_URL` point at OFL's GitHub `master` branch and were not checked by hand (the agent has no
     internet). Confirm them (or OFL's own API), and decide the `license` string the wizard passes to
     `import_fixture()` (OFL data license; see Decisions). Then list OFL attribution in About (item 33).
-28. **P4 manual reader worker + review.** `manual_reader/worker.py` (`QThread`, cancellable, result cached
-    by PDF sha256 so a manual is never paid for twice) and `review.py`: validate, save a `manual_ai` draft
-    (`confirmed: false`), open the channel-test screen with low-confidence cells highlighted and the source
-    page shown. Upload page of the wizard: one-time consent ("the PDF is sent to Anthropic"); greyed out
-    with no key or offline. Accept: UI tests with a fake client.
+38. **P4 API key settings.** A Settings dialog field that stores the Anthropic key with
+    `manual_reader.client.store_api_key()` (keychain only), shows whether one is set (never the key), and a
+    "Remove" button. Accept: UI tests with a fake keyring.
 29. [JOSH] **P4 manual reader evaluation (costs money).** `tools/eval_manual_reader.py` against the three
     known manuals (SHEHDS 180W, SHEHDS 3W laser, OK103), scored per channel against `builtin/`.
 30. [JOSH] [BLOCKED: items 2, 4] **P5 automatic lasers.** New `"auto"` laser profile built on
@@ -233,3 +231,10 @@ Hard rules for every item, whoever does it:
   refusal fallback `fallbacks="default"`; `estimate()` via token counting at $4/$20 per MTok; key from
   keyring else `ANTHROPIC_API_KEY`, never written or logged; typed errors). Tests:
   `tests/test_app_manual_client.py` (recorded response, fake client and keyring).
+- **28. P4 manual reader worker + review** (2026-10-28). `manual_reader/worker.py` (`read_manual()` +
+  `ManualReaderWorker` QThread: cancel before the paid call, answer cached by PDF sha256 so a manual is never
+  paid for twice), `review.py` (`draft()`, `save_draft()` refuses confirmed, `doubts()` below 0.6 confidence),
+  `ui/manual_upload.py` (the wizard's upload page: greyed out without a key or offline, checked only when
+  shown; one-time consent remembered in settings; page list + cost estimate before sending). The channel-test
+  screen flags low-confidence rows with their manual page. Tests: `tests/test_app_manual_review.py`.
+  An API key entry in Settings is not built yet (item 38).

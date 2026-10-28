@@ -23,6 +23,7 @@ from ..fixtures.definition import LASER_INTENTS, FixtureDefinition, LaserIntents
 
 UNTESTED, PASS, FAIL = "untested", "pass", "fail"
 _MARKS = (UNTESTED, PASS, FAIL)
+LOW_CONFIDENCE = 0.6
 _INTENT_LABELS = {"blank": "Blank (laser off)", "line_static": "Static line", "fan": "Fan"}
 
 
@@ -52,6 +53,7 @@ class ChannelTestPanel(QtWidgets.QWidget):
         self.sliders: list[QtWidgets.QSlider] = []
         self.pickers: list[QtWidgets.QComboBox] = []
         self.marks: list[QtWidgets.QComboBox] = []
+        self.flagged: list[int] = []     # channel offsets with a low-confidence reading
 
         v = QtWidgets.QVBoxLayout(self)
         src = definition.source
@@ -68,7 +70,16 @@ class ChannelTestPanel(QtWidgets.QWidget):
 
         grid = QtWidgets.QGridLayout()
         for row, ch in enumerate(sorted(self.mode.channels, key=lambda c: c.offset)):
-            grid.addWidget(QtWidgets.QLabel(f"CH{ch.offset + 1} · {ch.function.replace('_', ' ')}"), row, 0)
+            name = QtWidgets.QLabel(f"CH{ch.offset + 1} · {ch.function.replace('_', ' ')}")
+            doubt = [c for c in ch.capabilities if c.confidence is not None and c.confidence < LOW_CONFIDENCE]
+            if doubt:
+                # the manual reader was unsure: flag the row and say which manual page to check
+                pages = sorted({c.source_page for c in doubt if c.source_page})
+                name.setStyleSheet("color:#e0a030; font-weight:bold;")
+                name.setToolTip("Check against the manual" + (f", page {', '.join(map(str, pages))}" if pages else "")
+                                + f" (confidence {min(c.confidence for c in doubt):.0%})")
+                self.flagged.append(ch.offset)
+            grid.addWidget(name, row, 0)
             s = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             s.setRange(0, 255)
             val = QtWidgets.QLabel("0")
