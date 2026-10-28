@@ -146,6 +146,12 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         fx_menu = self.menuBar().addMenu("&Fixtures")
         fx_menu.addAction("Fixture library…", self.open_fixture_library)
         fx_menu.addAction("Anthropic API key…", self.open_api_key)
+        # Help menu (roadmap item 42): About, and the first-run setup again (it saves only; item 40 applies it)
+        self.about_dialog = None
+        self.first_run_dialog = None
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction("About LiveReact…", self.open_about)
+        help_menu.addAction("Run first-time setup again…", self.open_first_run)
         self.resize(1280, 800)
 
         self._install_shortcuts()
@@ -448,6 +454,21 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         dlg = ApiKeyDialog(self)
         dlg.show()
         return dlg
+
+    def open_about(self):
+        from .about import AboutDialog
+        self.about_dialog = AboutDialog(self)
+        self.about_dialog.show()
+        return self.about_dialog
+
+    def open_first_run(self, **providers):
+        """``providers``: FirstRunDialog's audio/interface lists (tests inject them)."""
+        from .first_run import FirstRunDialog
+        self.first_run_dialog = FirstRunDialog(self, **providers)
+        self.first_run_dialog.completed.connect(
+            lambda _c: self.statusBar().showMessage("Setup saved — it applies at the next start.", 8000))
+        self.first_run_dialog.show()
+        return self.first_run_dialog
 
     def _rig_chosen(self, path: str) -> None:
         """Switch live when the app can (App.switch_rig, roadmap item 4); until then the
