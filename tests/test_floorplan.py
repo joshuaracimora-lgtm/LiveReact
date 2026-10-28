@@ -386,3 +386,29 @@ def test_a_drag_that_snaps_back_puts_the_caption_back(qapp):
     mh = rig.fixture("mh").position
     assert (mh.x, mh.y) == pytest.approx((ft_to_m(5), ft_to_m(2)))
     assert (cap.title.scenePos() - cap0).manhattanLength() < 0.5
+
+
+def test_an_edge_targets_caption_does_not_land_on_another_caption(qapp):
+    """UI_BUGS (labels): on a small room the right-wall target's caption had
+    no free slot inside the scene (every side slot ran past the wall margin)
+    and the least-overlap fallback put it on top of another caption."""
+    from PySide6 import QtWidgets
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = load_rig(os.path.join(HERE, "rigs", "junior_crib.json"))
+    k, v = 0.6, rig.venue
+    rig.venue = Venue(v.width_m * k, v.length_m * k, v.height_m,
+                      {n: Point3(p.x * k, p.y * k, p.z) for n, p in v.targets.items()})
+    for fx in rig.fixtures:
+        if fx.position is not None:
+            fx.position = Point3(fx.position.x * k, fx.position.y * k, fx.position.z)
+    rig.refresh_geometry()
+    view = FloorPlanView(rig, editable=True)
+    view._layout_labels()
+    texts = [(t.text(), t.sceneBoundingRect()) for t in view._scene.items()
+             if isinstance(t, QtWidgets.QGraphicsSimpleTextItem) and t.isVisible() and t.text()]
+    pairs = [(a, b) for i, (a, ra) in enumerate(texts) for b, rb in texts[i + 1:]
+             if ra.intersected(rb).width() * ra.intersected(rb).height() > 2.0]   # ui_snapshot.MIN_OVERLAP_PX2
+    assert pairs == []
+    scene = view._scene.sceneRect()
+    assert all(scene.contains(r) for _, r in texts)

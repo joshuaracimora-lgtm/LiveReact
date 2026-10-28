@@ -30,6 +30,15 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Fixed
 
+- **On a small room an edge target's caption landed on another caption** (junior_crib@small:
+  venue_edge_right on back_wall's "7′ up"): every slot beside a right-wall target ran past the scene, so
+  the least-overlap fallback was used. Before that fallback, `_layout_labels` now tries the same slots up
+  to one caption-width past the side of the scene and grows the scene to take it. Only reached when no
+  slot inside is free: caption positions on all eight real rigs are unchanged (compared before/after);
+  junior_crib@small overlaps 1 -> 0, though several of its captions now sit further from their bodies
+  (leaders). Test: `tests/test_floorplan.py::test_an_edge_targets_caption_does_not_land_on_another_caption`
+  (2026-10-28).
+
 - **Captions stayed behind during a drag** until the mouse was released. `FloorPlanView.mouseMoveEvent`
   now carries each moved body's caption and leader with it; the release re-lays them out as before (also
   when the drop snaps back to where it started). Tests:

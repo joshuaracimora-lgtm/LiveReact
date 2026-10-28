@@ -532,6 +532,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         placed: list[QtCore.QRectF] = []
         order = sorted(self._captions.values(), key=lambda c: (c.item.pos().x(), c.item.pos().y()))
         gap = 4.0
+        grown = False
         for cap in order:
             a = cap.item.pos()
             br = cap.item.boundingRect()
@@ -584,6 +585,16 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                         chosen = r
                         break
             if chosen is None:
+                # a caption on a side wall (an edge target) can find every slot
+                # inside the scene taken while one just past the wall is free:
+                # take it and let the scene grow sideways, rather than overlap
+                wide = scene_rect.adjusted(-lw, 0, lw, 0)
+                for sx, sy in [*self._SLOTS, *ring]:
+                    r = slot_rect(sx, sy)
+                    if wide.contains(r) and not any(r.intersects(o) for o in obstacles + placed + reserved):
+                        chosen, far, grown = r, True, True
+                        break
+            if chosen is None:
                 # last resort (room smaller than its labels): the slot inside the
                 # scene that overlaps the least (bodies, captions AND the bands),
                 # nearest first. (It used to stack straight down, out of the
@@ -597,6 +608,12 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             cap.place(chosen)
             cap.leader_to(chosen if far else None)
             placed.append(chosen.adjusted(-3, -2, 3, 2))
+        if grown:
+            r = scene_rect
+            for p_ in placed:
+                r = r.united(p_)
+            self._scene.setSceneRect(r)
+            self._fit()
 
     def _fit(self) -> None:
         self.fitInView(self._scene.sceneRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio)
