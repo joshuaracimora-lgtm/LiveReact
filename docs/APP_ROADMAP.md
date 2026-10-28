@@ -55,11 +55,6 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-21. **P2 patch view.** Extend `ui/rig_config.py`:
-    - The fixture type list includes library definitions (item 13), with a mode picker.
-    - DMX address auto-assigns the next free block; overlap is shown inline (from `rig.py` validation).
-    - Role/side editors and an "address set on the fixture" checklist column.
-    Accept: UI tests.
 22. **P2 channel-test screen.** Extend `ui/fixture_test.py` for a definition-driven fixture:
     - one slider per channel, labelled by function (not just kind);
     - a capability picker ("Red: 10-19", click to send);
@@ -224,3 +219,9 @@ Hard rules for every item, whoever does it:
   is validated through the loader, remembered, and emitted as `rig_chosen(path)`. The console has a Rig menu
   -> "Rig manager…"; it calls `app.switch_rig(path)` when the app has it (item 4), else says "restart to
   apply". Tests: `tests/test_app_rig_manager.py`.
+- **21. P2 patch view** (2026-10-28). `ui/rig_config.py`: the type list adds the user's (and the rig's
+  embedded) definitions with a Mode column; "Add fixture" takes the next free DMX block that fits; rows whose
+  blocks collide or run past 512 are marked inline, with the loader's `RigError` on the status line; an
+  "Address set" checklist column is saved as the slot's `address_set` (unticked = v1 slot unchanged);
+  definition rows save as v2 `fixture` slots with the `definitions` snapshot. The channel reference lists a
+  definition's channels. Tests: `tests/test_app_patch_view.py`.
