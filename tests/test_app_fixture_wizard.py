@@ -21,6 +21,49 @@ def home(tmp_path, monkeypatch):
     return tmp_path / "home"
 
 
+def _offline_ofl():
+    from livereact.fixtures.ofl import OflService
+
+    def offline(url, timeout):
+        raise OSError("offline")
+    import tempfile
+    return OflService(tempfile.mkdtemp(), offline)
+
+
+def test_ofl_route_imports_into_the_channel_test(qapp, tmp_path):
+    from pathlib import Path
+    from livereact.fixtures import ofl
+    from livereact.fixtures.ofl import OflService
+    from livereact.ui import fixture_wizard as fw
+    data = Path(__file__).resolve().parent / "data" / "ofl"
+
+    def recorded(url, timeout):
+        if url == ofl.REGISTER_URL:
+            return (data / "register.json").read_bytes()
+        if url == ofl.MANUFACTURERS_URL:
+            return (data / "manufacturers.json").read_bytes()
+        if url == ofl.FIXTURE_URL.format(key="test-maker/test-par-rgbw"):
+            return (data / "test-par-rgbw.json").read_bytes()
+        raise OSError(url)
+    w = fw.FixtureWizard(ofl_service_factory=lambda: OflService(tmp_path / "c", recorded), threaded=False)
+    w.b_ofl.click()
+    w.ofl_page.e_query.setText("par rgbw")
+    w.ofl_page.b_import.click()
+    assert w.stack.currentIndex() == fw.PAGE_TEST
+    assert w.test_panel.definition.source.kind == "ofl"
+
+
+def test_ofl_route_offline_says_unavailable(qapp):
+    from livereact.ui import fixture_wizard as fw
+    from livereact.ui.ofl_worker import UNAVAILABLE
+    w = fw.FixtureWizard(ofl_service_factory=_offline_ofl, threaded=False)
+    w.b_ofl.click()
+    assert UNAVAILABLE in w.ofl_page.l_status.text()
+    w.b_back.click()
+    w.b_hand.click()
+    assert w.stack.currentIndex() == fw.PAGE_HAND
+
+
 def _enter_par(w):
     h = w.hand
     h.e_manufacturer.setText("Acme Lights")
@@ -33,7 +76,7 @@ def _enter_par(w):
 
 def test_three_routes_from_the_start_page(qapp):
     from livereact.ui import fixture_wizard as fw
-    w = fw.FixtureWizard()
+    w = fw.FixtureWizard(ofl_service_factory=_offline_ofl, threaded=False)
     assert w.stack.currentIndex() == fw.PAGE_START
     w.b_ofl.click()
     assert w.stack.currentIndex() == fw.PAGE_OFL
@@ -49,7 +92,7 @@ def test_pages_without_a_backend_say_so(qapp):
     from PySide6 import QtWidgets
     from livereact.ui import fixture_wizard as fw
     w = fw.FixtureWizard()
-    for page in (fw.PAGE_OFL, fw.PAGE_MANUAL):
+    for page in (fw.PAGE_MANUAL,):        # Open Fixture Library is built (item 25)
         texts = [lbl.text() for lbl in w.stack.widget(page).findChildren(QtWidgets.QLabel)]
         assert fw.NOT_BUILT in texts
 

@@ -57,12 +57,10 @@ Hard rules for every item, whoever does it:
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
 36. **P2 fixtures menu.** Open `FixtureLibraryBrowser` from the console (a "Fixtures" menu next to "Rig") and
     refresh the Rig Config tab's type list after a fixture is added. Accept: UI test.
-25. **P3 OFL search + fetch service.** A cached copy of OFL's fixture register (manufacturer/model index)
-    in the user folder, fuzzy search, and on-demand fetch of one fixture's JSON, all in a `QThread` worker
-    with timeouts. Offline it reports "Open Fixture Library unavailable" and the wizard offers the other
-    two pages. OFL data is fetched per user, never bundled; attribution is stored on each definition and
-    listed in About. The exact register/fetch URLs are a constant to check by hand (mark it in the
-    report). Accept: tests with a recorded register and a fake transport (no network).
+37. [JOSH] **P3 check the OFL URLs + data license.** `fixtures/ofl.py` `REGISTER_URL`, `MANUFACTURERS_URL`,
+    `FIXTURE_URL` point at OFL's GitHub `master` branch and were not checked by hand (the agent has no
+    internet). Confirm them (or OFL's own API), and decide the `license` string the wizard passes to
+    `import_fixture()` (OFL data license; see Decisions). Then list OFL attribution in About (item 33).
 26. **P4 manual page finder.** `src/livereact/fixtures/manual_reader/extract.py`:
     - Per-page text with `pypdf`, then score pages for DMX charts ("DMX", "CH1", "channel", value ranges
       like `000-255`, "mode").
@@ -231,3 +229,9 @@ Hard rules for every item, whoever does it:
   OFL nulls, matrix inserts and deeper fine bytes become `generic`. Unconfirmed, `source.kind = ofl`,
   attribution with the OFL key and authors; `license` is left to the caller (Josh's decision). Test data:
   `tests/data/ofl/test-*.json`, written for the tests. Tests: `tests/test_app_ofl.py`.
+- **25. P3 OFL search + fetch service** (2026-10-28). `fixtures/ofl.py` `OflService(cache_dir, transport)`:
+  the register (+ manufacturer names) cached under `fixtures/ofl_cache/` in the user folder, refresh falling
+  back to the cache, `search()` (every word, then close spellings), `fetch(key)` (cached, strict key format),
+  `import_fixture()`; any network or parse failure is `OflUnavailable`. `ui/ofl_worker.py`: a `QThread`
+  worker and the wizard's search page ("Open Fixture Library unavailable" offline, attribution line).
+  Tests: `tests/test_app_ofl_search.py` (recorded register, fake transport), wizard route tests.

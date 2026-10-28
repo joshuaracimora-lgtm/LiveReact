@@ -1,8 +1,8 @@
 """Add-fixture wizard: three ways in, one way out (the channel-test screen).
 
-Pages (roadmap item 23): Search Open Fixture Library (item 25), Upload the manual (the AI
-reader, items 26-28), Enter by hand (a channel table producing a ``user`` definition). Pages
-whose backend is not built yet say so. Every route ends on ui/channel_test.py, where Confirm
+Pages (roadmap item 23): Search Open Fixture Library (item 25, ui/ofl_worker.py), Upload the
+manual (the AI reader, items 26-28), Enter by hand (a channel table producing a ``user``
+definition). Pages whose backend is not built yet say so. Every route ends on ui/channel_test.py, where Confirm
 saves the definition to the user's library.
 """
 
@@ -14,6 +14,7 @@ from PySide6 import QtCore, QtWidgets
 
 from ..fixtures.definition import CATEGORIES, FUNCTIONS, SCHEMA, DefinitionError, load_definition, validate
 from .channel_test import ChannelTestPanel
+from .ofl_worker import OflSearchPage
 
 PAGE_START, PAGE_OFL, PAGE_MANUAL, PAGE_HAND, PAGE_TEST = range(5)
 NOT_BUILT = "Not available in this version yet — use “Enter by hand” for now."
@@ -115,11 +116,18 @@ class HandEntryPage(QtWidgets.QWidget):
         return None if errs else d
 
 
+def _default_ofl_service():
+    from ..fixtures.ofl import OflService, default_cache_dir
+    return OflService(default_cache_dir())
+
+
 class FixtureWizard(QtWidgets.QDialog):
     added = QtCore.Signal(object)   # the confirmed, saved FixtureDefinition
 
-    def __init__(self, parent: QtWidgets.QWidget | None = None, save=None) -> None:
-        """``save``: passed to the channel-test screen (default: the user library)."""
+    def __init__(self, parent: QtWidgets.QWidget | None = None, save=None,
+                 ofl_service_factory=None, threaded: bool = True) -> None:
+        """``save``: passed to the channel-test screen (default: the user library).
+        ``ofl_service_factory() -> OflService`` (default: the real one, cached in the user folder)."""
         super().__init__(parent)
         self.setWindowTitle("Add a fixture")
         self._save = save
@@ -138,7 +146,9 @@ class FixtureWizard(QtWidgets.QDialog):
             sl.addWidget(b)
         sl.addStretch(1)
         self.stack.addWidget(start)
-        self.stack.addWidget(self._placeholder("Open Fixture Library"))
+        self.ofl_page = OflSearchPage(ofl_service_factory or _default_ofl_service, threaded=threaded)
+        self.ofl_page.imported.connect(self.open_channel_test)
+        self.stack.addWidget(self.ofl_page)
         self.stack.addWidget(self._placeholder("Upload manual"))
         self.hand = HandEntryPage()
         self.stack.addWidget(self.hand)
@@ -175,6 +185,8 @@ class FixtureWizard(QtWidgets.QDialog):
         return w
 
     def go(self, page: int) -> None:
+        if page == PAGE_OFL and self.ofl_page.service is None:
+            self.ofl_page.load()
         self.stack.setCurrentIndex(page)
         self.b_back.setVisible(page != PAGE_START)
         self.b_next.setVisible(page == PAGE_HAND)

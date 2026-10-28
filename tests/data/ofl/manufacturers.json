@@ -1,0 +1,5 @@
+{
+  "$comment": "Written for LiveReact's tests in Open Fixture Library's format.",
+  "test-maker": {"name": "Test Maker"},
+  "other-co": {"name": "Other Co.", "website": "https://example.invalid"}
+}
