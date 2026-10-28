@@ -48,10 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-7. **P1 the four built-in models as definitions.** `src/livereact/fixtures/builtin/*.json` for
-   `shehds_180w_mh`, `shehds_3w_laser`, `rgb_par`, `ok103_wash_bar`, read from `profiles.py`
-   (documentation and patch-UI source; the native classes stay what the show runs). Accept: a test that
-   each definition's channel count, `kind_of()` per channel and boot defaults equal the native class's.
 8. **P1 fixture traits.** `src/livereact/fixtures/traits.py` `traits_of(fx) -> frozenset`: `rgb_wash`,
    `pan_tilt`, `color_wheel`, `strobe_channel`, `dimmer`, `laser`. Native classes map by class (Par/WashBar
    -> rgb_wash, MovingHead -> pan_tilt + color_wheel, Laser -> laser); definition-driven fixtures map from
@@ -215,3 +211,9 @@ Hard rules for every item, whoever does it:
   round-trip. Offsets are 0-based per mode; a laser's every channel is LASER; capability types add
   `maintenance` and `no_function` to the function list; `validate()` also checks `laser_intents`
   offsets/values and duplicate mode names. Tests: `tests/test_app_fixture_definition.py`.
+- **7. P1 the four built-in models as definitions** (2026-10-28). `fixtures/builtin/{shehds_180w_mh,
+  shehds_3w_laser,rgb_par,ok103_wash_bar}.json`, generated once from `profiles.py` (wheel slots, laser
+  colour bands, MH ranges/speed). Par and wash bar are `confirmed` (verified on hardware 2026-08-31);
+  the MH and the laser are not (the laser has no `laser_intents`, so a definition-driven laser built
+  from it stays dark). Tests: `tests/test_app_builtin_definitions.py` (count, `kind_of()` per channel
+  and boot defaults equal the native class).

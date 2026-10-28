@@ -1,0 +1,205 @@
+{
+ "schema": "livereact-fixture/1",
+ "id": "shehds_180w_mh",
+ "manufacturer": "SHEHDS",
+ "model": "180W Beam Moving Head",
+ "category": "moving_head",
+ "source": {
+  "kind": "builtin",
+  "attribution": "LiveReact (fixtures/profiles.py)",
+  "confirmed": false
+ },
+ "physical": {
+  "pan_deg": 540.0,
+  "tilt_deg": 270.0,
+  "pan_max_deg_s": 260.0
+ },
+ "modes": [
+  {
+   "name": "15ch",
+   "channels": [
+    {
+     "offset": 0,
+     "function": "pan",
+     "default": 128
+    },
+    {
+     "offset": 1,
+     "function": "pan_fine",
+     "default": 0,
+     "fine_of": 0
+    },
+    {
+     "offset": 2,
+     "function": "tilt",
+     "default": 80
+    },
+    {
+     "offset": 3,
+     "function": "tilt_fine",
+     "default": 0,
+     "fine_of": 2
+    },
+    {
+     "offset": 4,
+     "function": "pan_tilt_speed",
+     "default": 128
+    },
+    {
+     "offset": 5,
+     "function": "dimmer",
+     "default": 0
+    },
+    {
+     "offset": 6,
+     "function": "strobe",
+     "default": 0
+    },
+    {
+     "offset": 7,
+     "function": "color_wheel",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        7
+       ],
+       "type": "color_wheel",
+       "color": "#ffffff",
+       "label": "white"
+      },
+      {
+       "range": [
+        8,
+        15
+       ],
+       "type": "color_wheel",
+       "color": "#ff0000",
+       "label": "red"
+      },
+      {
+       "range": [
+        16,
+        23
+       ],
+       "type": "color_wheel",
+       "color": "#ff7800",
+       "label": "amber"
+      },
+      {
+       "range": [
+        24,
+        31
+       ],
+       "type": "color_wheel",
+       "color": "#ffff00",
+       "label": "yellow"
+      },
+      {
+       "range": [
+        32,
+        39
+       ],
+       "type": "color_wheel",
+       "color": "#00ff00",
+       "label": "green"
+      },
+      {
+       "range": [
+        40,
+        47
+       ],
+       "type": "color_wheel",
+       "color": "#00c8ff",
+       "label": "cyan"
+      },
+      {
+       "range": [
+        48,
+        55
+       ],
+       "type": "color_wheel",
+       "color": "#0000ff",
+       "label": "blue"
+      },
+      {
+       "range": [
+        56,
+        63
+       ],
+       "type": "color_wheel",
+       "color": "#ff00ff",
+       "label": "magenta"
+      }
+     ]
+    },
+    {
+     "offset": 8,
+     "function": "gobo",
+     "default": 0
+    },
+    {
+     "offset": 9,
+     "function": "prism",
+     "default": 0
+    },
+    {
+     "offset": 10,
+     "function": "focus",
+     "default": 0
+    },
+    {
+     "offset": 11,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        255
+       ],
+       "type": "generic",
+       "label": "frost"
+      }
+     ]
+    },
+    {
+     "offset": 12,
+     "function": "macro",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        0
+       ],
+       "type": "no_function",
+       "label": "off (LiveReact keeps 0)"
+      }
+     ]
+    },
+    {
+     "offset": 13,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        255
+       ],
+       "type": "generic",
+       "label": "macro speed"
+      }
+     ]
+    },
+    {
+     "offset": 14,
+     "function": "reset",
+     "default": 0
+    }
+   ]
+  }
+ ]
+}
