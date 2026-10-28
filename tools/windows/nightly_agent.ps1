@@ -32,8 +32,12 @@ Set-Location $root
 $rerun = Invoke-PulledSelf $PSCommandPath $PSBoundParameters
 if ($rerun -ne $null) { exit $rerun }
 $date = Get-Date -Format yyyyMMdd
-New-Item -ItemType Directory -Force -Path results\nightly, "results\agent\$date" | Out-Null
-$night = Join-Path $root "results\agent\$date"
+# a second run on the same date (2026-10-28: an overnight run, then the 2 PM one) gets its own folder,
+# as its branches get -2, or it would overwrite the first run's NIGHT.md and agent reports
+$nightTag = $date; $k = 2
+while (Test-Path (Join-Path $root "results\agent\$nightTag")) { $nightTag = "$date-$k"; $k++ }
+New-Item -ItemType Directory -Force -Path results\nightly, "results\agent\$nightTag" | Out-Null
+$night = Join-Path $root "results\agent\$nightTag"
 $log = "results\nightly\$(Get-Date -Format yyyyMMdd-HHmm)-agent.log"
 Start-Transcript -Path $log | Out-Null
 if ($PulledFrom) { Write-Host "self-update: pulled harness $PulledFrom -> $("$(git rev-parse --short harness 2>$null)".Trim()) and re-ran this script from the new code" }
@@ -173,8 +177,8 @@ function Invoke-NightAgent([string]$Role, [string]$Brief, [double]$AgentHours, [
 - repo: $root  (Windows). Your Bash tool is Git Bash: use forward slashes and the venv interpreter
   ``.venv/Scripts/python.exe`` for every python/pytest command, e.g. ``.venv/Scripts/python.exe -m pytest -q``.
 - start: $($start.ToString('yyyy-MM-dd HH:mm'))   deadline: $($deadline.ToString('yyyy-MM-dd HH:mm'))  (hard kill at the deadline)
-- your night folder (report, gate outputs, study scripts): results/agent/$date/$Role/
-- tonight's sweep: results/agent/$date/SWEEP.md; tonight's starting baseline: results/agent/$date/baseline_before.json
+- your night folder (report, gate outputs, study scripts): results/agent/$nightTag/$Role/
+- tonight's sweep: results/agent/$nightTag/SWEEP.md; tonight's starting baseline: results/agent/$nightTag/baseline_before.json
 - the knob search runs after the agents, by the orchestrator; do not run it yourself
 - usb export: usb_export/ (the tools find it on their own)
 - sweep: exit $SweepExit (0 clean, 1 findings, 2 tool error). SWEEP.md head:
