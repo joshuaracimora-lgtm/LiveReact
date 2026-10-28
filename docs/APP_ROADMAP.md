@@ -48,8 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-11. **P1 GenericMovingHead.** Adds 8/16-bit pan/tilt, a slew limit from `physical.pan_max_deg_s` (a
-    conservative default when missing), and home position. Accept: tests.
 12. **P1 GenericLaser.** Driven only through `laser_intents` (blank, line_static, fan). Every channel is
     LASER kind. It outputs all zeros while `source.confirmed` is false, and it inherits the existing
     `apply_safety` / `apply_laser_gate` behaviour. Accept: tests, including that an unconfirmed laser stays
@@ -216,3 +214,8 @@ Hard rules for every item, whoever does it:
   in when absent, amber/UV held at 0; nearest wheel slot (middle of its range); strobe into the strobe
   capability range (0 = open); master brightness, strobe cap, colour bias, `visual_state()`.
   Tests: `tests/test_app_generic_fixture.py` (par, RGBW bar, wheel-only).
+- **11. P1 GenericMovingHead** (2026-10-28). 16-bit pan/tilt when the definition pairs fine channels
+  (8-bit otherwise), `set_aim` marking absolute movement, home-position remap, and a slew limit from
+  `physical.pan_max_deg_s` (tilt uses the same deg/s over its own range; default 180 deg/s, slower
+  than the native 260 placeholder; ranges default 540/270). `make_fixture()` picks the class. No motion
+  box (`bounds`) or aim calibration yet. Tests: `tests/test_app_generic_moving_head.py`.
