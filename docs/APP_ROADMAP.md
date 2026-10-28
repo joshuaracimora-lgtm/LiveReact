@@ -55,10 +55,8 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-23. **P2 fixture library browser + add-fixture wizard.** `ui/fixture_library.py` (browse builtin / user /
-    imported definitions) and `ui/fixture_wizard.py` with three pages: Search Open Fixture Library (item 25),
-    Upload manual (item 28), Enter by hand (a channel table editor producing a `user` definition). Every
-    page ends on the channel-test screen. Pages whose backend is not built yet say so. Accept: UI tests.
+36. **P2 fixtures menu.** Open `FixtureLibraryBrowser` from the console (a "Fixtures" menu next to "Rig") and
+    refresh the Rig Config tab's type list after a fixture is added. Accept: UI test.
 24. **P3 OFL converter.** `src/livereact/fixtures/ofl.py`: a pure function from OFL fixture JSON to a
     definition. Covers `availableChannels`, `modes`, fine channel aliases, capability
     `dmxRange`/`type`/`color`/speed, and `physical`. Unknown capability types become `generic`. Test data:
@@ -224,3 +222,9 @@ Hard rules for every item, whoever does it:
   the sliders into `laser_intents`; Confirm needs all three. Laser channels send zeros unless "Enable laser
   output on this screen" is ticked (this screen is outside the show's arm switch). `ui/fixture_test.py` labels
   definition fixtures' channels by function. Tests: `tests/test_app_channel_test.py`.
+- **23. P2 fixture library browser + add-fixture wizard** (2026-10-28). `ui/fixture_library.py`
+  `FixtureLibraryBrowser` (built-in / yours / imported, confirmed or not; Add fixture…, Test / confirm…) and
+  `ui/fixture_wizard.py` `FixtureWizard`: three routes (OFL, manual, by hand), the hand-entry page (manufacturer,
+  model, category, mode, a channel table; fine channels paired automatically) producing a `user` definition,
+  every route ending on the channel-test screen. Tests: `tests/test_app_fixture_wizard.py`. Not yet in a
+  console menu (item 36).
