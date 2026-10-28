@@ -21,10 +21,27 @@ def home(tmp_path, monkeypatch):
     return tmp_path / "home"
 
 
+_OPEN: list = []
+
+
+@pytest.fixture(autouse=True)
+def _delete_dialogs(qapp):
+    # a dialog still alive when Python exits crashes the interpreter (0xC0000409) after every test passed
+    yield
+    from PySide6 import QtCore
+    while _OPEN:
+        d = _OPEN.pop()
+        d.close()
+        d.deleteLater()
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+
+
 def _dialog(settings=None):
     from livereact.ui.first_run import FirstRunDialog
-    return FirstRunDialog(settings=settings, audio_provider=lambda: ["XDJ-XZ Audio", "Mic"],
-                          interface_provider=lambda: ["Ethernet", "Wi-Fi"])
+    d = FirstRunDialog(settings=settings, audio_provider=lambda: ["XDJ-XZ Audio", "Mic"],
+                       interface_provider=lambda: ["Ethernet", "Wi-Fi"])
+    _OPEN.append(d)
+    return d
 
 
 def test_needs_first_run_until_done(qapp):
