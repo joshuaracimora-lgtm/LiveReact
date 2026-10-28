@@ -25,14 +25,18 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
    steps Josh saw it with.
-4. **Rig Config's Side column is stale.** It is built once, so after a Venue-tab move it still shows
-   (and Save writes back) the side the fixture had at launch. (The centre-line half: fixed below.)
-5. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
+4. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
-6. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
+5. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Rig Config's Side column was stale**: built once, so after a Venue-tab move it still showed -- and
+  Save wrote back -- the side the fixture had at launch. Opening the tab now refreshes the column from
+  the rig; a placed fixture's side is shown locked ("Set by where the fixture is placed on the Venue
+  tab", its x decides it on load anyway), an unplaced one stays editable. Test:
+  `tests/test_console.py::test_rig_config_side_column_follows_a_venue_tab_move` (2026-10-28).
 
 - **`side` got stuck at the centre line**: `Rig.refresh_geometry` set `side` from x and never restored
   it, so a head dragged right and then onto the centre line (or un-placed, or the floor plan removed)

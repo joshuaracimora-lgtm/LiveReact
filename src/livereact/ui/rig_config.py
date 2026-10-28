@@ -73,6 +73,25 @@ class RigConfigTab(QtWidgets.QWidget):
 
         self.status = QtWidgets.QLabel("")
         v.addWidget(self.status)
+        self.sync_sides()
+
+    def sync_sides(self) -> None:
+        """A placed fixture's side comes from its x (Rig.refresh_geometry), and
+        the Venue tab moves fixtures after this table was built: show that
+        side, locked, instead of the one it had at launch (which Save would
+        write back). Unplaced fixtures keep an editable, declared side. The
+        console calls this whenever the tab is opened."""
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            combo = self.table.cellWidget(row, 5)
+            fx = self.rig._by_slot.get(item.text().strip()) if item else None
+            if fx is None or not isinstance(combo, QtWidgets.QComboBox):
+                continue
+            derived = fx.x_norm is not None and fx.x_norm != 0
+            if derived or not combo.isEnabled():
+                combo.setCurrentText(fx.side)
+            combo.setEnabled(not derived)
+            combo.setToolTip("Set by where the fixture is placed on the Venue tab." if derived else "")
 
     # ------------------------------------------------------------------ rows
     def _add_row(self, slot_id: str, label: str, ftype: str, address: int, role: str, side: str) -> None:

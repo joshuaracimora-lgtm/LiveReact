@@ -132,7 +132,8 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             self.laser_show_tab = self._build_laser_show_tab()
             tabs.addTab(self.laser_show_tab, "Laser Show")
         tabs.addTab(self.venue_tab, "Venue")
-        tabs.addTab(RigConfigTab(app.rig, rig_path), "Rig Config")
+        self.rig_config_tab = RigConfigTab(app.rig, rig_path)
+        tabs.addTab(self.rig_config_tab, "Rig Config")
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
         self.setCentralWidget(tabs)
@@ -150,6 +151,9 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         # same rig objects, so re-layout it whenever we come back to Show
         if idx == 0:
             self.rig_view.refresh_layout()
+        # the Venue tab moves fixtures (and so their side) under this table
+        if self.tabs.widget(idx) is self.rig_config_tab:
+            self.rig_config_tab.sync_sides()
 
     # ------------------------------------------------------------------ build
     def _build_status_strip(self) -> QtWidgets.QWidget:

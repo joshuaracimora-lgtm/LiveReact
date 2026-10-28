@@ -809,3 +809,30 @@ def test_floor_plan_gets_the_left_columns_height_at_1280x800(qapp):
     scroll = tab.findChild(QtWidgets.QScrollArea)
     assert scroll.horizontalScrollBar().maximum() == 0          # the targets grid fits the panel too
     tab.close()
+
+
+def test_rig_config_side_column_follows_a_venue_tab_move(qapp):
+    """UI_BUGS 'Rig Config's Side column is stale': the column was built once,
+    so after a Venue-tab move it still showed -- and Save wrote back -- the
+    side the head had at launch. A placed head's side comes from its x, so
+    the column shows that side and can't be edited to disagree with it."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    cfg = win.rig_config_tab
+    row = next(r for r in range(cfg.table.rowCount()) if cfg.table.item(r, 0).text() == "mh_l")
+    side_combo = cfg.table.cellWidget(row, 5)
+    assert side_combo.currentText() == "left"
+
+    tab = win.venue_tab
+    win.tabs.setCurrentIndex(1)
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(25.0); tab.sb_y.setValue(3.0); tab.sb_z.setValue(1.5)   # right half of a 30 ft room
+    assert app.rig.fixture("mh_l").side == "right"
+
+    win.tabs.setCurrentIndex(2)
+    assert side_combo.currentText() == "right"
+    assert not side_combo.isEnabled()
+    slot = next(s for s in cfg._collect()["slots"] if s["slot_id"] == "mh_l")
+    assert slot["side"] == "right"
