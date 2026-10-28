@@ -141,3 +141,18 @@ def test_sim_and_live_build_the_same_catalog_and_pool():
     assert "show_catalog(" in inspect.getsource(app.App.__init__)
     src = inspect.getsource(harness._run_sim)
     assert "show_catalog(" in src and "scene_pool=phrase.catalog.names_by_bucket()" in src
+
+
+def test_the_planners_roll_lead_in_is_the_shipped_snare_roll_class():
+    from livereact.rekordbox import section_classes
+    from livereact.rekordbox.planner import plan_track
+    from livereact.rekordbox.pssi import MOOD_HIGH, Phrase, PhraseTable
+    from livereact.rekordbox.sections import section_features
+    spec = [(1, 1, "intro"), (17, 2, "up"), (97, 5, "chorus"), (161, 6, "outro")]
+    ends = [b for b, _, _ in spec[1:]] + [193]
+    table = PhraseTable(mood=MOOD_HIGH, end_beat=193, bank=0, phrases=tuple(
+        Phrase(index=i + 1, beat=b, end_beat=e, kind=k, label=lab) for i, ((b, k, lab), e) in enumerate(zip(spec, ends))))
+    plan = plan_track(table, track_id=1, bpm=120.0, classes=section_classes.load())
+    feats = section_features(plan, table, bpm=120.0)
+    assert [f.roll for f in feats] == [0, 0, 1, 0, 0]
+    assert [s.cls for s in plan.sections if s.kind == "drop"] == ["drop_snare_roll", "drop_full"]
