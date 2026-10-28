@@ -31,7 +31,7 @@ from . import mapping
 from .look_notes import LookNotes
 from .pssi import PhraseTable, beat_to_seconds
 from .section_classes import ClassBook
-from .sections import section_features, track_profile
+from .sections import profile_position, section_features, track_profile
 from .waveform import ColorWaveform
 
 log = logging.getLogger(__name__)
@@ -333,7 +333,7 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
         ))
     palette = (look.hook_palette or "") if look is not None else ""
     if not palette and classes is not None:
-        palette = classes.palette_for(track_profile(waveform), seed)
+        palette = classes.palette_for(track_profile(waveform), seed, profile_position(waveform))
     plan = TrackPlan(track_id=int(track_id), title=title, bpm=float(bpm), mood=table.mood, palette_seed=seed,
                      hook_scene=hook_scene, sections=tuple(sections),
                      big_moment_index=big_run[0] if big_run else None, rules=rules,

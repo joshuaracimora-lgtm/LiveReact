@@ -103,6 +103,22 @@ def track_profile(waveform: ColorWaveform | None) -> str:
     return "mid"
 
 
+# (darkest, brightest) high-minus-low share inside each profile; the USB library (215 tracks,
+# 2026-10-28) spans -0.34..+0.38, so the outer edges clip the few extremes rather than stretch for them
+PROFILE_SPANS = {"low": (-0.30, -PROFILE_SPLIT), "mid": (-PROFILE_SPLIT, PROFILE_SPLIT), "high": (PROFILE_SPLIT, 0.30)}
+
+
+def profile_position(waveform: ColorWaveform | None) -> float | None:
+    """0..1: where the track sits inside its own profile, bassiest to brightest (palette-v2, D-23).
+    None without a usable waveform."""
+    prof = track_profile(waveform)
+    if not prof:
+        return None
+    low, _mid, high = waveform.band_shares(0.0, waveform.duration_s)
+    lo, hi = PROFILE_SPANS[prof]
+    return max(0.0, min(1.0, (high - low - lo) / (hi - lo)))
+
+
 def library_features(usb, cache_dir: str | Path | None = None, *, limit: int | None = None,
                      on_track=None) -> dict[str, dict]:
     """Every complete USB track -> {"id", "title", "bpm", "profile", "sections": [SectionFeatures dicts]}.

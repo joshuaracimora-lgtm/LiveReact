@@ -77,6 +77,36 @@ _FAMILY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 }
 
 
+# Two colours per song (palette-v2, 2026-10-28): a planned track's drop colour (D-23 / a look note)
+# brings ONE companion for its breaks -- a related, cooler hue -- and its builds keep the white wash
+# with the drop colour on the spots. Ed Warren (LD for Four Tet / Skrillex / Fred again..) keeps to at
+# most two colours per song; docs/13_DECISION_LOG.md D-27.
+COMPANION: dict[str, str] = {
+    "blood_red": "uv_violet",
+    "uv_violet": "deep_blue",
+    "hot_magenta": "uv_violet",
+    "deep_blue": "uv_violet",
+    "cold_steel": "deep_blue",
+    "cyan_ice": "deep_blue",
+    "toxic_green": "cyan_ice",
+    "deep_amber": "hot_magenta",
+    "acid_yellow": "toxic_green",
+    "warm_white": "cyan_ice",
+}
+
+
+def song_pair(bucket: str, song: str, wash: str, spot: str) -> tuple[str, str]:
+    """(wash, spot) for a planned track whose drop colour is ``song``; ``wash``/``spot`` are the
+    family's own pick, kept where the song colour does not apply (the build's white wash)."""
+    fam = family(bucket)
+    if fam == "drop":
+        return song, song
+    if fam == "break":
+        c = COMPANION.get(song, wash)
+        return c, c
+    return wash, song                      # build: white wash, the song's colour on the heads
+
+
 def family(bucket: str) -> str:
     """OUTRO is a promoted BREAK, PEAK an escalated DROP (core/metronome.py's
     overlays) -- same palette family, so an overlay flip alone never

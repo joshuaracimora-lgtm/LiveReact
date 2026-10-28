@@ -19,8 +19,8 @@
   ],
   "palette_by_profile": {
     "approved": true,
-    "high": ["acid_yellow", "warm_white", "deep_amber", "toxic_green"],
-    "mid": ["deep_blue", "cyan_ice", "cold_steel"],
+    "high": ["deep_amber", "toxic_green", "acid_yellow", "warm_white"],
+    "mid": ["deep_blue", "cold_steel", "cyan_ice"],
     "low": ["blood_red", "uv_violet", "hot_magenta"]
   }
 }

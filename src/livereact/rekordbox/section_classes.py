@@ -65,9 +65,15 @@ class ClassBook:
     def approved_scenes(self) -> list[str]:
         return [c.scene for c in self.classes if c.approved and c.scene]
 
-    def palette_for(self, profile: str, seed: int) -> str:
+    def palette_for(self, profile: str, seed: int, position: float | None = None) -> str:
+        """The profile's list runs darkest to brightest; ``position`` (0..1, sections.profile_position)
+        picks along it, so the bassiest track in a profile gets its deepest colour. No position: by seed."""
         names = self.palette_by_profile.get(profile) or ()
-        return names[seed % len(names)] if (self.palette_approved and names) else ""
+        if not (self.palette_approved and names):
+            return ""
+        if position is None:
+            return names[seed % len(names)]
+        return names[min(len(names) - 1, int(position * len(names)))]
 
 
 EMPTY = ClassBook()

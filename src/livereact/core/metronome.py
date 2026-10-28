@@ -1791,8 +1791,9 @@ class Metronome(threading.Thread):
             # machine is not advanced, so it resumes cleanly if the plan ever lets go
             bucket = self.look_bucket.value
             self.palette, self.palette_spot = palette_mod.pick(bucket, plan.palette_seed, 0, 0)
-            if plan.palette and palette_mod.family(bucket) == "drop":
-                self.palette = self.palette_spot = plan.palette   # look notes: the hook's own hue
+            if plan.palette:   # D-23 / look notes: the song's colour and its one companion
+                self.palette, self.palette_spot = palette_mod.song_pair(bucket, plan.palette, self.palette,
+                                                                        self.palette_spot)
             return
         self._derive_palette_auto()
 

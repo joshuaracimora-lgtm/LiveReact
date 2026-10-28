@@ -48,13 +48,13 @@ def test_the_shipped_file_is_valid_and_approves_only_the_profile_palette():
 def test_the_shipped_classes_change_only_the_tags_and_the_profile_palette():
     """No class is approved, so the plan keeps today's scenes, hits and flags (only cls added); the palette
     is D-23's pick for the track's frequency profile (approved 2026-10-28)."""
-    from livereact.rekordbox.sections import track_profile
+    from livereact.rekordbox.sections import profile_position, track_profile
     t, w = _table(), _wave()
     before = plan_track(t, track_id=3, bpm=120.0, waveform=w)
     book = section_classes.load()
     after = plan_track(t, track_id=3, bpm=120.0, waveform=w, classes=book)
     assert [replace(s, cls="") for s in after.sections] == list(before.sections)
-    assert after.palette and after.palette == book.palette_for(track_profile(w), 3)
+    assert after.palette and after.palette == book.palette_for(track_profile(w), 3, profile_position(w))
     assert replace(after, sections=before.sections, palette=before.palette) == before
     assert any(s.cls for s in after.sections)
 
@@ -146,3 +146,20 @@ def test_sim_and_live_build_the_same_catalog_and_pool():
     assert "show_catalog(" in inspect.getsource(app.App.__init__)
     src = inspect.getsource(harness._run_sim)
     assert "show_catalog(" in src and "scene_pool=phrase.catalog.names_by_bucket()" in src
+
+
+def test_profile_position_runs_bassiest_to_brightest_inside_the_profile():
+    from livereact.rekordbox.sections import profile_position, track_profile
+    assert profile_position(None) is None
+    dark, bright = _wave(1, 1, 2), _wave(1, 1, 6)        # both "high", the second much brighter
+    assert track_profile(dark) == track_profile(bright) == "high"
+    assert 0.0 <= profile_position(dark) < profile_position(bright) <= 1.0
+
+
+def test_palette_for_picks_dark_to_bright_by_position_and_by_seed_without_one():
+    pal = {"approved": True, "high": ["deep_amber", "toxic_green", "acid_yellow", "warm_white"],
+           "mid": ["deep_blue"], "low": ["blood_red"]}
+    book = _book([], pal)
+    assert [book.palette_for("high", 0, p) for p in (0.0, 0.3, 0.6, 1.0)] == pal["high"]
+    assert book.palette_for("high", 2) == "acid_yellow"
+    assert _book([], dict(pal, approved=False)).palette_for("high", 0, 1.0) == ""
