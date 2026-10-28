@@ -843,6 +843,17 @@
       ],
       "note": "planner: a roll lead-in is only split off when the build keeps at least this many beats (TIME-02 8-bar build look + the look change's lag)"
     },
+    "PLAN_ROLL_RISE": {
+      "module": "livereact.rekordbox.planner",
+      "default": 1.2,
+      "type": "float",
+      "tag": "tunable",
+      "range": [
+        1.0,
+        2.5
+      ],
+      "note": "planner: a roll lead-in is half of PLAN_ROLL_BEATS when the waveform energy of bars 4..2 before the drop is at least this many times that of bars 8..6 (a 4-bar crescendo)"
+    },
     "REGULAR_DROP_HIT": {
       "module": "livereact.rekordbox.planner",
       "default": 0.92,

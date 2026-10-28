@@ -73,3 +73,15 @@ def test_json_round_trip_keeps_the_new_fields():
             t.pop(k, None)
     legacy = Evaluation.from_json(old)
     assert legacy.mode == "classifier" and legacy.sweep == [] and legacy.tracks[0].drop_offsets == []
+
+
+def test_a_drop_placement_gain_passes_without_a_compliance_gain():
+    """Josh, 2026-10-28: drops landing closer to his marks count as the improvement (compliance may not fall)."""
+    base = _ev(0.5, [2.0, 2.0])
+    closer = _ev(0.5, [1.0, 1.0])
+    v = compare(base, closer)
+    assert v["accept"], v["reasons"]
+    assert any("drop placement" in n for n in v["notes"])
+    assert not compare(base, _ev(0.5, [1.9, 2.0]))["accept"]          # 0.05 bars: not enough
+    assert not compare(base, _ev(0.49, [1.0, 1.0]))["accept"]         # compliance fell
+    assert not compare(_ev(0.5, [2.0]), _ev(0.5, [2.0]))["accept"]    # nothing moved

@@ -18,6 +18,7 @@ QUALITY_FLOOR = {"distinct_looks": 0.8, "brightness_dynamic_range": 0.85,
                  "fixture_utilization": 0.9, "drop_response_mean": 0.8}   # fraction of baseline allowed
 MIN_IMPROVEMENT = 0.005                                                    # compliance points on the tuning set
 DROP_OFFSET_TOLERANCE_BARS = 0.25   # drive mode: mean |ear drop - DROP commit| may not grow by more than this
+DROP_PLACEMENT_GAIN_BARS = 0.25     # drive mode: a tuning-set placement gain this big counts as the improvement
 
 
 def _key(track: str) -> str:
@@ -41,6 +42,21 @@ def mode_mismatch(baseline: Evaluation, candidate: Evaluation) -> str | None:
     return None
 
 
+def placement_gain(b: dict, c: dict) -> str:
+    """Drive mode: '' unless the tuning drops land at least DROP_PLACEMENT_GAIN_BARS closer to Josh's
+    marks on average, or fewer of his drops are missed (tuning + hold-out), with neither getting worse."""
+    bo, co = b["tuning"].get("drop_offset_bars_mean"), c["tuning"].get("drop_offset_bars_mean")
+    if bo is None or co is None:
+        return ""
+    bm = sum(b[s].get("drops_missed", 0) or 0 for s in ("tuning", "holdout"))
+    cm = sum(c[s].get("drops_missed", 0) or 0 for s in ("tuning", "holdout"))
+    if cm > bm or co > bo + 1e-9:
+        return ""
+    if co <= bo - DROP_PLACEMENT_GAIN_BARS + 1e-9 or cm < bm:
+        return f"tuning drops {bo} -> {co} bars from the ear marks, missed {bm} -> {cm}"
+    return ""
+
+
 def compare(baseline: Evaluation, candidate: Evaluation, min_improvement: float = MIN_IMPROVEMENT) -> dict:
     """``min_improvement`` 0.0 = the no-regression gate (2026-10-26): a change that is not meant to
     move the lighting score (a UI fix, a crash fix, a section-class rule) must leave the tuning set
@@ -61,10 +77,18 @@ def compare(baseline: Evaluation, candidate: Evaluation, min_improvement: float 
                        "simulate both from the same seed")
 
     bt, ct = b["tuning"], c["tuning"]
-    improved = ct["compliance"] is not None and bt["compliance"] is not None         and ct["compliance"] >= bt["compliance"] + min_improvement - 1e-9
+    have = ct["compliance"] is not None and bt["compliance"] is not None
+    improved = have and ct["compliance"] >= bt["compliance"] + min_improvement - 1e-9
+    if not improved and have and min_improvement > 0 and ct["compliance"] >= bt["compliance"] - 1e-9:
+        # Josh, 2026-10-28: drops landing closer to his marks count as the improvement on their own
+        # (the compliance may not fall, and every other check below still applies)
+        gain = placement_gain(b, c)
+        if gain:
+            improved = True
+            notes.append(f"accepted on drop placement: {gain}")
     if not improved:
         reasons.append(f"tuning compliance {bt['compliance']} -> {ct['compliance']} "
-                       + (f"(needs +{min_improvement})" if min_improvement > 0 else "(may not fall)"))
+                       + (f"(needs +{min_improvement} or a drop placement gain)" if min_improvement > 0 else "(may not fall)"))
 
     bh, ch = b["holdout"], c["holdout"]
     if bh["n"] and ch["compliance"] is not None and bh["compliance"] is not None and ch["compliance"] < bh["compliance"] - 1e-9:

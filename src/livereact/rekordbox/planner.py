@@ -58,13 +58,18 @@ MIN_BUILD_BEATS = 16         # builds may be 4 bars
 # The snare roll that leads into a drop (Josh's drop, D-21): rekordbox's chorus starts where the bass
 # returns, Josh's drop at the roll 4-8 bars earlier. Measured 2026-10-28 on the 7 tuning tracks: of the
 # 13 ear drops right before a planned build -> drop boundary, 8 start exactly 8 bars before it, 5 exactly
-# 4 bars; nothing in the file (inner Up beats, phrase starts, the colour waveform's onsets) told the two
-# apart, so the planner splits the last PLAN_ROLL_BEATS of the build off as its own drop section (a roll
-# lead-in), unless that would leave the build under PLAN_ROLL_MIN_BUILD_BEATS: TIME-02's 8-bar build look hold plus the up-to-2-bar lag of
+# 4 bars. Rekordbox's inner Up beats, phrase starts and the colour waveform's onsets did not tell the two
+# apart; the waveform's loudness did: a 4-bar roll is a crescendo over those 4 bars (PLAN_ROLL_RISE, below).
+# The planner splits the last PLAN_ROLL_BEATS of the build off as its own drop section (a roll lead-in),
+# half of it on a crescendo, unless that would leave the build under PLAN_ROLL_MIN_BUILD_BEATS: TIME-02's 8-bar build look hold plus the up-to-2-bar lag of
 # the phrase engine's look change after the bucket enters BUILD (seen on the sweep: an 8-bar build shows
 # 'Rising Tide' for 6 bars).
 PLAN_ROLL_BEATS = 32              # params.json knob (tunable)
 PLAN_ROLL_MIN_BUILD_BEATS = 40    # params.json knob (tunable)
+# Waveform energy over bars 4..2 before the drop over bars 8..6 (the last bar of each half skipped: it holds
+# the pre-drop gap). Tuning tracks: all 5 four-bar ear rolls rise 1.23-1.96x, 7 of the 8 eight-bar ones
+# 0.21-1.14x (the eighth, a clap drop, 1.44x).
+PLAN_ROLL_RISE = 1.2              # params.json knob (tunable)
 
 # default section energies when no waveform is available (ranking then falls back to length)
 _KIND_ENERGY = {"drop": 0.8, "build": 0.5, "verse": 0.4, "breakdown": 0.2, "intro": 0.15, "outro": 0.2}
@@ -83,6 +88,7 @@ class PlanRules:
     min_build_beats: int = field(default_factory=lambda: MIN_BUILD_BEATS)
     roll_beats: int = field(default_factory=lambda: PLAN_ROLL_BEATS)               # 0 = no roll lead-ins
     roll_min_build_beats: int = field(default_factory=lambda: PLAN_ROLL_MIN_BUILD_BEATS)
+    roll_rise: float = field(default_factory=lambda: PLAN_ROLL_RISE)
 
 
 @dataclass(frozen=True)
@@ -309,13 +315,23 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
                 return 0.5 * waveform.energy(t0, t1) + 0.5 * waveform.peak(t0, t1)
         return fallback
 
+    def crescendo(drop_beat: int, half: int) -> bool:
+        """The last ``half`` beats before the drop are a crescendo over the ``half`` before them (PLAN_ROLL_RISE)."""
+        if waveform is None or half <= 4:
+            return False
+        ts = [seconds(drop_beat - k) for k in (2 * half, 2 * half - (half - 4), half, 4)]
+        if any(t is None for t in ts):
+            return False
+        before, last = waveform.energy(ts[0], ts[1]), waveform.energy(ts[2], ts[3])
+        return before > 0 and last >= rules.roll_rise * before
+
     rolled: list[dict] = []
     for i, m in enumerate(merged):
         build = rolled[-1] if rolled else None
         if m["kind"] == "drop" and build is not None and build["kind"] == "build" and rules.roll_beats > 0:
             blen = build["end_beat"] - build["beat"]
-            rb = rules.roll_beats
-            if blen - rb >= rules.roll_min_build_beats:
+            rb = rules.roll_beats // 2 if crescendo(m["beat"], rules.roll_beats // 2) else rules.roll_beats
+            if rb > 0 and blen - rb >= rules.roll_min_build_beats:
                 start = build["end_beat"] - rb
                 roll = dict(build, beat=start, kind="drop", bucket="drop", roll=True, phrases=1,
                             energy=energy_of(start, build["end_beat"], _KIND_ENERGY["drop"]),
