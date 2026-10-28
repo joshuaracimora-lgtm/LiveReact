@@ -80,10 +80,9 @@ Hard rules for every item, whoever does it:
     locally), add icons under `src/livereact/ui/icons/` (`livereact.ico`, `livereact.icns`), pick the macOS
     `bundle_identifier` (placeholder `org.livereact.app`), and check `macos-13` (x86_64) is still a GitHub
     runner.
-33. **P6 first-run setup + About.** `ui/first_run.py`: output (Enttec / Art-Net / sACN / demo), audio
-    device, DJ Link network interface, then demo rig or "add my fixtures"; `settings.py` remembers it is
-    done. `ui/about.py`: version + third-party notices (PySide6/Qt LGPL, prodj-link, OFL attribution,
-    Anthropic SDK). Accept: UI tests.
+40. [JOSH] **P6 show first-run + About.** `__main__` opens `FirstRunDialog` when `needs_first_run()` and
+    maps `settings.extra["setup"]` onto `AppConfig` (output backend, `audio_device`, `pdl_interface`; item 3);
+    a Help -> About entry in the console.
 34. [JOSH] **P6 signing + clean-machine tests.** Apple Developer account and notarization; Windows Azure
     Trusted Signing or an OV certificate; CI secrets; install on a clean Windows PC and a clean Mac.
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
@@ -242,3 +241,9 @@ Hard rules for every item, whoever does it:
   (not sandboxed; network client/server, audio input; library-validation keys for the bundled Python),
   `.github/workflows/release.yml` (windows-x64, macos-arm64, macos-x86_64; Azure Trusted Signing / codesign /
   notarize only when their secrets exist). Nothing is built nightly. Tests: `tests/test_app_packaging.py`.
+- **33. P6 first-run setup + About** (2026-10-28). `ui/first_run.py` `FirstRunDialog`: output (Enttec /
+  Art-Net / sACN / demo), audio input, DJ Link interface (device lists injectable), demo rig or add my
+  fixtures; Finish saves `settings.extra["setup"]` and `onboarding_done`; `needs_first_run()`. `ui/about.py`
+  `AboutDialog`: version (package metadata) and notices (PySide6/Qt, Anthropic SDK, platformdirs, pypdf,
+  keyring from their metadata; prodj-link and OFL marked "to confirm"), plus OFL attribution per imported
+  fixture. Tests: `tests/test_app_first_run.py`. Showing them at start-up / in a Help menu is item 40.
