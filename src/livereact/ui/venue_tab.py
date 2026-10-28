@@ -168,6 +168,7 @@ class VenueTab(QtWidgets.QWidget):
         outer.addWidget(split, 1)
 
         self.status = QtWidgets.QLabel("")
+        self.status.setWordWrap(True)      # two warnings + "Unsaved" outrun 1280 px on one line
         outer.addWidget(self.status)
         self._select_first()
 
@@ -248,7 +249,22 @@ class VenueTab(QtWidgets.QWidget):
         self.rig.venue.targets[name] = dataclasses.replace(p, **{axis: ft_to_m(value_ft)})
         self.plan.refresh_layout()
         self._update_laser_readout()
-        self._mark_dirty()
+        self._mark_dirty(self._target_captured_warning([name]))
+
+    def _target_captured_warning(self, names: list[str]) -> str:
+        """Same as _captured_warning, for the other end of the capture: the
+        offsets were solved against where the target WAS. Kept as is (right if
+        the target really moved, wrong if its old numbers were a typo)."""
+        heads, used = [], set()
+        for fx in self.rig.fixtures:
+            if isinstance(fx, MovingHead) and fx.calibration.captured:
+                on = {fx.calibration.target, fx.calibration.target2} & set(names)
+                if on:
+                    heads.append(fx.label); used |= on
+        if not heads:
+            return ""
+        return (f"{', '.join(heads)}: aim captured on {', '.join(sorted(used))} at its old spot: check it with "
+                "Aim at target, and SET AIM again if the beam misses.")
 
     # ------------------------------------------------------------------ property panel
     def _build_property_panel(self) -> QtWidgets.QWidget:
@@ -484,14 +500,17 @@ class VenueTab(QtWidgets.QWidget):
             self._update_place_title()
         self._loading = True
         try:
+            moved = []
             for name, (bx, by, bz) in self._target_boxes.items():
                 p = self.rig.venue.targets.get(name)
                 if p is not None:
+                    if abs(bx.value() - m_to_ft(p.x)) > 0.05 or abs(by.value() - m_to_ft(p.y)) > 0.05:
+                        moved.append(name)                 # the drag moved this target
                     bx.setValue(m_to_ft(p.x)); by.setValue(m_to_ft(p.y)); bz.setValue(m_to_ft(p.z))
         finally:
             self._loading = False
         self._update_laser_readout()
-        self._mark_dirty(note)
+        self._mark_dirty(" ".join(n for n in (note, self._target_captured_warning(moved)) if n))
 
     def _reset_positions(self) -> None:
         self._clear_pins()

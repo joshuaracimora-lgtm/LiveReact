@@ -14,7 +14,7 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
      facing, `geometry.calibrate_from_capture`), so every aim silently rotates. The tab now WARNS
      (fixed below); whether to re-solve from the stored capture (right if the old numbers were a typo)
      or keep the offsets (right if the head was re-hung the same way) is Josh's call. Moving a TARGET a
-     capture was taken on is not warned about yet.
+     capture was taken on now warns too (fixed below); same open question for it.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
@@ -31,6 +31,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Moving a target a head was captured on was silent** (box edit or drag): the SET AIM / ADD 2ND
+  POINT offsets were solved against the target's old spot and are kept. The status line now names the
+  head(s) and the target and says to check with Aim at target / SET AIM again. Nothing is re-solved.
+  The Venue status line now wraps (two warnings plus "Unsaved changes" outran 1280 px). Test:
+  `tests/test_console.py::test_moving_a_target_a_head_was_captured_on_warns` (2026-10-28).
 
 - **Rig Config's Side column was stale**: built once, so after a Venue-tab move it still showed -- and
   Save wrote back -- the side the fixture had at launch. Opening the tab now refreshes the column from
