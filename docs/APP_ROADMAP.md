@@ -48,9 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-13. **P1 definition library.** `src/livereact/fixtures/library.py`: resolve `"<id>@<mode>"` from the rig's
-    embedded `definitions`, then the user folder (`userdata.paths().fixtures`), then `builtin/`; list all;
-    save a user definition. Accept: tests with `LIVEREACT_HOME`.
 14. **P1 rig file v2.** `rig.py`:
     - A slot may say `"fixture": "<id>@<mode>"` instead of `fixture_type`.
     - The rig embeds a top-level `"definitions": {id: {...}}` snapshot, so the file is self-contained and
@@ -221,3 +218,8 @@ Hard rules for every item, whoever does it:
   `laser_enabled=True`) leaves the head at zero. Disarmed zeroes everything; the gate writes `blank`
   (only the `chop_channel` when one is set, like the native CH1-only gate).
   Tests: `tests/test_app_generic_laser.py`.
+- **13. P1 definition library** (2026-10-28). `fixtures/library.py`: `parse_ref`, `resolve(ref,
+  embedded)` (rig snapshot, user folder, builtin; a builtin id always resolves to the packaged model, so
+  neither a user file nor a rig snapshot can redefine it), `list_definitions()` (bad user files
+  skipped), `save_user_definition()` (validated, safe lowercase ids, atomic), `refs()`.
+  Tests: `tests/test_app_fixture_library.py`.
