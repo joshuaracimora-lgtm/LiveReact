@@ -14,26 +14,75 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
      facing, `geometry.calibrate_from_capture`), so every aim silently rotates. The tab now WARNS
      (fixed below); whether to re-solve from the stored capture (right if the old numbers were a typo)
      or keep the offsets (right if the head was re-hung the same way) is Josh's call. Moving a TARGET a
-     capture was taken on is not warned about yet.
+     capture was taken on now warns too (fixed below); same open question for it.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
    - leader lines, beams and wedges are not obstacles;
-   - captions don't follow a drag until release; tooltips are never refreshed after a drop;
-   - `_mark_stacks` ignores targets (a fixture on a target is not drawn as a stack).
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
    steps Josh saw it with.
-4. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it:
-   exactly at the centre line it is never updated (keeps whatever it was last). The Rig Config tab's
-   Side column is built once and can save a stale value back. (Reset positions: fixed below.)
-5. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
+4. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
-6. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
+5. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **On a small room an edge target's caption landed on another caption** (junior_crib@small:
+  venue_edge_right on back_wall's "7′ up"): every slot beside a right-wall target ran past the scene, so
+  the least-overlap fallback was used. Before that fallback, `_layout_labels` now tries the same slots up
+  to one caption-width past the side of the scene and grows the scene to take it. Only reached when no
+  slot inside is free: caption positions on all eight real rigs are unchanged (compared before/after);
+  junior_crib@small overlaps 1 -> 0, though several of its captions now sit further from their bodies
+  (leaders). Test: `tests/test_floorplan.py::test_an_edge_targets_caption_does_not_land_on_another_caption`
+  (2026-10-28).
+
+- **Captions stayed behind during a drag** until the mouse was released. `FloorPlanView.mouseMoveEvent`
+  now carries each moved body's caption and leader with it; the release re-lays them out as before (also
+  when the drop snaps back to where it started). Tests:
+  `tests/test_floorplan.py::test_captions_follow_a_drag_before_release`,
+  `::test_a_drag_that_snaps_back_puts_the_caption_back` (2026-10-28).
+
+- **A target under a fixture was hidden and unclickable**: `_mark_stacks` ignored targets, so
+  junior_crib's dj_booth / booth_edge diamonds were drawn beneath the wash bar and lasers and a click
+  there picked the fixture. A target covered by a fixture glyph is now drawn above the fixtures
+  (re-checked after every drop / box edit); elsewhere it stays under them. The dashed-ring stack stays
+  fixtures-only, as the legend says. Test:
+  `tests/test_floorplan.py::test_a_target_under_a_fixture_stays_visible_and_clickable` (2026-10-28).
+
+- **A fixture's or target's tooltip kept its old position after a drag** (only `refresh_layout` set
+  tooltips; a drop does not rebuild the plan). The drop commits and the placement-box path now rewrite
+  the tooltip from the new position. Test: `tests/test_floorplan.py::test_tooltips_follow_a_drag`
+  (2026-10-28).
+
+- **Axis numbers were drawn under bodies**: a fixture on the booth wall (testing_setup's wash bar) hung
+  over the x-axis "15′"/"20′", and a target on the left wall over the y-axis "25′" (junior_crib); the
+  numbers sat at a fixed offset from the room edge. `FloorPlanView._clear_axis_numbers` moves the whole
+  row (with the wall title) / column out past whatever hangs over the edge, the scene grows, and the
+  caption layout now reserves the numbers where they actually are. Overlaps (harness -> now):
+  junior_crib 1->0, testing_setup 2->0, junior_crib@small 2->1, the six others 0->0. Test:
+  `tests/test_floorplan.py::test_axis_numbers_are_not_drawn_under_a_body` (2026-10-28).
+
+- **Moving a target a head was captured on was silent** (box edit or drag): the SET AIM / ADD 2ND
+  POINT offsets were solved against the target's old spot and are kept. The status line now names the
+  head(s) and the target and says to check with Aim at target / SET AIM again. Nothing is re-solved.
+  The Venue status line now wraps (two warnings plus "Unsaved changes" outran 1280 px). Test:
+  `tests/test_console.py::test_moving_a_target_a_head_was_captured_on_warns` (2026-10-28).
+
+- **Rig Config's Side column was stale**: built once, so after a Venue-tab move it still showed -- and
+  Save wrote back -- the side the fixture had at launch. Opening the tab now refreshes the column from
+  the rig; a placed fixture's side is shown locked ("Set by where the fixture is placed on the Venue
+  tab", its x decides it on load anyway), an unplaced one stays editable. Test:
+  `tests/test_console.py::test_rig_config_side_column_follows_a_venue_tab_move` (2026-10-28).
+
+- **`side` got stuck at the centre line**: `Rig.refresh_geometry` set `side` from x and never restored
+  it, so a head dragged right and then onto the centre line (or un-placed, or the floor plan removed)
+  stayed "right" although the file says "left". The rig now remembers each fixture's declared side and
+  gives it back whenever x can't decide. Rigs loaded from file get exactly the sides they got before.
+  Test: `tests/test_rig.py::test_side_at_the_centre_line_or_unplaced_falls_back_to_the_declared_side`
+  (2026-10-28).
 
 - **On a crowded small room a caption was pushed out of the scene** onto the wall title (the last-resort
   placement stacked it straight down, ignoring the scene and the reserved bands). It now takes the slot
@@ -64,7 +113,8 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 - **Reset positions left every fixture on the side last derived from its x** (a left head dragged right
   stayed "right" with no position). The Venue tab keeps the sides the rig had when it opened and Reset
-  positions gives them back. UI-only; the centre-line case in `Rig.refresh_geometry` is still open. Test:
+  positions gives them back. (2026-10-28: now done by `Rig.refresh_geometry` itself, which gives an
+  unplaced fixture its declared side; the tab's own copy was removed.) Test:
   `tests/test_console.py::test_reset_positions_restores_each_fixtures_side` (2026-10-26).
 
 - **An unplaced fixture showed X/Y, yet SET AIM said "Place the head first"**: the boxes show where it

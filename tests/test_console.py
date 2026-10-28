@@ -809,3 +809,73 @@ def test_floor_plan_gets_the_left_columns_height_at_1280x800(qapp):
     scroll = tab.findChild(QtWidgets.QScrollArea)
     assert scroll.horizontalScrollBar().maximum() == 0          # the targets grid fits the panel too
     tab.close()
+
+
+def test_rig_config_side_column_follows_a_venue_tab_move(qapp):
+    """UI_BUGS 'Rig Config's Side column is stale': the column was built once,
+    so after a Venue-tab move it still showed -- and Save wrote back -- the
+    side the head had at launch. A placed head's side comes from its x, so
+    the column shows that side and can't be edited to disagree with it."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    cfg = win.rig_config_tab
+    row = next(r for r in range(cfg.table.rowCount()) if cfg.table.item(r, 0).text() == "mh_l")
+    side_combo = cfg.table.cellWidget(row, 5)
+    assert side_combo.currentText() == "left"
+
+    tab = win.venue_tab
+    win.tabs.setCurrentIndex(1)
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(25.0); tab.sb_y.setValue(3.0); tab.sb_z.setValue(1.5)   # right half of a 30 ft room
+    assert app.rig.fixture("mh_l").side == "right"
+
+    win.tabs.setCurrentIndex(2)
+    assert side_combo.currentText() == "right"
+    assert not side_combo.isEnabled()
+    slot = next(s for s in cfg._collect()["slots"] if s["slot_id"] == "mh_l")
+    assert slot["side"] == "right"
+
+
+def test_moving_a_target_a_head_was_captured_on_warns(qapp):
+    """UI_BUGS (calibration not tied to what it was solved for): a SET AIM
+    capture is solved against the target's position at the time; moving that
+    target afterwards silently kept the offsets. Whether to re-solve is Josh's
+    call; the tab must at least say which head's aim was captured there."""
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    tab.cb_jog.setChecked(True)
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    assert app.rig.fixture("mh_l").calibration.target == "dj_booth"
+
+    other = next(n for n in tab._target_boxes if n != "dj_booth")
+    tab._mark_dirty()
+    tab._target_boxes[other][0].setValue(tab._target_boxes[other][0].value() + 2.0)
+    assert "captured" not in tab.status.text()          # nobody was captured on that one
+
+    bx = tab._target_boxes["dj_booth"][0]
+    bx.setValue(bx.value() + 2.0)
+    msg = tab.status.text()
+    assert app.rig.fixture("mh_l").label in msg
+    assert "dj_booth" in msg and "SET AIM" in msg
+
+    # a drag of the target on the plan warns too
+    tab._mark_dirty()
+    view = tab.plan
+    view.resize(800, 900); view._fit()
+    p = view.mapFromScene(view._targets["dj_booth"].scenePos())
+    left, none = QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier
+    QTest.mousePress(view.viewport(), left, none, p)
+    for dy in (-15, -30, -45, -60):
+        QTest.mouseMove(view.viewport(), QtCore.QPoint(p.x(), p.y() + dy))
+    QTest.mouseRelease(view.viewport(), left, none, QtCore.QPoint(p.x(), p.y() - 60))
+    assert "dj_booth" in tab.status.text() and "SET AIM" in tab.status.text()

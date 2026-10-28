@@ -258,9 +258,11 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self._beams: dict[str, QtWidgets.QGraphicsLineItem] = {}
         self._wedges: dict[str, QtWidgets.QGraphicsPolygonItem] = {}
         self._captions: dict[str, _Caption] = {}
+        self._axis_rects: list[QtCore.QRectF] = []     # axis numbers + wall title (refresh_layout)
         self._layout_dirty = False
         self._dragging: set[str] = set()
         self._press_pos: dict[int, QtCore.QPointF] = {}
+        self._press_caps: dict[str, tuple] = {}   # caption key -> (title pos, sub pos, leader line) at press
         self._scene.selectionChanged.connect(self._on_selection)
         self.refresh_layout()
 
@@ -324,6 +326,8 @@ class FloorPlanView(QtWidgets.QGraphicsView):
 
         # grid: every foot light, every 5 ft bold
         step = ft_to_m(1.0) * PX_PER_M
+        x_ticks: list[QtWidgets.QGraphicsSimpleTextItem] = []
+        y_ticks: list[QtWidgets.QGraphicsSimpleTextItem] = []
         n_x, n_y = int(v.width_m / ft_to_m(1.0)) + 1, int(v.length_m / ft_to_m(1.0)) + 1
         for i in range(n_x + 1):
             x = i * step
@@ -333,6 +337,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             self._grid.append(self._scene.addLine(x, 0, x, l_px, pen))
             if i % 5 == 0:
                 t = self._scene.addSimpleText(f"{i}′"); t.setBrush(_TEXT); t.setPos(x - 6, l_px + 4)
+                x_ticks.append(t)
         for j in range(n_y + 1):
             y = l_px - j * step
             if y < -0.5:
@@ -341,6 +346,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             self._grid.append(self._scene.addLine(0, y, w_px, y, pen))
             if j % 5 == 0:
                 t = self._scene.addSimpleText(f"{j}′"); t.setBrush(_TEXT); t.setPos(-_MARGIN + 2, y - 7)
+                y_ticks.append(t)
         self._scene.addRect(0, 0, w_px, l_px, QtGui.QPen(_ROOM_EDGE, 2))
         # the wall title goes under the x-axis numbers (not across them); the
         # scene grows to fit it
@@ -384,8 +390,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             item.fill = QtGui.QColor(0, 0, 0); item.edge = _TARGET; item.edge_w = 2
             item.setPos(self.to_scene(p.x, p.y))
             item.setZValue(4.5 if is_ceiling else 5)      # the hollow ceiling diamond sits under a floor one
-            item.setToolTip(f"{name}\n{m_to_ft(p.x):.1f} ft along the booth wall, "
-                            f"{m_to_ft(p.y):.1f} ft out, {m_to_ft(p.z):.1f} ft up")
+            item.setToolTip(self._target_tip(name, p))
             if self.editable:
                 item.setFlags(movable)
                 item.setCursor(QtCore.Qt.CursorShape.OpenHandCursor)
@@ -404,9 +409,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             o = self.fixture_origin(fx)
             placed = fx.position is not None
             item.setPos(self.to_scene(o.x, o.y))
-            where = (f"{m_to_ft(o.x):.1f} ft along the booth wall, {m_to_ft(o.y):.1f} ft out, "
-                     f"{m_to_ft(o.z):.1f} ft up" if placed else "not placed yet -- drag it to where it hangs")
-            item.setToolTip(f"{fx.label}\n{fx.type_name} @ DMX {fx.address}\n{where}")
+            item.setToolTip(self._fixture_tip(fx))
             if self.editable:
                 item.setFlags(movable | QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
                 item.setCursor(QtCore.Qt.CursorShape.OpenHandCursor)
@@ -426,10 +429,45 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                          else f"@{fx.address} · not placed yet")
             self._captions[key] = cap
         self._mark_stacks()
+        self._clear_axis_numbers(x_ticks, y_ticks, booth)
         self._scene.blockSignals(False)
         self._layout_dirty = True
         self._fit()
         self.update_from_universe(self.rig.boot_universe())
+
+    def _fixture_tip(self, fx) -> str:
+        o = self.fixture_origin(fx)
+        where = (f"{m_to_ft(o.x):.1f} ft along the booth wall, {m_to_ft(o.y):.1f} ft out, "
+                 f"{m_to_ft(o.z):.1f} ft up" if fx.position is not None
+                 else "not placed yet -- drag it to where it hangs")
+        return f"{fx.label}\n{fx.type_name} @ DMX {fx.address}\n{where}"
+
+    @staticmethod
+    def _target_tip(name: str, p: Point3) -> str:
+        return (f"{name}\n{m_to_ft(p.x):.1f} ft along the booth wall, "
+                f"{m_to_ft(p.y):.1f} ft out, {m_to_ft(p.z):.1f} ft up")
+
+    def _clear_axis_numbers(self, x_ticks: list, y_ticks: list, booth) -> None:
+        """The axis numbers sit at a fixed offset from the room edge; a body
+        hanging over that edge (a bar on the booth wall, a target on the left
+        wall) covered them. Move the whole row (with the wall title) / column
+        out past it; the scene grows to fit."""
+        bodies = [b.sceneBoundingRect() for b in (*self._bodies.values(), *self._targets.values())]
+        r = self._scene.sceneRect()
+        hit = [b for b in bodies if any(t.sceneBoundingRect().intersects(b) for t in x_ticks)]
+        if hit:
+            dy = max(b.bottom() for b in hit) + 2 - min(t.sceneBoundingRect().top() for t in x_ticks)
+            for t in (*x_ticks, booth):
+                t.moveBy(0, dy)
+            r.setBottom(max(r.bottom(), booth.sceneBoundingRect().bottom() + 2))
+        hit = [b for b in bodies if any(t.sceneBoundingRect().intersects(b) for t in y_ticks)]
+        if hit:
+            dx = min(b.left() for b in hit) - 2 - max(t.sceneBoundingRect().right() for t in y_ticks)
+            for t in y_ticks:
+                t.moveBy(dx, 0)
+            r.setLeft(min(r.left(), min(t.sceneBoundingRect().left() for t in y_ticks) - 2))
+        self._scene.setSceneRect(r)
+        self._axis_rects = [t.sceneBoundingRect() for t in (*x_ticks, *y_ticks, booth)]
 
     @staticmethod
     def _key(fx) -> str:
@@ -441,7 +479,11 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         look-alike discs. The highest-mounted one keeps its normal glyph on
         top; each one beneath it becomes a progressively larger dashed
         outline around it, so every member of the pile stays visible and
-        clickable. Positions are untouched."""
+        clickable. Positions are untouched.
+
+        A target under a fixture glyph (dj_booth under the wash bar) is drawn
+        above the fixtures instead, so its small diamond stays visible and
+        clickable; anywhere else it sits under them as usual."""
         entries = [(self._key(fx), self.fixture_origin(fx)) for fx in self.rig.fixtures]
         for key, _o in entries:
             item = self._bodies.get(key)
@@ -464,6 +506,11 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                 item = self._bodies[k]
                 item.set_glyph_scale(1.0 + _STACK_STEP * rank)
                 item.setZValue(10 - 0.1 * rank)
+        bodies = [b.mapRectToScene(b.glyph_rect()) for b in self._bodies.values()]
+        for t in self._targets.values():
+            covered = any(t.mapRectToScene(t.glyph_rect()).intersects(r) for r in bodies)
+            base = 4.5 if t.glyph == "ceiling_target" else 5      # the hollow ceiling diamond under a floor one
+            t.setZValue(base + 6.5 if covered else base)
 
     def _layout_labels(self) -> None:
         """Keep every caption legible: each starts centred under its body and
@@ -479,11 +526,13 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             QtCore.QRectF(-_MARGIN, l_px + 1, w_px + 2 * _MARGIN, _MARGIN + 40),     # x axis + "DJ BOOTH WALL"
             QtCore.QRectF(-_MARGIN - 2, -_MARGIN - _LEGEND_H, _MARGIN + 1, l_px + 2 * _MARGIN + _LEGEND_H),  # y axis
             self._legend.sceneBoundingRect(),                                                            # legend
+            *self._axis_rects,                             # the numbers themselves, wherever they were moved
         ]
         obstacles = [c.item.sceneBoundingRect() for c in self._captions.values()]
         placed: list[QtCore.QRectF] = []
         order = sorted(self._captions.values(), key=lambda c: (c.item.pos().x(), c.item.pos().y()))
         gap = 4.0
+        grown = False
         for cap in order:
             a = cap.item.pos()
             br = cap.item.boundingRect()
@@ -536,6 +585,16 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                         chosen = r
                         break
             if chosen is None:
+                # a caption on a side wall (an edge target) can find every slot
+                # inside the scene taken while one just past the wall is free:
+                # take it and let the scene grow sideways, rather than overlap
+                wide = scene_rect.adjusted(-lw, 0, lw, 0)
+                for sx, sy in [*self._SLOTS, *ring]:
+                    r = slot_rect(sx, sy)
+                    if wide.contains(r) and not any(r.intersects(o) for o in obstacles + placed + reserved):
+                        chosen, far, grown = r, True, True
+                        break
+            if chosen is None:
                 # last resort (room smaller than its labels): the slot inside the
                 # scene that overlaps the least (bodies, captions AND the bands),
                 # nearest first. (It used to stack straight down, out of the
@@ -549,6 +608,12 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             cap.place(chosen)
             cap.leader_to(chosen if far else None)
             placed.append(chosen.adjusted(-3, -2, 3, 2))
+        if grown:
+            r = scene_rect
+            for p_ in placed:
+                r = r.united(p_)
+            self._scene.setSceneRect(r)
+            self._fit()
 
     def _fit(self) -> None:
         self.fitInView(self._scene.sceneRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio)
@@ -578,7 +643,24 @@ class FloorPlanView(QtWidgets.QGraphicsView):
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         # where everything sat before this press: only what the drag moved is committed
         self._press_pos = {id(i): i.pos() for i in (*self._bodies.values(), *self._targets.values())}
+        self._press_caps = {k: (c.title.pos(), c.sub.pos(), c.leader.line()) for k, c in self._captions.items()}
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        """During a drag each moved body's caption (and leader) moves with
+        it; the release re-lays every caption out as before."""
+        super().mouseMoveEvent(event)
+        if not self.editable or not self._press_pos:
+            return
+        for key, cap in self._captions.items():
+            before = self._press_pos.get(id(cap.item))
+            start = self._press_caps.get(key)
+            if before is None or start is None:
+                continue
+            d = cap.item.pos() - before
+            cap.title.setPos(start[0] + d)
+            cap.sub.setPos(start[1] + d)
+            cap.leader.setLine(start[2].translated(d))
 
     def _moved(self, item: PlanItem) -> bool:
         before = self._press_pos.get(id(item))
@@ -588,20 +670,25 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         super().mouseReleaseEvent(event)
         if not self.editable:
             return
-        changed = False
+        changed = moved = False
         for key, item in self._bodies.items():
             if self._moved(item):
+                moved = True
                 changed |= self._commit_fixture_drop(key, item)
         for name, item in self._targets.items():
             if self._moved(item):
+                moved = True
                 changed |= self._commit_target_drop(name, item)
         self._press_pos = {}
+        self._press_caps = {}
         if changed:
             self.rig.refresh_geometry()
             self._mark_stacks()
             self._layout_labels()
             if self.on_changed is not None:
                 self.on_changed()
+        elif moved:
+            self._layout_labels()      # snapped back where it was: captions back too
 
     def _snap(self, x_m: float, y_m: float) -> tuple[float, float]:
         v = self.venue()
@@ -616,6 +703,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         z = old.z if old is not None else 1.0
         fx.position = Point3(x_m, y_m, z)
         item.setPos(self.to_scene(x_m, y_m))
+        item.setToolTip(self._fixture_tip(fx))
         cap = self._captions.get(key)
         if cap is not None:
             cap.set_text(fx.label, f"@{fx.address} · {m_to_ft(z):.0f}′ up")
@@ -631,6 +719,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         z = old.z if old is not None else 1.0
         v.targets[name] = Point3(x_m, y_m, z)
         item.setPos(self.to_scene(x_m, y_m))
+        item.setToolTip(self._target_tip(name, v.targets[name]))
         self._layout_dirty = True
         return old != v.targets[name]
 
@@ -639,6 +728,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         item = self._bodies.get(slot_id)
         if item is not None:
             item.setPos(self.to_scene(p.x, p.y))
+            item.setToolTip(self._fixture_tip(self.rig.fixture(slot_id)))
             cap = self._captions.get(slot_id)
             if cap is not None:
                 cap.set_text(cap.title.text(), f"@{self.rig.fixture(slot_id).address} · {m_to_ft(p.z):.0f}′ up")

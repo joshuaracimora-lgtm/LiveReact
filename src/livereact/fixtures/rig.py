@@ -104,6 +104,11 @@ class Rig:
         # so `requires{atm: X}` is a single honest comparison everywhere.
         # Revisit only if/when haze hardware is actually added.
         self.atm: float = 0.0
+        # The side each fixture was built with (the rig file's `side`): what
+        # refresh_geometry falls back to when x can't decide (no venue, not
+        # placed, exactly on the centre line), so `side` never depends on
+        # where a head was dragged before.
+        self._declared_sides: dict[int, str] = {id(fx): fx.side for fx in fixtures}
         self._validate_and_index()
         self.refresh_geometry()
 
@@ -132,24 +137,30 @@ class Rig:
         (LIGHTING_BIBLE.md §1.2/§6.2: mirrored effects order fixtures by
         ``x_norm``, never by a hand-typed label). Without a venue nothing
         changes: ``side`` stays whatever the rig file declared, so rigs
-        with no floor plan behave exactly as before. Called at load and by
-        the Venue tab after every edit.
+        with no floor plan behave exactly as before. A fixture that is not
+        placed, or sits exactly on the centre line, also gets its declared
+        side back. Called at load and by the Venue tab after every edit.
 
         MOVE-03: if two or more fixtures of one role sit on the same side of
         centre, a mirrored effect can't mirror -- warn, don't guess."""
+        declared = getattr(self, "_declared_sides", {})
         if self.venue is None or self.venue.width_m <= 0:
             for fx in self.fixtures:
                 fx.x_norm = None
+                fx.side = declared.get(id(fx), fx.side)
             return
         for fx in self.fixtures:
             if fx.position is None:
                 fx.x_norm = None
+                fx.side = declared.get(id(fx), fx.side)
                 continue
             fx.x_norm = x_norm(fx.position.x, self.venue.width_m)
             if fx.x_norm < 0:
                 fx.side = "left"
             elif fx.x_norm > 0:
                 fx.side = "right"
+            else:
+                fx.side = declared.get(id(fx), fx.side)
         by_role: dict[str, list[Fixture]] = {}
         for fx in self.fixtures:
             if fx.x_norm is not None:

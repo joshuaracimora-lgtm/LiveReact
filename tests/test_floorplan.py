@@ -271,3 +271,144 @@ def test_crowded_small_room_keeps_every_caption_inside_the_scene(qapp):
             r = line.sceneBoundingRect()
             assert scene.contains(r), (key, line.text())
             assert r.top() < room_bottom, (key, line.text())      # not in the axis / wall-title band
+
+
+@pytest.mark.parametrize("rig_name", ["testing_setup.json", "junior_crib.json"])
+def test_axis_numbers_are_not_drawn_under_a_body(qapp, rig_name):
+    """UI_BUGS (labels): a fixture on the booth wall (wash bar) hung over the
+    x-axis numbers, and a target on the left wall over a y-axis number; the
+    numbers sat at a fixed offset from the room edge whatever was there."""
+    from PySide6 import QtWidgets
+    from livereact.ui.floorplan import FloorPlanView
+
+    view = FloorPlanView(load_rig(os.path.join(HERE, "rigs", rig_name)), editable=True)
+    texts = [i for i in view._scene.items() if isinstance(i, QtWidgets.QGraphicsSimpleTextItem)]
+    ticks = [t for t in texts if t.text().endswith("′") and t.text()[:-1].isdigit()]
+    bodies = [b.sceneBoundingRect() for b in (*view._bodies.values(), *view._targets.values())]
+    under = [t.text() for t in ticks if any(t.sceneBoundingRect().intersects(b) for b in bodies)]
+    assert ticks and under == []
+    scene = view._scene.sceneRect()
+    assert all(scene.contains(t.sceneBoundingRect()) for t in texts if t.text())
+    booth = next(t for t in texts if t.text() == "DJ BOOTH WALL")
+    assert not [t.text() for t in ticks if t.sceneBoundingRect().intersects(booth.sceneBoundingRect())]
+
+
+def test_tooltips_follow_a_drag(qapp):
+    """UI_BUGS (labels): after dragging a fixture or a target its tooltip
+    still gave the old position in feet (only refresh_layout rebuilt them)."""
+    from livereact.fixtures.geometry import m_to_ft
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    view = FloorPlanView(rig, editable=True)
+    _click(view, view._bodies["mh"], drag_px=(60, 0))
+    mh = rig.fixture("mh")
+    assert mh.position.x > ft_to_m(5.5)
+    assert f"{m_to_ft(mh.position.x):.1f} ft along the booth wall" in view._bodies["mh"].toolTip()
+    _click(view, view._targets["dj_booth"], drag_px=(0, -60))
+    p = rig.venue.targets["dj_booth"]
+    assert f"{m_to_ft(p.y):.1f} ft out" in view._targets["dj_booth"].toolTip()
+
+
+def test_a_target_under_a_fixture_stays_visible_and_clickable(qapp):
+    """UI_BUGS (labels): `_mark_stacks` ignored targets, so a target under a
+    fixture (junior_crib's dj_booth under the wash bar) was drawn beneath it:
+    hidden, and a click there picked the fixture."""
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    o = rig.fixture("mh").position
+    rig.venue.targets["dj_booth"] = Point3(o.x, o.y, ft_to_m(4))
+    view = FloorPlanView(rig, editable=True)
+    target = view._targets["dj_booth"]
+    top = view._scene.items(target.scenePos())[0]            # topmost item at the diamond's centre
+    assert top is target
+    # moved off the fixture (a drag), it goes back under the bodies' layer
+    _click(view, target, drag_px=(0, -80))
+    assert target.zValue() < view._bodies["mh"].zValue()
+    # and a fixture dragged onto a target puts the target back on top
+    rig2 = _josh_rig_with_venue()
+    view2 = FloorPlanView(rig2, editable=True)
+    t2 = view2._targets["dj_booth"]
+    mh = view2._bodies["mh"]
+    view2.resize(800, 900); view2._fit()
+    d = view2.mapFromScene(t2.scenePos()) - view2.mapFromScene(mh.scenePos())
+    _click(view2, mh, drag_px=(d.x(), d.y()))
+    assert view2._scene.items(t2.scenePos())[0] is t2
+
+
+def test_captions_follow_a_drag_before_release(qapp):
+    """UI_BUGS (labels): while dragging a fixture or target its caption stayed
+    where it was until the mouse was released."""
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    view = FloorPlanView(rig, editable=True)
+    view.resize(800, 900); view._fit()
+    vp = view.viewport()
+    left, none = QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier
+    for item, cap in ((view._bodies["mh"], view._captions["mh"]),
+                      (view._targets["dj_booth"], view._captions["target:dj_booth"])):
+        p = view.mapFromScene(item.scenePos())
+        item0, cap0 = item.scenePos(), cap.title.scenePos()
+        QTest.mousePress(vp, left, none, p)
+        for dx in (10, 20, 30, 40):
+            QTest.mouseMove(vp, QtCore.QPoint(p.x() + dx, p.y() - dx))
+        moved = item.scenePos() - item0
+        assert moved.manhattanLength() > 10                       # the drag really moved it
+        d = cap.title.scenePos() - cap0
+        assert abs(d.x() - moved.x()) < 1 and abs(d.y() - moved.y()) < 1
+        QTest.mouseRelease(vp, left, none, QtCore.QPoint(p.x() + 40, p.y() - 40))
+
+
+def test_a_drag_that_snaps_back_puts_the_caption_back(qapp):
+    """A drag smaller than half the snap step lands where it started (no
+    change committed): the caption, moved during the drag, must come back.
+    (Guards the drag-follow change above; it passed before it too.)"""
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    view = FloorPlanView(rig, editable=True)
+    view.resize(800, 900); view._fit()
+    vp = view.viewport()
+    item, cap = view._bodies["mh"], view._captions["mh"]
+    p = view.mapFromScene(item.scenePos())
+    cap0 = cap.title.scenePos()
+    left, none = QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier
+    QTest.mousePress(vp, left, none, p)
+    QTest.mouseMove(vp, QtCore.QPoint(p.x() + 1, p.y()))
+    assert item.scenePos() != view.to_scene(ft_to_m(5), ft_to_m(2))     # it did move a little
+    QTest.mouseRelease(vp, left, none, QtCore.QPoint(p.x() + 1, p.y()))
+    mh = rig.fixture("mh").position
+    assert (mh.x, mh.y) == pytest.approx((ft_to_m(5), ft_to_m(2)))
+    assert (cap.title.scenePos() - cap0).manhattanLength() < 0.5
+
+
+def test_an_edge_targets_caption_does_not_land_on_another_caption(qapp):
+    """UI_BUGS (labels): on a small room the right-wall target's caption had
+    no free slot inside the scene (every side slot ran past the wall margin)
+    and the least-overlap fallback put it on top of another caption."""
+    from PySide6 import QtWidgets
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = load_rig(os.path.join(HERE, "rigs", "junior_crib.json"))
+    k, v = 0.6, rig.venue
+    rig.venue = Venue(v.width_m * k, v.length_m * k, v.height_m,
+                      {n: Point3(p.x * k, p.y * k, p.z) for n, p in v.targets.items()})
+    for fx in rig.fixtures:
+        if fx.position is not None:
+            fx.position = Point3(fx.position.x * k, fx.position.y * k, fx.position.z)
+    rig.refresh_geometry()
+    view = FloorPlanView(rig, editable=True)
+    view._layout_labels()
+    texts = [(t.text(), t.sceneBoundingRect()) for t in view._scene.items()
+             if isinstance(t, QtWidgets.QGraphicsSimpleTextItem) and t.isVisible() and t.text()]
+    pairs = [(a, b) for i, (a, ra) in enumerate(texts) for b, rb in texts[i + 1:]
+             if ra.intersected(rb).width() * ra.intersected(rb).height() > 2.0]   # ui_snapshot.MIN_OVERLAP_PX2
+    assert pairs == []
+    scene = view._scene.sceneRect()
+    assert all(scene.contains(r) for _, r in texts)
