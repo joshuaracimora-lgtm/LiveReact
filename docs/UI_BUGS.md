@@ -25,15 +25,21 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
    steps Josh saw it with.
-4. **`side` gets stuck.** `Rig.refresh_geometry` overwrites `fx.side` from x and never restores it:
-   exactly at the centre line it is never updated (keeps whatever it was last). The Rig Config tab's
-   Side column is built once and can save a stale value back. (Reset positions: fixed below.)
+4. **Rig Config's Side column is stale.** It is built once, so after a Venue-tab move it still shows
+   (and Save writes back) the side the fixture had at launch. (The centre-line half: fixed below.)
 5. **Slew limit uses the placeholder pan/tilt range** (`MovingHead.apply_slew_limit` reads
     `PAN_RANGE_DEG`/`TILT_RANGE_DEG`), not the two-point solved range in `calibration.ranges()`.
 6. **Legacy layout flips.** The legacy `layout_y` fallback (`FloorPlanView._fallback_xy`) maps the old
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **`side` got stuck at the centre line**: `Rig.refresh_geometry` set `side` from x and never restored
+  it, so a head dragged right and then onto the centre line (or un-placed, or the floor plan removed)
+  stayed "right" although the file says "left". The rig now remembers each fixture's declared side and
+  gives it back whenever x can't decide. Rigs loaded from file get exactly the sides they got before.
+  Test: `tests/test_rig.py::test_side_at_the_centre_line_or_unplaced_falls_back_to_the_declared_side`
+  (2026-10-28).
 
 - **On a crowded small room a caption was pushed out of the scene** onto the wall title (the last-resort
   placement stacked it straight down, ignoring the scene and the reserved bands). It now takes the slot

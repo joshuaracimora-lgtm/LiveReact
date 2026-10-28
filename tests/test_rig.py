@@ -156,6 +156,40 @@ def test_side_is_derived_from_real_x_when_a_venue_is_declared(caplog):
     assert rig.fixture("a").side == "right" and rig.fixture("a").x_norm is None
 
 
+def test_side_at_the_centre_line_or_unplaced_falls_back_to_the_declared_side():
+    """docs/UI_BUGS.md 'side gets stuck': refresh_geometry overwrote `side`
+    from x and never restored it, so a head dragged right and then onto the
+    centre line (or un-placed) stayed "right" although the file says "left".
+    Without a usable x the rig file's declared side is the answer, whatever
+    the head's history."""
+    from livereact.fixtures.geometry import Point3
+
+    rig = _rig_from_dict({
+        "name": "centre",
+        "venue": {"width_m": 8.0, "length_m": 10.0},
+        "slots": [
+            {"slot_id": "a", "fixture_type": "shehds_180w_mh", "dmx_address": 1, "role": "spot",
+             "side": "left", "position": {"x_m": 4.0, "y_m": 0.5, "z_m": 0.3}},   # on the centre line
+        ],
+    })
+    fx = rig.fixture("a")
+    assert fx.x_norm == 0 and fx.side == "left"
+    fx.position = Point3(7.0, 0.5, 0.3)
+    rig.refresh_geometry()
+    assert fx.side == "right"
+    fx.position = Point3(4.0, 0.5, 0.3)   # back on the centre line
+    rig.refresh_geometry()
+    assert fx.x_norm == 0 and fx.side == "left"
+    fx.position = Point3(7.0, 0.5, 0.3)
+    rig.refresh_geometry()
+    fx.position = None                                                       # un-placed
+    rig.refresh_geometry()
+    assert fx.x_norm is None and fx.side == "left"
+    rig.venue = None                                                         # floor plan removed
+    rig.refresh_geometry()
+    assert fx.side == "left"
+
+
 def test_channel_kind_map_matches_addresses():
     rig = load_rig()
     # MH Left at address 1: ch6 (index 5) is the dimmer.
