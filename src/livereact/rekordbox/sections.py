@@ -19,11 +19,11 @@ from pathlib import Path
 from .pssi import PhraseTable, beat_to_seconds
 from .waveform import ColorWaveform
 
-FEATURES_VERSION = 1   # bump when a feature's meaning changes: invalidates every cached file
+FEATURES_VERSION = 2   # bump when a feature's meaning changes: invalidates every cached file
 
 # the feature names a class rule may test (section_classes.json "rule" keys)
 FEATURE_NAMES = ("bars", "energy", "peak", "low_share", "mid_share", "high_share", "energy_delta",
-                 "rel_position", "inner_beats", "phrases")
+                 "rel_position", "inner_beats", "phrases", "roll")
 
 # track profile thresholds on the whole-track high minus low share (D-23); see track_profile
 PROFILE_SPLIT = 0.06
@@ -49,6 +49,7 @@ class SectionFeatures:
     rel_position: float    # t0 / track length, 0..1 (0 when unknown)
     inner_beats: int       # rekordbox Up-phrase extra beats (beat2/3/4) inside the section
     phrases: int           # rekordbox phrases the section spans
+    roll: int = 0          # 1 = the planner's snare-roll lead-in before a drop (planner PLAN_ROLL_BEATS)
 
     def get(self, name: str) -> float:
         return float(getattr(self, name))
@@ -84,7 +85,7 @@ def section_features(plan, table: PhraseTable, *, grid=None, waveform: ColorWave
             low_share=round(low, 4), mid_share=round(mid, 4), high_share=round(high, 4),
             energy_delta=round(energy - prev_energy, 4) if prev_energy is not None else 0.0,
             rel_position=round(t0 / length, 4) if (t0 is not None and length) else 0.0,
-            inner_beats=inner, phrases=max(1, len(spanned))))
+            inner_beats=inner, phrases=max(1, len(spanned)), roll=int(bool(getattr(s, "roll", False)))))
         prev_energy = energy
     return out
 

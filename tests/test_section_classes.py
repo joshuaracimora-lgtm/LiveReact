@@ -163,3 +163,18 @@ def test_palette_for_picks_dark_to_bright_by_position_and_by_seed_without_one():
     assert [book.palette_for("high", 0, p) for p in (0.0, 0.3, 0.6, 1.0)] == pal["high"]
     assert book.palette_for("high", 2) == "acid_yellow"
     assert _book([], dict(pal, approved=False)).palette_for("high", 0, 1.0) == ""
+
+
+def test_the_planners_roll_lead_in_is_the_shipped_snare_roll_class():
+    from livereact.rekordbox import section_classes
+    from livereact.rekordbox.planner import plan_track
+    from livereact.rekordbox.pssi import MOOD_HIGH, Phrase, PhraseTable
+    from livereact.rekordbox.sections import section_features
+    spec = [(1, 1, "intro"), (17, 2, "up"), (97, 5, "chorus"), (161, 6, "outro")]
+    ends = [b for b, _, _ in spec[1:]] + [193]
+    table = PhraseTable(mood=MOOD_HIGH, end_beat=193, bank=0, phrases=tuple(
+        Phrase(index=i + 1, beat=b, end_beat=e, kind=k, label=lab) for i, ((b, k, lab), e) in enumerate(zip(spec, ends))))
+    plan = plan_track(table, track_id=1, bpm=120.0, classes=section_classes.load())
+    feats = section_features(plan, table, bpm=120.0)
+    assert [f.roll for f in feats] == [0, 0, 1, 0, 0]
+    assert [s.cls for s in plan.sections if s.kind == "drop"] == ["drop_snare_roll", "drop_full"]

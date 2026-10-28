@@ -821,6 +821,28 @@
       ],
       "note": "planner: shorter builds are absorbed"
     },
+    "PLAN_ROLL_BEATS": {
+      "module": "livereact.rekordbox.planner",
+      "default": 32,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        0,
+        48
+      ],
+      "note": "planner: the last this-many beats of a build before a drop are planned as the drop's snare-roll lead-in (Josh's drop = the roll); 0 = off"
+    },
+    "PLAN_ROLL_MIN_BUILD_BEATS": {
+      "module": "livereact.rekordbox.planner",
+      "default": 40,
+      "type": "int",
+      "tag": "tunable",
+      "range": [
+        16,
+        64
+      ],
+      "note": "planner: a roll lead-in is only split off when the build keeps at least this many beats (TIME-02 8-bar build look + the look change's lag)"
+    },
     "REGULAR_DROP_HIT": {
       "module": "livereact.rekordbox.planner",
       "default": 0.92,
