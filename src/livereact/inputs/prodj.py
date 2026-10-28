@@ -304,6 +304,7 @@ class ProDjLinkListener(InputSource):
             beat_count=None if beat_count == NO_TRACK_BEAT_COUNT else beat_count,
             beat_in_bar=int(c.beat),
             source_ip=addr[0],
+            looping=play_state == "looping",
         )
         self.status_count += 1
         if self.first_status_at is None:

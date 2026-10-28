@@ -365,6 +365,17 @@ display)? If it is early/late by a beat, note it: that becomes `PSSI_BEAT_OFFSET
 in `core/metronome.py`. Also note what `beat_count` does on a cue, a hot cue and a
 loop, and whether `ONAIR`/`MASTER` ever show with both decks playing.
 
+**Loops (2026-10-26).** Set a 4-beat loop a few bars before a chorus and let it
+cycle. The status lines should switch to `looping` and `beat_count` should cycle
+within the loop; the app logs `rekordbox: deck N looping from beat B: holding the
+section`, `state.jsonl` has `loop_active: true`, and the section / `beats_to_drop`
+stay frozen at the loop-in beat until `loop released`. Then loop *across* the
+chorus downbeat (last 4 of the build + first 4 of the drop): the look must hold
+the build with the count-in armed and NOT land the drop, blackout bridge, or hit
+on every pass; releasing inside the chorus lands the drop at once. If the XZ
+reports a loop as `playing` rather than `looping`, note it -- the whole feature
+keys off that play state (`inputs/prodj.py`, `DeckStatusMessage.looping`).
+
 **Drive mode (the track plan runs the lights).** Once the probe passes, launch with
 `--phrases drive`: at load the plan is logged (`rekordbox plan: ... hook=...`), each
 section boundary logs `rekordbox plan: chorus(drop) -> drop BIG MOMENT | scene ...`,

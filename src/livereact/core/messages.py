@@ -69,6 +69,10 @@ class DeckStatusMessage:
     beat_count: int | None
     beat_in_bar: int       # 1..4
     source_ip: str = ""
+    # ``play_state == "looping"``: the deck is cycling a loop, so ``beat_count`` jumps
+    # back every pass. The loop's start/end/length fields exist only in the CDJ-3000
+    # packet layout, not the XZ's, so the fact of a loop is all we get (2026-10-26).
+    looping: bool = False
 
 
 @dataclass(frozen=True)

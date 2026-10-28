@@ -60,6 +60,16 @@ PLAN_ROLL_WINDOW_BEATS = 32    # a snare-roll start this close before a planned 
 PSSI_BEAT_OFFSET = 0           # status beat_count -> phrase-table beat index correction; a Gate-1 hardware
                                # measurement (plan: lets-start-building-this-shimmering-knuth.md). ear-tuned.
 
+# Loops (2026-10-26). The deck's status packet says when it is looping (play_state
+# "looping"); the beat counter then cycles inside the loop every pass. A loop is the
+# DJ holding a moment, so the section is pinned at the beat where the loop began and
+# everything derived from it (planned bucket, scene, beats_to_drop, count-in) holds
+# until the loop releases -- a loop straddling a section boundary must not re-run
+# the build -> drop boundary (count-in, blackout bridge, hit) every pass. The kick-
+# reactive layer stays live; phrase rotation is suspended by ShowSnapshot.loop_active
+# (engines/phrase.py). Until this, the real-hardware path hard-coded loop_active=False
+# (inputs/prodj.py's beat path), so the suspend rule only ever ran in demo mode.
+
 
 @dataclass(frozen=True)
 class SectionState:
@@ -85,6 +95,9 @@ class SectionState:
     laser_allowed: bool = True
     beats_to_drop: int = -1
     planned_hit: float = 0.0
+    # the deck is looping: track_beat (and everything above) is pinned at loop_pin_beat
+    looping: bool = False
+    loop_pin_beat: int = 0
 
 
 _NO_SECTION = SectionState()
@@ -633,6 +646,8 @@ class Metronome(threading.Thread):
         # song structure from CDJ status packets + rekordbox phrase tables (shadow mode,
         # 2026-10-25): shadow mode records + shows them; drive mode executes the plan (_drive_from_plan).
         self._decks: dict[int, DeckStatusMessage] = {}
+        self._loop_pin: tuple[tuple, int] | None = None   # ((slot, track_id), track_beat at loop entry) while looping
+        self._deck_looping = False                       # the active deck reports a loop (status packet)
         self._phrase_tables: dict[tuple[str, int], object] = {}   # (slot, track_id) -> PhraseTable | None
         self._track_titles: dict[tuple[str, int], str] = {}
         self._active_deck: int | None = None
@@ -1892,6 +1907,8 @@ class Metronome(threading.Thread):
             # bucket (the classifier may have moved it meanwhile), so forget the last key
             self._plan_section_key = None
             self._plan_early_drop_at = None
+            self._loop_pin = None
+            self._deck_looping = False
             return
         fresh = not stale
         track_beat = 0
@@ -1901,11 +1918,23 @@ class Metronome(threading.Thread):
                 live_bpm = msg.bpm * (msg.pitch if msg.pitch > 0 else 1.0)
                 track_beat += int((now - msg.timestamp) * live_bpm / 60.0)  # extrapolate between packets
             track_beat += PSSI_BEAT_OFFSET
+        # A loop pins the section at the beat where it began (see the LOOP note by PSSI_BEAT_OFFSET).
+        looping = bool(msg.looping and msg.playing)
+        if looping:
+            if self._loop_pin is None or self._loop_pin[0] != key:
+                self._loop_pin = (key, track_beat)
+                log.info("rekordbox: deck %s looping from beat %d: holding the section", deck, track_beat)
+            track_beat = self._loop_pin[1]
+        elif self._loop_pin is not None:
+            log.info("rekordbox: deck %s loop released at beat %d", deck, track_beat)
+            self._loop_pin = None
+        self._deck_looping = looping
+        loop_pin_beat = self._loop_pin[1] if self._loop_pin is not None else 0
         table = self._phrase_tables.get(key) if msg.track_id else None
         title = self._track_titles.get(key, "")
         if table is None or track_beat <= 0:
             self._section = SectionState(deck=deck, fresh=fresh, track_id=msg.track_id, slot=msg.slot, title=title,
-                                         track_beat=track_beat)
+                                         track_beat=track_beat, looping=looping, loop_pin_beat=loop_pin_beat)
             return
         cur, nxt = table.at_beat(track_beat)
         plan = self._plans.get(key)
@@ -1926,6 +1955,7 @@ class Metronome(threading.Thread):
             laser_allowed=ps.laser_allowed if ps is not None else True,
             beats_to_drop=plan.beats_to_drop(track_beat) if plan is not None else -1,
             planned_hit=ps.hit if ps is not None else 0.0,
+            looping=looping, loop_pin_beat=loop_pin_beat,
         )
         if self.phrases_mode != "drive":
             self._shadow_compare(now)
@@ -1968,7 +1998,8 @@ class Metronome(threading.Thread):
         # where Josh's drop begins. Commit now with the planned hit; the boundary then only
         # confirms. The pre-drop blackout bridge is skipped (the roll IS the lead-in).
         early_target = sec.track_beat + sec.beats_to_drop if sec.beats_to_drop > 0 else None
-        if (self._roll_start_pending and ROLL_START_COMMITS and early_target is not None
+        # (not while looping: a looped roll is the DJ holding the tension, not starting the drop)
+        if (self._roll_start_pending and ROLL_START_COMMITS and early_target is not None and not sec.looping
                 and sec.beats_to_drop <= PLAN_ROLL_WINDOW_BEATS and self._base_committed != EnergyBucket.DROP
                 and self._is_audio_fresh(now)):
             self._roll_start_pending = False
@@ -2031,7 +2062,8 @@ class Metronome(threading.Thread):
             if self._drop_arm_source != "dj":
                 self._drop_armed_until = now + 2 * self._bar_s()
                 self._drop_arm_source = "rekordbox"
-            self._pending_drop_release = sec.beats_to_drop <= 1   # the pre-drop blackout bridge
+            # the pre-drop blackout bridge -- never held open by a loop pinned on the last beat
+            self._pending_drop_release = sec.beats_to_drop <= 1 and not sec.looping
         elif self._drop_arm_source == "rekordbox" and not (0 < sec.beats_to_drop <= rules.prearm_beats):
             self._drop_armed_until = None
             self._drop_arm_source = ""
@@ -2089,7 +2121,7 @@ class Metronome(threading.Thread):
             beat_in_bar=self._beat_in_bar,
             bar=self._bar,
             playing=self._playing,
-            loop_active=self._loop_active,
+            loop_active=self._loop_active or self._deck_looping,
             on_air=self._on_air,
             master_deck=self._master_deck,
             crossfader=self._midi["crossfader"],

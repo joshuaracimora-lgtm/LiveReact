@@ -173,3 +173,12 @@ def test_phrase_service_is_asked_once_per_track_change():
     src._handle_packet(socks[50002], cdj_status(player=2, track_id=0), XZ)   # nothing loaded: no request
     assert calls == [(XZ[0], "sd", 1, 175), (XZ[0], "sd", 1, 176), (XZ[0], "sd", 2, 175)]
     assert prefetches == [(XZ[0], "sd")]          # export.pdb warmed once per (ip, slot), on the first status
+
+
+def test_looping_play_state_is_reported_as_a_loop():
+    src, q, socks, seen = make_listener()
+    src._handle_status(cdj_status(play_state="looping", beat_count=64), XZ)
+    src._handle_status(cdj_status(play_state="playing", beat_count=65), XZ)
+    looped, played = seen[0][0], seen[1][0]
+    assert looped.looping and looped.playing and looped.play_state == "looping"
+    assert not played.looping and played.playing

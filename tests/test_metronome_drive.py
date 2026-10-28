@@ -44,15 +44,31 @@ class Sim:
         self.track_id = track_id
         self.beat = 0
         self.beat_in_bar = 0
+        self.looping = False
         self.level = 0.2
         self.snaps = []
 
-    def status(self, *, playing=True, beat=None):
+    def status(self, *, playing=True, beat=None, looping=None):
+        looping = self.looping if looping is None else looping
+        play_state = "looping" if (playing and looping) else ("playing" if playing else "paused")
         return DeckStatusMessage(timestamp=self.clock.monotonic(), player=1, track_id=self.track_id, loaded_player=1,
-                                 slot="sd", analyze_type="rekordbox", play_state="playing" if playing else "paused",
+                                 slot="sd", analyze_type="rekordbox", play_state=play_state,
                                  playing=playing, on_air=True, master=True, sync=False, bpm=BPM, pitch=1.0,
                                  beat_count=self.beat if beat is None else beat, beat_in_bar=self.beat_in_bar or 1,
-                                 source_ip="x")
+                                 source_ip="x", looping=playing and looping)
+
+    def loop(self, start, end, beats, level=None):
+        """Cycle the deck's beat counter over start..end (inclusive) for `beats` beats with the
+        loop flag set, the way the XZ reports a loop; release leaves the counter at the loop end."""
+        self.looping = True
+        length = end - start + 1
+        snap = None
+        for i in range(beats):
+            self.beat = start + (i % length) - 1   # step_beat adds one
+            snap = self.step_beat(level)
+        self.looping = False
+        self.beat = end
+        return snap
 
     def step_beat(self, level=None, send_status=True):
         """Advance one beat: emit the beat packet, a status packet, audio, and tick 5x (10 Hz)."""
@@ -232,3 +248,58 @@ def test_regular_drop_never_peaks_and_overlay_bookkeeping_is_untouched():
         exposed_since.append(sim.m._exposed_since)
     assert all(s.bucket == "drop" for s in sim.snaps[-150:])
     assert len(set(exposed_since)) == 1       # no PEAK->DROP demotions resetting the exposure clock
+
+
+def test_loop_inside_a_section_holds_it_and_the_countdown():
+    sim = Sim()
+    sim.run_to(28, level=0.1)                           # in 'up' (build), 21 beats before the drop
+    snap = sim.loop(25, 28, 24, level=0.1)              # a 4-beat loop, six passes
+    assert snap.loop_active and snap.plan_active and snap.bucket == "build"
+    held = sim.snaps[-24 * 5:]
+    assert all(s.loop_active and s.section_kind == "build" for s in held)
+    assert len({s.beats_to_drop for s in held}) == 1 and not any(s.drop_pending for s in held)
+    assert held[0].track_beat == held[-1].track_beat   # the pinned beat, not the cycling counter
+    snap = sim.run_to(48, level=0.1)                    # released: the countdown resumes live
+    assert not snap.loop_active and snap.beats_to_drop == 1 and snap.drop_armed and snap.drop_pending
+    snap = sim.run_to(49, level=0.1)
+    assert snap.bucket == "drop" and not snap.drop_pending
+
+
+def test_loop_across_the_drop_boundary_does_not_retrigger_the_drop():
+    sim = Sim()
+    sim.run_to(46, level=0.1)                           # armed count-in, drop at 49
+    snap = sim.loop(45, 52, 32, level=0.1)              # an 8-beat loop straddling the chorus downbeat
+    held = sim.snaps[-32 * 5:]
+    assert all(s.bucket == "build" and s.beats_to_drop == held[0].beats_to_drop for s in held)
+    assert not any(s.drop_pending for s in held)
+    assert snap.loop_active and snap.drop_armed and snap.drop_arm_source == "rekordbox"
+    snap = sim.run_to(53, level=0.1)                    # release lands inside the chorus: DROP now
+    assert not snap.loop_active and snap.bucket == "drop" and snap.section_kind == "drop"
+    assert snap.drop_hit_intensity < 0.95 and not snap.planned_big_moment
+
+
+def test_loop_on_the_last_beat_does_not_hold_the_blackout_bridge():
+    sim = Sim()
+    snap = sim.run_to(48, level=0.1)
+    assert snap.drop_pending and snap.beats_to_drop == 1
+    snap = sim.loop(48, 48, 8, level=0.1)               # a 1-beat loop on the bridge beat
+    assert snap.loop_active and snap.bucket == "build" and not snap.drop_pending
+    assert all(not s.drop_pending for s in sim.snaps[-8 * 5:])
+    snap = sim.run_to(49, level=0.1)
+    assert snap.bucket == "drop"
+
+
+def test_loop_pin_clears_when_status_goes_stale():
+    sim = Sim()
+    sim.run_to(28, level=0.1)
+    sim.loop(25, 28, 8, level=0.1)
+    sim.looping = True
+    sim.beat = 28
+    for _ in range(int((DECK_STATUS_STALE_AFTER + PLAN_HOLD_AFTER_STALE_S) / (BEAT_S / 5)) + 3):
+        sim.step_beat(0.1, send_status=False)
+    snap = sim.snaps[-1]
+    assert not snap.loop_active and not snap.plan_active
+    sim.looping = False
+    sim.beat = 40
+    snap = sim.run_to(49, level=0.1)                    # status back, no loop: the plan resumes
+    assert snap.plan_active and snap.bucket == "drop"
