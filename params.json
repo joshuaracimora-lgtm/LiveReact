@@ -3,7 +3,7 @@
   "knobs": {
     "ENERGY_SMOOTHING": {
       "module": "livereact.core.metronome",
-      "default": 0.05,
+      "default": 0.044,
       "type": "float",
       "tag": "tunable",
       "range": [
@@ -234,7 +234,7 @@
     },
     "AUTO_DROP_CONFIRM_S": {
       "module": "livereact.core.metronome",
-      "default": 3.75,
+      "default": 2.655,
       "type": "float",
       "tag": "tunable",
       "range": [
@@ -575,7 +575,7 @@
     },
     "ONSET_RATIO": {
       "module": "livereact.inputs.audio",
-      "default": 2.0,
+      "default": 2.2599,
       "type": "float",
       "tag": "tunable",
       "range": [

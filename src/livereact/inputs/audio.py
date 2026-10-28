@@ -113,7 +113,7 @@ AGC_RELEASE_S = 20.0       # strobe/drop logic loses the song. A peak tracker on
 # ROLL_MIN_RATE, so the accent fires; it just can't tell 32nds from 16ths. Thresholds are [CONVENTION] until the first
 # live --record run with the `onset_rate` column (Josh: validate live).
 ONSET_MEAN_TAU_S = 0.5     # adaptive threshold: EMA of the high-band flux
-ONSET_RATIO = 2.0          # flux must exceed ONSET_RATIO x its own mean ...
+ONSET_RATIO = 2.2599       # flux must exceed ONSET_RATIO x its own mean ...
 ONSET_FLOOR = 0.01         # ... plus this absolute floor (mean-per-bin magnitude units)
 ONSET_REFRACTORY_S = 0.06  # one onset per this (counted in blocks)
 ONSET_RATE_WINDOW_S = 1.0  # onsets/s = count over this trailing window

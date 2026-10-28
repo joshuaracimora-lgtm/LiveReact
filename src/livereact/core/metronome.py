@@ -102,7 +102,7 @@ class SectionState:
 
 
 _NO_SECTION = SectionState()
-ENERGY_SMOOTHING = 0.05  # EMA factor per tick (~0.2 s time constant at 100 Hz) —
+ENERGY_SMOOTHING = 0.044  # EMA factor per tick (~0.2 s time constant at 100 Hz) —
                          # MIDI-proxy fallback only; real audio bypasses this,
                          # see _derive_energy
 
@@ -467,7 +467,7 @@ RISE_AUTO_ARM = True                   # core/rise.py: a strong rise (RISE_ARM h
                                        # Scored with replay_state.py before shipping.
 RISE_ARM_HOLD_BARS = 8.0
 RISE_ARM_HOLD_S = RISE_ARM_HOLD_BARS * SECONDS_PER_BAR
-AUTO_DROP_CONFIRM_S = 2.0 * SECONDS_PER_BAR
+AUTO_DROP_CONFIRM_S = 2.655  # knob search 2026-10-27 (was 2 bars, 3.75 s); fixed SWEETER STRUCT-09
 DROP_HIT_MIN_KICKS = 2                 # (unarmed hit lead, retired 2026-09-17 -- see above; kept for the record)
                                        # the hit must be a PATTERN: two distinct kicks
                                        # (rising edges of the raw low band over the
