@@ -32,6 +32,14 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Fixed
 
+- **Axis numbers were drawn under bodies**: a fixture on the booth wall (testing_setup's wash bar) hung
+  over the x-axis "15′"/"20′", and a target on the left wall over the y-axis "25′" (junior_crib); the
+  numbers sat at a fixed offset from the room edge. `FloorPlanView._clear_axis_numbers` moves the whole
+  row (with the wall title) / column out past whatever hangs over the edge, the scene grows, and the
+  caption layout now reserves the numbers where they actually are. Overlaps (harness -> now):
+  junior_crib 1->0, testing_setup 2->0, junior_crib@small 2->1, the six others 0->0. Test:
+  `tests/test_floorplan.py::test_axis_numbers_are_not_drawn_under_a_body` (2026-10-28).
+
 - **Moving a target a head was captured on was silent** (box edit or drag): the SET AIM / ADD 2ND
   POINT offsets were solved against the target's old spot and are kept. The status line now names the
   head(s) and the target and says to check with Aim at target / SET AIM again. Nothing is re-solved.

@@ -271,3 +271,23 @@ def test_crowded_small_room_keeps_every_caption_inside_the_scene(qapp):
             r = line.sceneBoundingRect()
             assert scene.contains(r), (key, line.text())
             assert r.top() < room_bottom, (key, line.text())      # not in the axis / wall-title band
+
+
+@pytest.mark.parametrize("rig_name", ["testing_setup.json", "junior_crib.json"])
+def test_axis_numbers_are_not_drawn_under_a_body(qapp, rig_name):
+    """UI_BUGS (labels): a fixture on the booth wall (wash bar) hung over the
+    x-axis numbers, and a target on the left wall over a y-axis number; the
+    numbers sat at a fixed offset from the room edge whatever was there."""
+    from PySide6 import QtWidgets
+    from livereact.ui.floorplan import FloorPlanView
+
+    view = FloorPlanView(load_rig(os.path.join(HERE, "rigs", rig_name)), editable=True)
+    texts = [i for i in view._scene.items() if isinstance(i, QtWidgets.QGraphicsSimpleTextItem)]
+    ticks = [t for t in texts if t.text().endswith("′") and t.text()[:-1].isdigit()]
+    bodies = [b.sceneBoundingRect() for b in (*view._bodies.values(), *view._targets.values())]
+    under = [t.text() for t in ticks if any(t.sceneBoundingRect().intersects(b) for b in bodies)]
+    assert ticks and under == []
+    scene = view._scene.sceneRect()
+    assert all(scene.contains(t.sceneBoundingRect()) for t in texts if t.text())
+    booth = next(t for t in texts if t.text() == "DJ BOOTH WALL")
+    assert not [t.text() for t in ticks if t.sceneBoundingRect().intersects(booth.sceneBoundingRect())]

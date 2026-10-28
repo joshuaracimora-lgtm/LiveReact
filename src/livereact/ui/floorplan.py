@@ -258,6 +258,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self._beams: dict[str, QtWidgets.QGraphicsLineItem] = {}
         self._wedges: dict[str, QtWidgets.QGraphicsPolygonItem] = {}
         self._captions: dict[str, _Caption] = {}
+        self._axis_rects: list[QtCore.QRectF] = []     # axis numbers + wall title (refresh_layout)
         self._layout_dirty = False
         self._dragging: set[str] = set()
         self._press_pos: dict[int, QtCore.QPointF] = {}
@@ -324,6 +325,8 @@ class FloorPlanView(QtWidgets.QGraphicsView):
 
         # grid: every foot light, every 5 ft bold
         step = ft_to_m(1.0) * PX_PER_M
+        x_ticks: list[QtWidgets.QGraphicsSimpleTextItem] = []
+        y_ticks: list[QtWidgets.QGraphicsSimpleTextItem] = []
         n_x, n_y = int(v.width_m / ft_to_m(1.0)) + 1, int(v.length_m / ft_to_m(1.0)) + 1
         for i in range(n_x + 1):
             x = i * step
@@ -333,6 +336,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             self._grid.append(self._scene.addLine(x, 0, x, l_px, pen))
             if i % 5 == 0:
                 t = self._scene.addSimpleText(f"{i}′"); t.setBrush(_TEXT); t.setPos(x - 6, l_px + 4)
+                x_ticks.append(t)
         for j in range(n_y + 1):
             y = l_px - j * step
             if y < -0.5:
@@ -341,6 +345,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             self._grid.append(self._scene.addLine(0, y, w_px, y, pen))
             if j % 5 == 0:
                 t = self._scene.addSimpleText(f"{j}′"); t.setBrush(_TEXT); t.setPos(-_MARGIN + 2, y - 7)
+                y_ticks.append(t)
         self._scene.addRect(0, 0, w_px, l_px, QtGui.QPen(_ROOM_EDGE, 2))
         # the wall title goes under the x-axis numbers (not across them); the
         # scene grows to fit it
@@ -426,10 +431,33 @@ class FloorPlanView(QtWidgets.QGraphicsView):
                          else f"@{fx.address} · not placed yet")
             self._captions[key] = cap
         self._mark_stacks()
+        self._clear_axis_numbers(x_ticks, y_ticks, booth)
         self._scene.blockSignals(False)
         self._layout_dirty = True
         self._fit()
         self.update_from_universe(self.rig.boot_universe())
+
+    def _clear_axis_numbers(self, x_ticks: list, y_ticks: list, booth) -> None:
+        """The axis numbers sit at a fixed offset from the room edge; a body
+        hanging over that edge (a bar on the booth wall, a target on the left
+        wall) covered them. Move the whole row (with the wall title) / column
+        out past it; the scene grows to fit."""
+        bodies = [b.sceneBoundingRect() for b in (*self._bodies.values(), *self._targets.values())]
+        r = self._scene.sceneRect()
+        hit = [b for b in bodies if any(t.sceneBoundingRect().intersects(b) for t in x_ticks)]
+        if hit:
+            dy = max(b.bottom() for b in hit) + 2 - min(t.sceneBoundingRect().top() for t in x_ticks)
+            for t in (*x_ticks, booth):
+                t.moveBy(0, dy)
+            r.setBottom(max(r.bottom(), booth.sceneBoundingRect().bottom() + 2))
+        hit = [b for b in bodies if any(t.sceneBoundingRect().intersects(b) for t in y_ticks)]
+        if hit:
+            dx = min(b.left() for b in hit) - 2 - max(t.sceneBoundingRect().right() for t in y_ticks)
+            for t in y_ticks:
+                t.moveBy(dx, 0)
+            r.setLeft(min(r.left(), min(t.sceneBoundingRect().left() for t in y_ticks) - 2))
+        self._scene.setSceneRect(r)
+        self._axis_rects = [t.sceneBoundingRect() for t in (*x_ticks, *y_ticks, booth)]
 
     @staticmethod
     def _key(fx) -> str:
@@ -479,6 +507,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             QtCore.QRectF(-_MARGIN, l_px + 1, w_px + 2 * _MARGIN, _MARGIN + 40),     # x axis + "DJ BOOTH WALL"
             QtCore.QRectF(-_MARGIN - 2, -_MARGIN - _LEGEND_H, _MARGIN + 1, l_px + 2 * _MARGIN + _LEGEND_H),  # y axis
             self._legend.sceneBoundingRect(),                                                            # legend
+            *self._axis_rects,                             # the numbers themselves, wherever they were moved
         ]
         obstacles = [c.item.sceneBoundingRect() for c in self._captions.values()]
         placed: list[QtCore.QRectF] = []
