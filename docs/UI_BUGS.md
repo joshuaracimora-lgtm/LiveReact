@@ -19,7 +19,6 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
    - leader lines, beams and wedges are not obstacles;
-   - captions don't follow a drag until release (tooltips after a drop: fixed below);
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
@@ -30,6 +29,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Captions stayed behind during a drag** until the mouse was released. `FloorPlanView.mouseMoveEvent`
+  now carries each moved body's caption and leader with it; the release re-lays them out as before (also
+  when the drop snaps back to where it started). Tests:
+  `tests/test_floorplan.py::test_captions_follow_a_drag_before_release`,
+  `::test_a_drag_that_snaps_back_puts_the_caption_back` (2026-10-28).
 
 - **A target under a fixture was hidden and unclickable**: `_mark_stacks` ignored targets, so
   junior_crib's dj_booth / booth_edge diamonds were drawn beneath the wash bar and lasers and a click

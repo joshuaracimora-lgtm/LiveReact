@@ -335,3 +335,54 @@ def test_a_target_under_a_fixture_stays_visible_and_clickable(qapp):
     d = view2.mapFromScene(t2.scenePos()) - view2.mapFromScene(mh.scenePos())
     _click(view2, mh, drag_px=(d.x(), d.y()))
     assert view2._scene.items(t2.scenePos())[0] is t2
+
+
+def test_captions_follow_a_drag_before_release(qapp):
+    """UI_BUGS (labels): while dragging a fixture or target its caption stayed
+    where it was until the mouse was released."""
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    view = FloorPlanView(rig, editable=True)
+    view.resize(800, 900); view._fit()
+    vp = view.viewport()
+    left, none = QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier
+    for item, cap in ((view._bodies["mh"], view._captions["mh"]),
+                      (view._targets["dj_booth"], view._captions["target:dj_booth"])):
+        p = view.mapFromScene(item.scenePos())
+        item0, cap0 = item.scenePos(), cap.title.scenePos()
+        QTest.mousePress(vp, left, none, p)
+        for dx in (10, 20, 30, 40):
+            QTest.mouseMove(vp, QtCore.QPoint(p.x() + dx, p.y() - dx))
+        moved = item.scenePos() - item0
+        assert moved.manhattanLength() > 10                       # the drag really moved it
+        d = cap.title.scenePos() - cap0
+        assert abs(d.x() - moved.x()) < 1 and abs(d.y() - moved.y()) < 1
+        QTest.mouseRelease(vp, left, none, QtCore.QPoint(p.x() + 40, p.y() - 40))
+
+
+def test_a_drag_that_snaps_back_puts_the_caption_back(qapp):
+    """A drag smaller than half the snap step lands where it started (no
+    change committed): the caption, moved during the drag, must come back.
+    (Guards the drag-follow change above; it passed before it too.)"""
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = _josh_rig_with_venue()
+    view = FloorPlanView(rig, editable=True)
+    view.resize(800, 900); view._fit()
+    vp = view.viewport()
+    item, cap = view._bodies["mh"], view._captions["mh"]
+    p = view.mapFromScene(item.scenePos())
+    cap0 = cap.title.scenePos()
+    left, none = QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier
+    QTest.mousePress(vp, left, none, p)
+    QTest.mouseMove(vp, QtCore.QPoint(p.x() + 1, p.y()))
+    assert item.scenePos() != view.to_scene(ft_to_m(5), ft_to_m(2))     # it did move a little
+    QTest.mouseRelease(vp, left, none, QtCore.QPoint(p.x() + 1, p.y()))
+    mh = rig.fixture("mh").position
+    assert (mh.x, mh.y) == pytest.approx((ft_to_m(5), ft_to_m(2)))
+    assert (cap.title.scenePos() - cap0).manhattanLength() < 0.5

@@ -262,6 +262,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self._layout_dirty = False
         self._dragging: set[str] = set()
         self._press_pos: dict[int, QtCore.QPointF] = {}
+        self._press_caps: dict[str, tuple] = {}   # caption key -> (title pos, sub pos, leader line) at press
         self._scene.selectionChanged.connect(self._on_selection)
         self.refresh_layout()
 
@@ -625,7 +626,24 @@ class FloorPlanView(QtWidgets.QGraphicsView):
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         # where everything sat before this press: only what the drag moved is committed
         self._press_pos = {id(i): i.pos() for i in (*self._bodies.values(), *self._targets.values())}
+        self._press_caps = {k: (c.title.pos(), c.sub.pos(), c.leader.line()) for k, c in self._captions.items()}
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        """During a drag each moved body's caption (and leader) moves with
+        it; the release re-lays every caption out as before."""
+        super().mouseMoveEvent(event)
+        if not self.editable or not self._press_pos:
+            return
+        for key, cap in self._captions.items():
+            before = self._press_pos.get(id(cap.item))
+            start = self._press_caps.get(key)
+            if before is None or start is None:
+                continue
+            d = cap.item.pos() - before
+            cap.title.setPos(start[0] + d)
+            cap.sub.setPos(start[1] + d)
+            cap.leader.setLine(start[2].translated(d))
 
     def _moved(self, item: PlanItem) -> bool:
         before = self._press_pos.get(id(item))
@@ -635,20 +653,25 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         super().mouseReleaseEvent(event)
         if not self.editable:
             return
-        changed = False
+        changed = moved = False
         for key, item in self._bodies.items():
             if self._moved(item):
+                moved = True
                 changed |= self._commit_fixture_drop(key, item)
         for name, item in self._targets.items():
             if self._moved(item):
+                moved = True
                 changed |= self._commit_target_drop(name, item)
         self._press_pos = {}
+        self._press_caps = {}
         if changed:
             self.rig.refresh_geometry()
             self._mark_stacks()
             self._layout_labels()
             if self.on_changed is not None:
                 self.on_changed()
+        elif moved:
+            self._layout_labels()      # snapped back where it was: captions back too
 
     def _snap(self, x_m: float, y_m: float) -> tuple[float, float]:
         v = self.venue()
