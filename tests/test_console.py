@@ -767,6 +767,49 @@ def test_moving_a_calibrated_head_warns_that_its_aim_was_captured_elsewhere(qapp
     assert "captured" in tab.status.text() and "SET AIM" in tab.status.text()
 
 
+def test_dragging_several_heads_warns_about_each_captured_one(qapp):
+    """UI_BUGS (calibration): Ctrl+click selects several bodies and one drag
+    moves them all, but the captured-aim warning only looked at the head shown
+    in the panel -- a captured head moved alongside it was moved silently."""
+    from PySide6 import QtCore
+    from PySide6.QtTest import QTest
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    for key, x in (("mh_l", 5.0), ("mh_r", 12.0)):
+        tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(key))
+        tab.sb_x.setValue(x); tab.sb_y.setValue(4.0); tab.sb_z.setValue(9.0)
+    view = tab.plan
+    keys = [k for k in view._bodies if k in ("mh_l", "mh_r")]
+    shown, other = keys                       # a multi-selection shows the first selected body
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData(other))
+    tab.cb_jog.setChecked(True)
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    assert app.rig.fixture(other).calibration.captured
+    assert not app.rig.fixture(shown).calibration.captured
+    tab._mark_dirty()
+    view.resize(800, 900); view._fit()
+    left = QtCore.Qt.MouseButton.LeftButton
+    none, ctrl = QtCore.Qt.KeyboardModifier.NoModifier, QtCore.Qt.KeyboardModifier.ControlModifier
+    vp = view.viewport()
+    p_other = view.mapFromScene(view._bodies[other].scenePos())
+    p = view.mapFromScene(view._bodies[shown].scenePos())
+    QTest.mouseClick(vp, left, none, p_other)
+    QTest.mouseClick(vp, left, ctrl, p)       # add the shown head to the selection
+    assert view._bodies[other].isSelected() and view._bodies[shown].isSelected()
+    assert tab._selected == shown
+    before = app.rig.fixture(other).position
+    QTest.mousePress(vp, left, none, p)
+    for dy in (15, 30, 45, 60):
+        QTest.mouseMove(vp, QtCore.QPoint(p.x(), p.y() - dy))
+    QTest.mouseRelease(vp, left, none, QtCore.QPoint(p.x(), p.y() - 60))
+    assert app.rig.fixture(other).position != before       # the drag moved the captured head too
+    label = app.rig.fixture(other).label
+    assert f"{label}'s aim was captured" in tab.status.text()
+
 def test_room_box_edit_writes_only_its_dimension_and_warns_about_what_falls_outside(qapp):
     """UI_BUGS: editing the room's width also rewrote length (rounded to 0.1 ft)
     and height (into a file that had none), and fixtures/targets left outside

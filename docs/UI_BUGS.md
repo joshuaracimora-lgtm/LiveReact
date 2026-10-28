@@ -18,7 +18,14 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
    - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
-   - leader lines, beams and wedges are not obstacles;
+   - leader lines, beams and wedges are not obstacles. 2026-10-28 (night 2): leaders cross other captions
+     on testing_setup (Laser R's runs between Wash Bar's title and sub-line) and junior_crib(_fan) (Laser L
+     through Moving Head L, Moving Head R through booth_edge_right). Tried three ways in `_layout_labels`
+     (strict near slots, then the old rules; plus a captions-only tier; a single distance + crossing cost):
+     each fixed testing_setup but not junior_crib, where seven bodies share ~8 ft of booth and Moving Head
+     L's caption sits over every short leader -- the greedy one-pass layout cannot clear it, and widening the
+     search parks captions 15 ft up the room. Needs a repair pass (re-place a caption whose leader got cut)
+     or the caption-size decision; reverted, not committed;
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
@@ -29,6 +36,12 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
     canvas top (the spots row) to the back wall, while unplaced fixtures otherwise hug the booth.
 
 ## Fixed
+
+- **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
+  one drag moves them all, but the "aim was captured at its old position" warning only checked the head
+  shown in the panel. `FloorPlanView` now records every fixture a drop moved (`last_moved`) and
+  `VenueTab._plan_changed` warns for each captured head among them. Nothing is re-solved. Test:
+  `tests/test_console.py::test_dragging_several_heads_warns_about_each_captured_one` (2026-10-28).
 
 - **On a small room an edge target's caption landed on another caption** (junior_crib@small:
   venue_edge_right on back_wall's "7′ up"): every slot beside a right-wall target ran past the scene, so

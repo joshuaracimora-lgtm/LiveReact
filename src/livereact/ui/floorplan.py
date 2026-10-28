@@ -263,6 +263,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         self._dragging: set[str] = set()
         self._press_pos: dict[int, QtCore.QPointF] = {}
         self._press_caps: dict[str, tuple] = {}   # caption key -> (title pos, sub pos, leader line) at press
+        self.last_moved: list[str] = []   # fixtures the last drop moved (a Ctrl+click selection drags several)
         self._scene.selectionChanged.connect(self._on_selection)
         self.refresh_layout()
 
@@ -671,10 +672,13 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         if not self.editable:
             return
         changed = moved = False
+        self.last_moved = []
         for key, item in self._bodies.items():
             if self._moved(item):
                 moved = True
-                changed |= self._commit_fixture_drop(key, item)
+                if self._commit_fixture_drop(key, item):
+                    changed = True
+                    self.last_moved.append(key)
         for name, item in self._targets.items():
             if self._moved(item):
                 moved = True
