@@ -2002,6 +2002,8 @@ class Metronome(threading.Thread):
         # where Josh's drop begins. Commit now with the planned hit; the boundary then only
         # confirms. The pre-drop blackout bridge is skipped (the roll IS the lead-in).
         early_target = sec.track_beat + sec.beats_to_drop if sec.beats_to_drop > 0 else None
+        if early_target is not None and getattr(plan.at_beat(early_target)[0], "roll", False):
+            early_target = None   # the plan already starts that drop on its roll (planner PLAN_ROLL_BEATS)
         # (not while looping: a looped roll is the DJ holding the tension, not starting the drop)
         if (self._roll_start_pending and ROLL_START_COMMITS and early_target is not None and not sec.looping
                 and sec.beats_to_drop <= PLAN_ROLL_WINDOW_BEATS and self._base_committed != EnergyBucket.DROP
@@ -2031,6 +2033,11 @@ class Metronome(threading.Thread):
                 self._apply_bucket_overlay(now, peak_allowed=peak_ok, outro_allowed=False)
             elif bucket == "drop" and self._plan_early_drop_at is not None and self._base_committed == EnergyBucket.DROP:
                 self._plan_early_drop_at = None   # the roll already landed this drop: hold, don't re-commit
+                self._apply_bucket_overlay(now, peak_allowed=peak_ok, outro_allowed=False)
+            elif (bucket == "drop" and self._base_committed == EnergyBucket.DROP
+                  and plan.continues_roll(sec.section_index)):
+                # the planned roll lead-in already landed this drop: the bass coming back is the
+                # same drop, not a second hit -- hold (no re-commit, PEAK's clock keeps running)
                 self._apply_bucket_overlay(now, peak_allowed=peak_ok, outro_allowed=False)
             elif bucket == "drop":
                 self._plan_early_drop_at = None

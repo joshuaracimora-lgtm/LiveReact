@@ -316,3 +316,38 @@ def test_loop_pin_clears_when_status_goes_stale():
     sim.beat = 40
     snap = sim.run_to(49, level=0.1)                    # status back, no loop: the plan resumes
     assert snap.plan_active and snap.bucket == "drop"
+
+
+def _roll_sim():
+    # intro 1-17, up 17-97, chorus 97-161, outro 161-193: the planner splits beats 65-97 off as the roll lead-in
+    table = _table([(1, 1, "intro"), (17, 2, "up"), (97, 5, "chorus"), (161, 6, "outro")], end=193)
+    sim = Sim(table=table)
+    assert [s.roll for s in sim.plan.sections] == [False, False, True, False, False]
+    return sim
+
+
+def test_planned_roll_lead_in_lands_the_drop_and_the_chorus_holds_it():
+    sim = _roll_sim()
+    snap = sim.run_to(64, level=0.1)
+    assert snap.bucket == "build" and snap.drop_armed and snap.beats_to_drop == 1 and snap.drop_pending
+    snap = sim.run_to(65, level=0.1)                       # the roll downbeat: Josh's drop
+    assert snap.bucket == "drop" and not snap.drop_pending and snap.planned_big_moment
+    assert snap.drop_hit_intensity >= 0.95                 # the big moment's hit starts on the roll
+    since, start_bar = sim.m._base_committed_since, sim.m.drop_start_bar
+    snap = sim.run_to(80, level=0.1)
+    assert snap.bucket == "drop" and snap.beats_to_drop == -1 and not snap.drop_armed
+    n0 = len(sim.snaps)
+    snap = sim.run_to(110, level=0.1)                      # the chorus (bass back) is the same drop: no re-commit
+    assert snap.bucket == "drop" and snap.section_kind == "drop"
+    assert sim.m._base_committed_since == since and sim.m.drop_start_bar == start_bar
+    assert all(s.bucket in ("drop", "peak") for s in sim.snaps[n0:])
+
+
+def test_live_roll_detector_does_not_pull_a_planned_roll_earlier():
+    sim = _roll_sim()
+    sim.run_to(40, level=0.1)                              # 25 beats before the planned roll
+    sim.m._roll_start_pending = True                       # what core/roll_period.py's detector raises
+    snap = sim.run_to(42, level=0.1)
+    assert snap.bucket == "build"                          # the file already placed this drop on its roll
+    snap = sim.run_to(65, level=0.1)
+    assert snap.bucket == "drop"

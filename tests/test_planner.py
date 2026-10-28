@@ -159,3 +159,51 @@ def test_planner_knobs_reach_plan_rules_through_params():
     finally:
         params.restore(before)
     assert planner.PlanRules().min_section_beats == 32 and metronome.REGULAR_PLAN_HIT == 0.92
+
+
+# intro 1-17, up 17-97 (20 bars), chorus 97-161, outro 161-193: the build is long enough for a roll lead-in
+ROLL = [(1, 1, "intro"), (17, 2, "up"), (97, 5, "chorus"), (161, 6, "outro")]
+
+
+def test_the_end_of_a_long_build_is_planned_as_the_drops_roll_lead_in():
+    plan = plan_track(_table(ROLL, end=193), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat, s.end_beat, s.roll) for s in plan.sections] == [
+        ("intro", 1, 17, False), ("build", 17, 65, False), ("drop", 65, 97, True), ("drop", 97, 161, False),
+        ("outro", 161, 193, False)]
+    roll, drop = plan.sections[2], plan.sections[3]
+    # one drop: the same hit and the same big moment as the chorus it runs into (Josh's drop IS the roll)
+    assert roll.hit == drop.hit and roll.big_moment and drop.big_moment and roll.scene == drop.scene
+    assert roll.strobe_allowed and roll.bucket == "drop"
+    assert plan.continues_roll(3) and not plan.continues_roll(2)
+    # the count-in runs to the roll; inside the roll the chorus is not a second drop boundary
+    assert plan.beats_to_drop(40) == 25 and plan.beats_to_drop(64) == 1 and plan.beats_to_drop(70) == -1
+    assert "up=roll**@65" in plan.summary()
+
+
+def test_no_roll_lead_in_when_the_build_would_get_too_short_or_rolls_are_off():
+    # a 12-bar build: splitting 8 bars off would leave 4 bars of build look (TIME-02 wants 8 + the look's lag)
+    short = [(1, 1, "intro"), (17, 2, "up"), (65, 5, "chorus"), (129, 6, "outro")]
+    plan = plan_track(_table(short, end=161), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat) for s in plan.sections] == [("intro", 1), ("build", 17), ("drop", 65), ("outro", 129)]
+    off = plan_track(_table(ROLL, end=193), track_id=1, bpm=120.0, rules=PlanRules(roll_beats=0))
+    assert [(s.kind, s.beat) for s in off.sections] == [("intro", 1), ("build", 17), ("drop", 97), ("outro", 161)]
+    assert not any(s.roll for s in off.sections)
+
+
+def test_big_moment_ranks_the_drop_not_its_roll_lead_in_and_look_notes_count_drops_without_rolls():
+    from livereact.rekordbox.look_notes import LookNotes
+    # drop 1 (49-81, no roll: its build is 8 bars) is a little louder than drop 2's chorus; drop 2's quiet
+    # roll lead-in must not drag drop 2's ranking down -- it is ranked on its chorus alone
+    spec = [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (81, 3, "down"), (113, 2, "up"),
+            (193, 5, "chorus"), (257, 6, "outro")]
+    table = _table(spec, end=289)
+    wave = _wave(loud_beats=(193, 257), quiet_level=4, loud_level=28)
+    plan = plan_track(table, track_id=1, bpm=120.0, waveform=wave)
+    kinds = [(s.kind, s.beat, s.roll) for s in plan.sections]
+    assert ("drop", 161, True) in kinds and ("drop", 193, False) in kinds
+    assert [s.beat for s in plan.sections if s.big_moment] == [161, 193]
+    # look notes "drop 1" is the first DROP, not the first drop section; "drop 2" takes its roll along
+    first = plan_track(table, track_id=1, bpm=120.0, waveform=wave, look=LookNotes(big_moment={"drop": 1}))
+    assert [s.beat for s in first.sections if s.big_moment] == [49]
+    second = plan_track(table, track_id=1, bpm=120.0, waveform=wave, look=LookNotes(big_moment={"drop": 2}))
+    assert [s.beat for s in second.sections if s.big_moment] == [161, 193]

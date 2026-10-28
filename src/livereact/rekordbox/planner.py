@@ -55,6 +55,16 @@ PREARM_BEATS = 16            # drop_armed this many beats before a planned drop 
 MIN_SECTION_BEATS = 32       # interior break/drop/outro sections shorter than this (8 bars = TIME-11's
                              # BREAK/DROP dwell) are absorbed into their predecessor
 MIN_BUILD_BEATS = 16         # builds may be 4 bars
+# The snare roll that leads into a drop (Josh's drop, D-21): rekordbox's chorus starts where the bass
+# returns, Josh's drop at the roll 4-8 bars earlier. Measured 2026-10-28 on the 7 tuning tracks: of the
+# 13 ear drops right before a planned build -> drop boundary, 8 start exactly 8 bars before it, 5 exactly
+# 4 bars; nothing in the file (inner Up beats, phrase starts, the colour waveform's onsets) told the two
+# apart, so the planner splits the last PLAN_ROLL_BEATS of the build off as its own drop section (a roll
+# lead-in), unless that would leave the build under PLAN_ROLL_MIN_BUILD_BEATS: TIME-02's 8-bar build look hold plus the up-to-2-bar lag of
+# the phrase engine's look change after the bucket enters BUILD (seen on the sweep: an 8-bar build shows
+# 'Rising Tide' for 6 bars).
+PLAN_ROLL_BEATS = 32              # params.json knob (tunable)
+PLAN_ROLL_MIN_BUILD_BEATS = 40    # params.json knob (tunable)
 
 # default section energies when no waveform is available (ranking then falls back to length)
 _KIND_ENERGY = {"drop": 0.8, "build": 0.5, "verse": 0.4, "breakdown": 0.2, "intro": 0.15, "outro": 0.2}
@@ -71,6 +81,8 @@ class PlanRules:
     prearm_beats: int = field(default_factory=lambda: PREARM_BEATS)
     min_section_beats: int = field(default_factory=lambda: MIN_SECTION_BEATS)
     min_build_beats: int = field(default_factory=lambda: MIN_BUILD_BEATS)
+    roll_beats: int = field(default_factory=lambda: PLAN_ROLL_BEATS)               # 0 = no roll lead-ins
+    roll_min_build_beats: int = field(default_factory=lambda: PLAN_ROLL_MIN_BUILD_BEATS)
 
 
 @dataclass(frozen=True)
@@ -90,6 +102,7 @@ class PlannedSection:
     laser_allowed: bool = True
     fill_beat: int | None = None      # rekordbox's fill-in flag (unused yet; the scorer's STRUCT-01 vocabulary)
     cls: str = ""                     # section class (rekordbox/section_classes.py); "" = none matched
+    roll: bool = False                # a roll lead-in (PLAN_ROLL_BEATS): a drop section the next drop continues
 
     @property
     def length(self) -> int:
@@ -123,10 +136,17 @@ class TrackPlan:
 
     def beats_to_drop(self, beat: int) -> int:
         """Beats until the next planned drop boundary strictly ahead of ``beat``; -1 if none."""
-        for s in self.sections:
-            if s.kind == "drop" and s.beat > beat:   # consecutive drops were merged, so each one is a boundary
+        for i, s in enumerate(self.sections):
+            # consecutive drops were merged, so each one is a boundary -- except the drop a roll
+            # lead-in runs into: that drop has already landed on the roll
+            if s.kind == "drop" and s.beat > beat and not self.continues_roll(i):
                 return s.beat - beat
         return -1
+
+    def continues_roll(self, i: int) -> bool:
+        """Section ``i`` is the drop a roll lead-in (PlannedSection.roll) runs straight into."""
+        return (0 < i < len(self.sections) and self.sections[i].kind == "drop"
+                and self.sections[i - 1].roll and self.sections[i - 1].end_beat == self.sections[i].beat)
 
     @property
     def drops(self) -> list[PlannedSection]:
@@ -136,7 +156,7 @@ class TrackPlan:
         parts = []
         for s in self.sections:
             tag = "**" if s.big_moment else ("*" if s.is_hook else "")
-            parts.append(f"{s.label}={s.kind}{tag}@{s.beat}")
+            parts.append(f"{s.label}={'roll' if s.roll else s.kind}{tag}@{s.beat}")
         return (f"plan track {self.track_id} {self.title!r} palette_seed={self.palette_seed} hook={self.hook_scene!r}: "
                 + " > ".join(parts))
 
@@ -152,7 +172,7 @@ def _look_big_moment(look: LookNotes | None, raw: list[dict], runs: list[list[in
         return None
     if bm == "none":
         return []
-    drops = [r for r in raw if r["kind"] == "drop"]
+    drops = [r for r in raw if r["kind"] == "drop" and not r.get("roll")]   # a roll lead-in is part of its drop
     if not drops:
         return []
     if "drop" in bm:
@@ -280,21 +300,56 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
             merged[-1]["phrases"] += m["phrases"]
         else:
             merged.append(m)
+
+    # --- the snare roll before a drop (PLAN_ROLL_BEATS): the end of the build becomes a drop section ---
+    def energy_of(b0: int, b1: int, fallback: float) -> float:
+        if waveform is not None:
+            t0, t1 = seconds(b0), seconds(b1)
+            if t0 is not None and t1 is not None and t1 > t0:
+                return 0.5 * waveform.energy(t0, t1) + 0.5 * waveform.peak(t0, t1)
+        return fallback
+
+    rolled: list[dict] = []
+    for i, m in enumerate(merged):
+        build = rolled[-1] if rolled else None
+        if m["kind"] == "drop" and build is not None and build["kind"] == "build" and rules.roll_beats > 0:
+            blen = build["end_beat"] - build["beat"]
+            rb = rules.roll_beats
+            if blen - rb >= rules.roll_min_build_beats:
+                start = build["end_beat"] - rb
+                roll = dict(build, beat=start, kind="drop", bucket="drop", roll=True, phrases=1,
+                            energy=energy_of(start, build["end_beat"], _KIND_ENERGY["drop"]),
+                            fill_beat=build["fill_beat"])
+                build["end_beat"] = start
+                build["energy"] = energy_of(build["beat"], start, build["energy"])
+                build["fill_beat"] = None if (build["fill_beat"] or 0) >= start else build["fill_beat"]
+                rolled.append(roll)
+        rolled.append(m)
+    merged = rolled
     for i, m in enumerate(merged):
         m["index"] = i
     raw = merged
 
     # --- the loudest drop section is the big moment ---
-    runs: list[list[int]] = [[r["index"]] for r in raw if r["kind"] == "drop"]
+    # a roll lead-in and the drop it runs into are one run: one hit, one big moment (Josh's drop IS the roll)
+    runs: list[list[int]] = []
+    for r in raw:
+        if r["kind"] != "drop":
+            continue
+        if runs and raw[runs[-1][-1]].get("roll") and runs[-1][-1] == r["index"] - 1:
+            runs[-1].append(r["index"])
+        else:
+            runs.append([r["index"]])
     big_run: list[int] = []
     forced = _look_big_moment(look, raw, runs, grid=grid, bpm=bpm)   # None = planner decides
     if forced is not None:
-        big_run = forced
+        big_run = next((run for run in runs if forced and forced[0] in run), forced)
     elif runs:
         if rules.one_big_moment:
             def run_score(run: list[int]) -> tuple[float, int, int]:
-                beats = sum(raw[i]["end_beat"] - raw[i]["beat"] for i in run) or 1
-                e = sum(raw[i]["energy"] * (raw[i]["end_beat"] - raw[i]["beat"]) for i in run) / beats
+                body = [i for i in run if not raw[i].get("roll")] or run   # ranked on the drop, not its lead-in
+                beats = sum(raw[i]["end_beat"] - raw[i]["beat"] for i in body) or 1
+                e = sum(raw[i]["energy"] * (raw[i]["end_beat"] - raw[i]["beat"]) for i in body) / beats
                 return (round(e, 3), beats, run[-1])   # loudest, then longest, then latest
             big_run = max(runs, key=run_score)
         else:
@@ -330,6 +385,7 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
             strobe_allowed=strobe_allowed,
             laser_allowed=laser_allowed,
             fill_beat=r["fill_beat"],
+            roll=bool(r.get("roll")),
         ))
     palette = (look.hook_palette or "") if look is not None else ""
     if not palette and classes is not None:
