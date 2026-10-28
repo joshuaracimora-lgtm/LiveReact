@@ -48,10 +48,6 @@ Hard rules for every item, whoever does it:
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a
    pinned SHA with its LICENSE; drop the PyQt5 / PyOpenGL imports (PyQt5 is GPL and must not ship).
-12. **P1 GenericLaser.** Driven only through `laser_intents` (blank, line_static, fan). Every channel is
-    LASER kind. It outputs all zeros while `source.confirmed` is false, and it inherits the existing
-    `apply_safety` / `apply_laser_gate` behaviour. Accept: tests, including that an unconfirmed laser stays
-    dark with `laser_enable=True`.
 13. **P1 definition library.** `src/livereact/fixtures/library.py`: resolve `"<id>@<mode>"` from the rig's
     embedded `definitions`, then the user folder (`userdata.paths().fixtures`), then `builtin/`; list all;
     save a user definition. Accept: tests with `LIVEREACT_HOME`.
@@ -219,3 +215,9 @@ Hard rules for every item, whoever does it:
   `physical.pan_max_deg_s` (tilt uses the same deg/s over its own range; default 180 deg/s, slower
   than the native 260 placeholder; ranges default 540/270). `make_fixture()` picks the class. No motion
   box (`bounds`) or aim calibration yet. Tests: `tests/test_app_generic_moving_head.py`.
+- **12. P1 GenericLaser** (2026-10-28). Driven only by `set_intent(buf, blank|line_static|fan)`; not a
+  GenericFixture, so wash/dimmer/strobe setters cannot light it; every channel LASER. `ready` needs
+  `source.confirmed` AND all three intents; until then every write, boot and `apply_safety` (even with
+  `laser_enabled=True`) leaves the head at zero. Disarmed zeroes everything; the gate writes `blank`
+  (only the `chop_channel` when one is set, like the native CH1-only gate).
+  Tests: `tests/test_app_generic_laser.py`.
