@@ -61,6 +61,8 @@ class ShowSnapshot:
     planned_strobe_allowed: bool = True  # quiet edges: intro/outro say no
     planned_laser_allowed: bool = True
     beats_to_drop: int = -1              # countdown to the next planned drop boundary (-1 = none)
+    planned_roll_progress: float = -1.0  # inside a planned snare-roll lead-in: 0..1 through it (-1 = not)
+    planned_hit: float = 0.0             # the plan's hit for this section (drops: 1.0 = the big moment)
 
     # --- MIDI intent (measured, normalized 0.0-1.0) ---
     crossfader: float = 0.5

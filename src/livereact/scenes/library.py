@@ -210,6 +210,37 @@ class DropStrobeStab(Scene):
         return c
 
 
+class DropSnareRollRamp(Scene):
+    """The planner's snare-roll lead-in (section class ``drop_snare_roll``, approved by Josh
+    2026-10-28 with this scene; proposal in the Track Classifier's 10-28 SCENE_PROPOSALS.md).
+    Josh's notes on every roll ask for the same shape: "strobe starts low-brightness and
+    escalates to the end of the roll", a weaker roll gets "reduced intensity". The strobe ramp
+    itself is the Reactive layer's (engines/reactive.py `_planned_roll_rate`: wash bar + par,
+    rate and flash climbing to a ceiling set by the planned hit). This look is its context: the
+    song's palette colour, the heads held still on the dance floor and rising from
+    ROLL_SPOT_START to the planned hit across the roll -- the movement and the laser fan belong
+    to the bass hit that follows. Reserved: only a plan's roll sections play it, never the
+    rotation."""
+
+    name = "Drop Snare Roll Ramp"
+    bucket = EnergyBucket.DROP
+    min_hold_bars = 4                 # a roll is 4 or 8 bars (rekordbox/planner.py PLAN_ROLL_BEATS)
+    dark_pct = 0.20
+    reactivity_note = "strobe ramp from the Reactive layer's planned-roll path; heads static"
+    color_note = "the song's palette (D-23 / D-28), unison"
+    ROLL_SPOT_START = 0.4
+
+    def render(self, rig: Rig, snap: ShowSnapshot, intensity: float = 1.0) -> Contribution:
+        c = Contribution()
+        r, g, b = scene_color(snap)
+        paint_wash(c, rig, r, g, b)
+        p = max(0.0, min(1.0, snap.planned_roll_progress)) if snap.planned_roll_progress >= 0 else 1.0
+        paint_spots(c, rig, r, g, b, (self.ROLL_SPOT_START + (1.0 - self.ROLL_SPOT_START) * p) * intensity)
+        for fx in rig.by_role("spot"):
+            aim_spots(c, rig, fx, "dancefloor_centre", (0.5, 0.5))   # still: no sweep until the hit
+        return c
+
+
 class BuildRiserWash(Scene):
     """LIGHTING_BIBLE.md §5's canonical build: "intensity climbs across the
     build... the ramp IS the build." The actual dimmer ramp is already
@@ -1114,6 +1145,7 @@ ALL_SCENES: list[type[Scene]] = [
     # Bible-integration Phase 5, first wave -- BUILD/DROP families:
     DropBlackoutHit,
     DropStrobeStab,
+    DropSnareRollRamp,   # 2026-10-28: reserved for the plan's roll sections (drop_snare_roll)
     BuildRiserWash,
     # Bible-integration Phase 5, second wave -- PEAK family:
     PeakFullRig,

@@ -312,6 +312,14 @@ BUILD_COUNTIN_BEATS = 8           # planned drop within this many beats (2 bars)
 # ends with the roll or the build (the commit into the drop).
 STROBE_ROLL_FLASH_DMX = 255
 
+# Planned snare roll (Josh, 2026-10-28: "yes" to the strobe running through the planner's roll
+# lead-in). The roll is part of the drop (D-21), so the DROP strobe's phrase-tail rule kept every
+# roll dark. Through a planned roll the strobe ramps like a build, its ceiling from the plan's hit:
+# hit ROLL_HIT_FLOOR or less -> ROLL_STROBE_MIN_CEILING of the full rate and flash, 1.0 (the big
+# moment) -> the full ramp. First guesses, not measured.
+ROLL_HIT_FLOOR = 0.85
+ROLL_STROBE_MIN_CEILING = 0.6
+
 # Color: the phrase-frozen palette entry on the snapshot (engines/palette.py,
 # picked by core/metronome.py). This engine used to keep its own 16-bar
 # frozen hue anchor (`HUE_UPDATE_BARS`, 2026-09-08) -- but it never reached
@@ -688,6 +696,11 @@ class ReactiveLayerEngine:
         if self.snare_roll_active or not snap.drop_armed:
             self._breath = False  # a new roll, the drop landed, or the arming lapsed
         self._prev_roll = self.snare_roll_active
+        if snap.planned_roll_progress >= 0.0:
+            # a planned snare roll (drive mode): the roll ramp below IS the strobe; the detector's
+            # accent may not lift it past the planned ceiling, or every roll would read the same
+            self._ambient_gate.apply(0.0)
+            return self._planned_roll_rate(snap) if snap.planned_strobe_allowed else 0.0
         ambient_rate = self._strobe_rate(snap)  # BUILD: sets strobe_flash_dmx to the ramp's byte...
         if roll_rate > 0:
             self.strobe_flash_dmx = STROBE_ROLL_FLASH_DMX  # ...which the roll accent overrides
@@ -739,6 +752,20 @@ class ReactiveLayerEngine:
         # a 2.4 Hz tail against the first's 4 Hz -- for a 0.8s accent that
         # only read as "weaker," not as "quieter drop." One burst shape.
         return STROBE_MAX
+
+    def _planned_roll_rate(self, snap: ShowSnapshot) -> float:
+        """The strobe through a planned snare-roll lead-in (rekordbox/planner.py PLAN_ROLL_BEATS):
+        rate and flash byte climb from the build's start to a ceiling set by the planned hit, so the
+        big moment's roll tops out at STROBE_MAX / STROBE_ROLL_FLASH_DMX and a regular drop's roll
+        visibly lower (STRUCT-02 escalation, STRUCT-08 weaker roll -> lower ceiling). Sustained, not
+        burst-gated: like the build ramp it stays under the 4 Hz sustained line (SAFE-01)."""
+        hit01 = max(0.0, min(1.0, (snap.planned_hit - ROLL_HIT_FLOOR) / (1.0 - ROLL_HIT_FLOOR)))
+        ceiling = ROLL_STROBE_MIN_CEILING + (1.0 - ROLL_STROBE_MIN_CEILING) * hit01
+        p = max(0.0, min(1.0, snap.planned_roll_progress))
+        rate01 = (BUILD_STROBE_START + (1.0 - BUILD_STROBE_START) * p) * ceiling
+        top = STROBE_FLASH_START_DMX + (STROBE_ROLL_FLASH_DMX - STROBE_FLASH_START_DMX) * ceiling
+        self.strobe_flash_dmx = round(STROBE_FLASH_START_DMX + (top - STROBE_FLASH_START_DMX) * p)
+        return STROBE_MAX * rate01
 
     def _build_strobe_rate(self, snap: ShowSnapshot) -> float:
         """The pre-drop strobe: only while the drop is armed AND the rise is

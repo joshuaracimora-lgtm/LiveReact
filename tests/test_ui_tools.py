@@ -53,7 +53,8 @@ def test_venue_check_passes_on_the_venue_rigs():
     assert res["ok"], res["rigs"]
     inv = res["inventory"]
     assert "Break Single Spot Special" in inv["aims_at_targets"]
-    assert sum(len(v) for v in inv.values()) == 27
+    assert "Drop Snare Roll Ramp" in inv["aims_at_targets"]
+    assert sum(len(v) for v in inv.values()) == 28
 
 
 def test_venue_check_catches_a_broken_link(monkeypatch):

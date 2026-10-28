@@ -882,3 +882,40 @@ def test_the_strobe_stops_the_instant_the_roll_ends_and_stays_off_until_the_hit(
     assert eng.strobe_level == 0 and not eng.strobe_on  # the breath: nothing, though still armed + rising
     eng.tick(_snap(bucket="drop", drop_armed=False), rig)
     assert eng.strobe_level == 0                        # the hit: the drop look owns it
+
+
+def test_a_planned_snare_roll_strobes_rising_with_a_ceiling_from_the_planned_hit():
+    """Josh, 2026-10-28: the strobe runs through the planner's roll lead-in (it is part of the drop,
+    where the phrase-tail rule kept it dark), escalating to the end, a regular drop's roll visibly
+    under the big moment's (STRUCT-02 / STRUCT-08)."""
+    from livereact.engines.reactive import ROLL_HIT_FLOOR, STROBE_ROLL_FLASH_DMX
+
+    def ramp(hit):
+        clock = FakeClock()
+        rig, eng = load_rig(), ReactiveLayerEngine(clock)
+        rates, flashes = [], []
+        for i, p in enumerate((0.0, 0.25, 0.5, 0.75, 1.0)):
+            clock.advance(1.0)
+            eng.tick(_snap(bar=10 + i, beat_in_bar=1, beat_phase=0.0, bucket="drop", plan_active=True,
+                           planned_roll_progress=p, planned_hit=hit, drop_start_bar=10), rig)
+            rates.append(eng.strobe_level)
+            flashes.append(eng.strobe_flash_dmx)
+        return rates, flashes
+
+    big, big_flash = ramp(1.0)
+    regular, _ = ramp(0.92)
+    soft, _ = ramp(ROLL_HIT_FLOOR)
+    assert all(v > 0 for v in big) and all(a < b for a, b in zip(big, big[1:]))
+    assert big[-1] == pytest.approx(STROBE_MAX) and big_flash[-1] == STROBE_ROLL_FLASH_DMX
+    assert soft[-1] < regular[-1] < big[-1]
+    assert round(big[-1] * 255) - round(regular[-1] * 255) >= 20          # STRUCT-08's visible step
+    assert big[-1] <= STROBE_MAX                                          # never past the 4 Hz line
+
+
+def test_no_roll_strobe_where_the_plan_forbids_the_strobe():
+    clock = FakeClock()
+    rig, eng = load_rig(), ReactiveLayerEngine(clock)
+    clock.advance(1.0)
+    eng.tick(_snap(bar=10, beat_in_bar=1, bucket="drop", plan_active=True, planned_roll_progress=0.5,
+                   planned_hit=1.0, planned_strobe_allowed=False), rig)
+    assert eng.strobe_level == 0.0

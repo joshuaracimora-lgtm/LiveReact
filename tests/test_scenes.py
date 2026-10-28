@@ -44,7 +44,7 @@ def test_thirty_scenes_across_all_buckets():
     build-out (BuildSnareAccent, 2026-09-14 -- depended on new snare-roll
     subdivision detection, core/snare_trigger.py, built this session)."""
     cat = SceneCatalog(full=True)  # the whole library, not the core default
-    assert len(ALL_SCENES) == 27
+    assert len(ALL_SCENES) == 28   # + DropSnareRollRamp (2026-10-28, the plan's roll sections)
     for bucket in EnergyBucket:
         assert cat.bucket(bucket), f"{bucket} has no scenes"
 

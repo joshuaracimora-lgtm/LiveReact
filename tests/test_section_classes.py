@@ -37,12 +37,15 @@ def _book(classes, palette=None):
     return section_classes.from_dict({"schema": 1, "classes": classes, **({"palette_by_profile": palette} if palette else {})})
 
 
-def test_the_shipped_file_is_valid_and_approves_only_the_profile_palette():
+def test_the_shipped_file_is_valid_and_approves_only_the_profile_palette_and_the_roll():
     d = json.loads(section_classes.CLASSES_PATH.read_text(encoding="utf-8"))
     assert section_classes.validate(d) == []
     book = section_classes.load()
-    # Josh approved D-23 on 2026-10-28 ("approve D-23 and have the lasers follow the palette"); no class yet
-    assert book.classes and book.approved_scenes() == [] and book.palette_approved
+    # Josh approved D-23 on 2026-10-28 ("approve D-23 and have the lasers follow the palette"), and the
+    # same day drop_snare_roll with the new Drop Snare Roll Ramp (the Track Classifier's proposal)
+    assert book.classes and book.approved_scenes() == ["Drop Snare Roll Ramp"] and book.palette_approved
+    from livereact.scenes.catalog import show_catalog
+    assert show_catalog(extra=book.approved_scenes()).find("Drop Snare Roll Ramp") is not None
 
 
 def test_the_shipped_classes_change_only_the_tags_and_the_profile_palette():

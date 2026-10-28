@@ -41,6 +41,7 @@ from __future__ import annotations
 from ..clock import Clock
 from ..core.show_state import ShowSnapshot
 from ..fixtures.profiles import Laser
+from ..scenes.base import EnergyBucket
 from ..fixtures.rig import Rig
 from ..merge.merge import Contribution, ManualParams
 from .envelope import NORMALIZE_TAU_S, BandEnvelope
@@ -68,6 +69,7 @@ class LaserFanEngine(LaserTriggerEngine):
         self._noted: set[tuple[str, int]] = set()  # (trigger, bar) already in candidates
         self._pending: dict | None = None        # this tick's candidate, verdict still open
         self.candidates: list[dict] = []
+        self._after_roll = ""                    # a drop edge seen inside a planned roll, fired when it ends
         self.color = self.color_l = self.color_r = Laser.COLOR_WHITE
         self.color_name = "white"
         self._ch12 = Laser.COLOR_WHITE
@@ -84,6 +86,16 @@ class LaserFanEngine(LaserTriggerEngine):
     def _auto_trigger(self, now: float, snap: ShowSnapshot) -> str:
         fired = super()._auto_trigger(now, snap)
         self._pending = None
+        # A planned snare roll is the start of the drop (D-21), but the fan belongs to the bass hit
+        # after it (2026-10-28, Drop Snare Roll Ramp): a drop/peak edge inside the roll waits for its end.
+        if snap.planned_roll_progress >= 0.0:
+            if fired in (TRIGGER_DROP, TRIGGER_PEAK) and not self.active:
+                self._after_roll = fired
+            return ""
+        if self._after_roll:
+            if not fired and EnergyBucket(snap.bucket) in (EnergyBucket.DROP, EnergyBucket.PEAK):
+                fired = self._after_roll
+            self._after_roll = ""
         if not fired or self.active:
             return fired   # lit already: the base class refuses it; nothing to log
         key = (fired, int(snap.bar))
