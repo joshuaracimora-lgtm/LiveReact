@@ -55,15 +55,6 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-18. **P5 Manual Override panel (widget).** `src/livereact/ui/override_panel.py`, a standalone widget bound
-    to `app.manual`:
-    - **Lasers block**: arm/disarm button with status (armed, blocked by event, disarmed).
-    - **Manual Override group**, collapsed by default: CUE BUILD, ARM DROP, STROBE BURST, SKIP, Tap, Laser
-      Cue (K), Laser Hit (J), Laser Show follow/rotate/hold + look grid when the rig has them.
-    - **Presets block**: Colour scheme / Genre / Event type combos + Save/Load event.
-    It calls the same methods the Show tab calls today; hotkeys unchanged. Preset changes call
-    `app.apply_preset(effect)` only if the app has it (item 4), else just store the choice. Accept: offscreen
-    UI tests.
 19. **P5 put the panel in the console.** Replace the Show tab's cue / laser / override groups in
     `ui/console.py` with the panel. Every existing console test stays green (hotkeys, pins, laser
     checkbox behaviour). Accept: `gate_app` with the UI checks.
@@ -220,3 +211,9 @@ Hard rules for every item, whoever does it:
   added for read-only lookups. The numbers in presets.json (biases, ceilings, which event types forbid
   lasers) are design defaults for Josh to tune; genre only sets a `catalog_kwargs` token until item 31.
   Tests: `tests/test_app_presets.py`.
+- **18. P5 Manual Override panel (widget)** (2026-10-28). `ui/override_panel.py` `OverridePanel(app)`:
+  Lasers block (arm/disarm writes `manual.laser_enable`; status armed / disarmed / blocked by event; an
+  event that forbids lasers disarms and blocks arming), Manual Override group collapsed by default (CUE
+  BUILD, ARM DROP, STROBE BURST, SKIP, Tap, Laser Cue, Laser Hit, and Laser Show follow/rotate/hold + look
+  grid on `show` rigs), Presets block (three combos, Save/Load event). Calls `app.apply_preset(effect)`
+  only when the app has it, else stores the choice. Tests: `tests/test_app_override_panel.py`.
