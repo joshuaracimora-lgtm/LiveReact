@@ -136,6 +136,10 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
         self.setCentralWidget(tabs)
+        # Rig menu (2026-10-28, ui/rig_manager.py): pick the rig instead of --rig <path>.
+        self.rig_manager = None
+        rig_menu = self.menuBar().addMenu("&Rig")
+        rig_menu.addAction("Rig manager…", self.open_rig_manager)
         self.resize(1280, 800)
 
         self._install_shortcuts()
@@ -413,6 +417,23 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         sc(QtCore.Qt.Key.Key_Space, self._strobe_burst)
 
     # ------------------------------------------------------------------ actions
+    def open_rig_manager(self):
+        from .rig_manager import RigManagerDialog
+        self.rig_manager = RigManagerDialog(self)
+        self.rig_manager.rig_chosen.connect(self._rig_chosen)
+        self.rig_manager.show()
+        return self.rig_manager
+
+    def _rig_chosen(self, path: str) -> None:
+        """Switch live when the app can (App.switch_rig, roadmap item 4); until then the
+        choice is remembered (recent rigs) and applies at the next start."""
+        switch = getattr(self.app, "switch_rig", None)
+        if callable(switch):
+            switch(path)
+            self.statusBar().showMessage(f"Switched to {path}", 8000)
+        else:
+            self.statusBar().showMessage(f"Rig chosen: {path} — restart LiveReact with this rig to apply it.")
+
     def _set_blackout(self, on: bool) -> None:
         self.app.manual.blackout = on
 

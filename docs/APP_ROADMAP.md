@@ -55,10 +55,6 @@ Hard rules for every item, whoever does it:
 16. [JOSH] [BLOCKED: item 1] **P1 laser driver.** `fixtures/laser_driver.py`: `ShehdsLaserDriver` (today's
     bytes exactly) and `IntentLaserDriver` (a confirmed definition's `laser_intents`). Every laser engine,
     `engines/color.py` and the laser scenes call the driver instead of SHEHDS methods.
-20. **P2 rig manager dialog.** `src/livereact/ui/rig_manager.py`: New (empty), Open (file dialog in
-    `userdata` rigs), Recent (from `settings.py`), Demo rig (packaged `default_rig.json`, read-only; "Save
-    as" copies it to the user folder). Emits `rig_chosen(path)`. A Rig menu entry in the console opens it;
-    switching rigs live waits for item 4 (until then: "restart to apply"). Accept: UI tests.
 21. **P2 patch view.** Extend `ui/rig_config.py`:
     - The fixture type list includes library definitions (item 13), with a mode picker.
     - DMX address auto-assigns the next free block; overlap is shown inline (from `rig.py` validation).
@@ -222,3 +218,9 @@ Hard rules for every item, whoever does it:
   widget's default is collapsed) so cues stay one press away mid-set: a question for Josh. The `manual`
   laser profile's scene grid, Blackout/Freeze and Feel stay where they were. Tests: `tests/test_console.py`
   (all green), gate UI checks.
+- **20. P2 rig manager dialog** (2026-10-28). `ui/rig_manager.py` `RigManagerDialog`: New (an empty rig in
+  the user's rigs folder), Open (file picker there), Recent (settings.py, missing files hidden), Demo rig
+  (packaged `default_rig.json`, read-only) and "Save demo rig as…" (a copy in the user folder). A chosen rig
+  is validated through the loader, remembered, and emitted as `rig_chosen(path)`. The console has a Rig menu
+  -> "Rig manager…"; it calls `app.switch_rig(path)` when the app has it (item 4), else says "restart to
+  apply". Tests: `tests/test_app_rig_manager.py`.
