@@ -59,9 +59,6 @@ Hard rules for every item, whoever does it:
     `FIXTURE_URL` point at OFL's GitHub `master` branch and were not checked by hand (the agent has no
     internet). Confirm them (or OFL's own API), and decide the `license` string the wizard passes to
     `import_fixture()` (OFL data license; see Decisions). Then list OFL attribution in About (item 33).
-38. **P4 API key settings.** A Settings dialog field that stores the Anthropic key with
-    `manual_reader.client.store_api_key()` (keychain only), shows whether one is set (never the key), and a
-    "Remove" button. Accept: UI tests with a fake keyring.
 29. [JOSH] **P4 manual reader evaluation (costs money).** `tools/eval_manual_reader.py` against the three
     known manuals (SHEHDS 180W, SHEHDS 3W laser, OK103), scored per channel against `builtin/`.
 30. [JOSH] [BLOCKED: items 2, 4] **P5 automatic lasers.** New `"auto"` laser profile built on
@@ -249,3 +246,7 @@ Hard rules for every item, whoever does it:
   `FixtureLibraryBrowser` (which now emits `library_changed`), "Anthropic API key…" opens the key dialog
   (item 38). `RigConfigTab.reload_definitions()` adds newly saved definitions to every row's type list.
   Tests: `tests/test_app_fixtures_menu.py`.
+- **38. P4 API key settings** (2026-10-28). `ui/api_key.py` `ApiKeyDialog`: save / replace (password
+  field, cleared after saving) and remove the key in the OS keychain through `store_api_key()`; shows only
+  whether a key is saved; keychain errors are reported without the key. Tests: `tests/test_app_api_key.py`
+  (fake keyring).
