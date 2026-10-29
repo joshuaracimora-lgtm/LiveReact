@@ -83,9 +83,9 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-43. **P6 Help -> Keyboard shortcuts.** A Help entry listing the console's hotkeys (B, F, Right, T, S, L, K,
-    J, C, D, Space) with what each does, built from the same table `_install_shortcuts()` uses so the
-    list cannot drift from the keys.
+44. **P6 Help -> Open my LiveReact folder.** A Help entry that opens the user data folder
+    (`userdata.paths()`: rigs, fixtures, manuals, logs) in Explorer / Finder through
+    `QDesktopServices.openUrl` (injectable in tests), so a user can back up rigs or send a log.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -272,3 +272,7 @@ Hard rules for every item, whoever does it:
   `AboutDialog`; "Run first-time setup again…" opens `FirstRunDialog` with the saved choices, saves only,
   and says the setup applies at the next start (wiring into `AppConfig` stays item 40).
   Tests: `tests/test_app_help_menu.py`.
+- **43. P6 Help -> Keyboard shortcuts** (2026-10-28). `ui/console.py` `SHORTCUTS` (key, target, what it
+  does) is the one table: `_install_shortcuts()` binds exactly these (same keys and targets as before) and
+  Help -> "Keyboard shortcuts…" lists them. Tests: `tests/test_app_shortcuts_help.py` (installed keys equal
+  the table, B and L still drive blackout and the arm switch, the dialog lists every key).

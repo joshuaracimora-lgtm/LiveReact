@@ -34,6 +34,27 @@ from .rig_config import RigConfigTab
 from .theme import MUTED, apply_theme, bucket_color
 from .venue_tab import VenueTab
 
+# The console's hotkeys: (key, attribute path on the window, what it does). _install_shortcuts()
+# binds exactly these and Help -> Keyboard shortcuts lists them, so the two cannot drift (item 43).
+SHORTCUTS: tuple[tuple[str, str, str], ...] = (
+    ("B", "b_black.toggle", "Blackout on/off"),
+    ("F", "b_freeze.toggle", "Freeze the look on/off"),
+    ("Right", "app.phrase_engine.skip", "Next look at the next bar"),
+    ("T", "_do_tap", "Tap tempo"),
+    ("S", "cb_synth.toggle", "Synth Sync on/off (wash follows the synths)"),
+    ("L", "cb_laser.toggle", "Arm / disarm lasers"),
+    ("K", "b_laser_cue.toggle", "Cue the laser on/off"),
+    ("J", "b_laser_hit.click", "Laser hit"),
+    ("C", "app.metronome.cue_build", "Cue the build: it is happening now"),
+    ("D", "app.metronome.arm_drop", "Arm the drop: it is next"),
+    ("Space", "_strobe_burst", "Strobe burst"),
+)
+
+
+def shortcuts_text() -> str:
+    return "\n".join(f"{key:<6} {what}" for key, _target, what in SHORTCUTS)
+
+
 log = logging.getLogger(__name__)
 
 
@@ -152,6 +173,8 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("About LiveReact…", self.open_about)
         help_menu.addAction("Run first-time setup again…", self.open_first_run)
+        help_menu.addAction("Keyboard shortcuts…", self.open_shortcuts)
+        self.shortcuts_dialog = None
         self.resize(1280, 800)
 
         self._install_shortcuts()
@@ -416,20 +439,11 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.rb_laser_hold.setChecked(True)      # its toggled slot writes laser_mode
 
     def _install_shortcuts(self) -> None:
-        def sc(key, fn):
+        for key, target, _what in SHORTCUTS:
+            fn = self
+            for name in target.split("."):
+                fn = getattr(fn, name)
             QtGui.QShortcut(QtGui.QKeySequence(key), self, activated=fn)
-
-        sc("B", self.b_black.toggle)
-        sc("F", self.b_freeze.toggle)
-        sc(QtCore.Qt.Key.Key_Right, self.app.phrase_engine.skip)
-        sc("T", self._do_tap)
-        sc("S", self.cb_synth.toggle)
-        sc("L", self.cb_laser.toggle)
-        sc("K", self.b_laser_cue.toggle)
-        sc("J", self.b_laser_hit.click)
-        sc("C", self.app.metronome.cue_build)
-        sc("D", self.app.metronome.arm_drop)
-        sc(QtCore.Qt.Key.Key_Space, self._strobe_burst)
 
     # ------------------------------------------------------------------ actions
     def open_rig_manager(self):
@@ -460,6 +474,21 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.about_dialog = AboutDialog(self)
         self.about_dialog.show()
         return self.about_dialog
+
+    def open_shortcuts(self):
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Keyboard shortcuts")
+        v = QtWidgets.QVBoxLayout(dlg)
+        dlg.text = QtWidgets.QPlainTextEdit(shortcuts_text())
+        dlg.text.setReadOnly(True)
+        v.addWidget(dlg.text, 1)
+        b = QtWidgets.QPushButton("Close")
+        b.clicked.connect(dlg.accept)
+        v.addWidget(b)
+        dlg.resize(420, 340)
+        dlg.show()
+        self.shortcuts_dialog = dlg
+        return dlg
 
     def open_first_run(self, **providers):
         """``providers``: FirstRunDialog's audio/interface lists (tests inject them)."""
