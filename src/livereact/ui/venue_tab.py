@@ -483,13 +483,12 @@ class VenueTab(QtWidgets.QWidget):
     def _plan_changed(self) -> None:
         """A drag on the plan moved a fixture or a target."""
         fx = self._fx()
-        note = ""
+        # every head the drag moved, not only the one in the panel (Ctrl+click drags several)
+        note = " ".join(w for w in (self._captured_warning(self.rig.fixture(k)) for k in self.plan.last_moved) if w)
         if fx is not None:
             self._loading = True
             try:
                 o = self.plan.fixture_origin(fx)
-                if abs(self.sb_x.value() - m_to_ft(o.x)) > 0.05 or abs(self.sb_y.value() - m_to_ft(o.y)) > 0.05:
-                    note = self._captured_warning(fx)      # the drag moved the selected head
                 self.sb_x.setValue(m_to_ft(o.x)); self.sb_y.setValue(m_to_ft(o.y))
             finally:
                 self._loading = False
