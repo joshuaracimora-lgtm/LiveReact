@@ -37,6 +37,14 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Fixed
 
+- **Dragging every fixture of a role onto one side of centre killed mirroring silently** (MOVE-03): the
+  rig logged the warning, but the operator doing the dragging is on the Venue tab, not reading the log.
+  `Rig.refresh_geometry` now also records its MOVE-03 warnings in `rig.mirror_warnings` and the Venue
+  status line shows them after every edit until the layout mirrors again. Detection only, exactly the
+  rule spec/conformance.md marks PARTIAL; nothing is disabled or re-rendered. Tests:
+  `tests/test_console.py::test_every_spot_on_one_side_puts_move_03_on_the_status_line`,
+  `tests/test_rig.py::test_side_is_derived_from_real_x_when_a_venue_is_declared` (extended) (2026-10-29).
+
 - **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
   one drag moves them all, but the "aim was captured at its old position" warning only checked the head
   shown in the panel. `FloorPlanView` now records every fixture a drop moved (`last_moved`) and
