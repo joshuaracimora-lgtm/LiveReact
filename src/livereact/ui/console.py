@@ -175,6 +175,9 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         help_menu.addAction("Run first-time setup again…", self.open_first_run)
         help_menu.addAction("Keyboard shortcuts…", self.open_shortcuts)
         self.shortcuts_dialog = None
+        # item 44: rigs, fixtures, manuals, logs live there; tests swap open_url for a fake
+        self.open_url = QtGui.QDesktopServices.openUrl
+        help_menu.addAction("Open my LiveReact folder…", lambda: self.open_data_folder())
         self.resize(1280, 800)
 
         self._install_shortcuts()
@@ -489,6 +492,14 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         dlg.show()
         self.shortcuts_dialog = dlg
         return dlg
+
+    def open_data_folder(self):
+        """Show the user data folder in Explorer / Finder; say where it is if that fails."""
+        from ..userdata import paths
+        root = paths().root
+        if not self.open_url(QtCore.QUrl.fromLocalFile(str(root))):
+            self.statusBar().showMessage(f"Could not open the folder — it is at {root}", 15000)
+        return root
 
     def open_first_run(self, **providers):
         """``providers``: FirstRunDialog's audio/interface lists (tests inject them)."""

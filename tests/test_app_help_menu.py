@@ -51,8 +51,8 @@ def test_help_menu_entries(qapp):
     win, _ = _win()
     menus = _menus(win)
     assert "Help" in menus
-    assert [a.text() for a in menus["Help"].actions()] == ["About LiveReact…", "Run first-time setup again…",
-                                                             "Keyboard shortcuts…"]
+    assert [a.text() for a in menus["Help"].actions()] == [
+        "About LiveReact…", "Run first-time setup again…", "Keyboard shortcuts…", "Open my LiveReact folder…"]
 
 
 def test_about_opens_the_about_dialog(qapp):

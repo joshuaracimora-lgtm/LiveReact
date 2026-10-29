@@ -83,9 +83,9 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-44. **P6 Help -> Open my LiveReact folder.** A Help entry that opens the user data folder
-    (`userdata.paths()`: rigs, fixtures, manuals, logs) in Explorer / Finder through
-    `QDesktopServices.openUrl` (injectable in tests), so a user can back up rigs or send a log.
+45. **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
+    definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
+    folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -276,3 +276,7 @@ Hard rules for every item, whoever does it:
   does) is the one table: `_install_shortcuts()` binds exactly these (same keys and targets as before) and
   Help -> "Keyboard shortcuts…" lists them. Tests: `tests/test_app_shortcuts_help.py` (installed keys equal
   the table, B and L still drive blackout and the arm switch, the dialog lists every key).
+- **44. P6 Help -> Open my LiveReact folder** (2026-10-28). Help -> "Open my LiveReact folder…" opens
+  `userdata.paths().root` in Explorer / Finder (`ConsoleWindow.open_url`, `QDesktopServices.openUrl` by
+  default, a fake in tests); when that fails the status bar says where the folder is.
+  Tests: `tests/test_app_data_folder.py`; `test_app_help_menu.py` now expects the fourth Help entry.
