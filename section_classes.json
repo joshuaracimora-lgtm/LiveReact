@@ -3,7 +3,7 @@
   "_doc": "Section classes (src/livereact/rekordbox/section_classes.py). The Track Classifier agent refines the rules; only Josh sets approved/scene. A rule of null names a class that is not defined yet. Nothing here changes the show until a class is approved.",
   "classes": [
     {"name": "drop_snare_roll", "kind": "drop", "rule": {"roll": [1, 1]}, "scene": null, "approved": false,
-     "notes": "Josh 2026-10-26: snare rolls are a class of drop (3-7 bars on his labels). Claude 2026-10-28: the planner now splits the last 8 bars of a long build (PLAN_ROLL_BEATS) off as the drop's roll lead-in (sections.py feature roll = 1); this class is exactly those sections. 4- vs 8-bar rolls are not told apart yet (nothing in the file separated them on the tuning tracks)."},
+     "notes": "Josh 2026-10-26: snare rolls are a class of drop (3-7 bars on his labels). Claude 2026-10-28: the planner now splits the last 8 bars of a long build (PLAN_ROLL_BEATS) off as the drop's roll lead-in (sections.py feature roll = 1); this class is exactly those sections. Since 58efe73 the roll is 4 bars when the waveform crescendos over the build's last 8 bars (PLAN_ROLL_RISE), else 8; the class covers both (library 2026-10-28: 136 sections in 108 tracks)."},
     {"name": "drop_full", "kind": "drop", "rule": {"bars": [7.75, 10000], "roll": [0, 0]}, "scene": null, "approved": false,
      "notes": "the groove/bass hit; at least 8 bars (Josh 2026-10-26)"},
     {"name": "drop_clap", "kind": "drop", "rule": null, "scene": null, "approved": false,
