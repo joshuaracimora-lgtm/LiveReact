@@ -531,6 +531,7 @@ class FloorPlanView(QtWidgets.QGraphicsView):
         ]
         obstacles = [c.item.sceneBoundingRect() for c in self._captions.values()]
         placed: list[QtCore.QRectF] = []
+        recs: list[list] = []            # [cap, anchor, slot_rect, chosen rect, far] per caption
         order = sorted(self._captions.values(), key=lambda c: (c.item.pos().x(), c.item.pos().y()))
         gap = 4.0
         grown = False
@@ -540,7 +541,9 @@ class FloorPlanView(QtWidgets.QGraphicsView):
             bw, bh = br.width() / 2, br.height() / 2
             lw, lh = cap.size()
 
-            def slot_rect(sx: int, sy: int) -> QtCore.QRectF:
+            # defaults bind this caption's geometry: the repair pass below
+            # calls slot_rect after the loop has moved on
+            def slot_rect(sx: int, sy: int, a=a, bw=bw, bh=bh, lw=lw, lh=lh) -> QtCore.QRectF:
                 if sx == 0:
                     x = a.x() - lw / 2
                 elif sx > 0:
@@ -606,15 +609,86 @@ class FloorPlanView(QtWidgets.QGraphicsView):
 
                 cands = [slot_rect(*p_) for p_ in [*self._SLOTS, *ring]]
                 chosen = min([r for r in cands if scene_rect.contains(r)] or cands, key=overlap)
-            cap.place(chosen)
-            cap.leader_to(chosen if far else None)
+            recs.append([cap, a, slot_rect, chosen, far])
             placed.append(chosen.adjusted(-3, -2, 3, 2))
+        self._repair_cut_leaders(recs, obstacles, reserved, scene_rect, floor_y=l_px)
+        for cap, _a, _sr, rect, far in recs:
+            cap.place(rect)
+            cap.leader_to(rect if far else None)
         if grown:
             r = scene_rect
-            for p_ in placed:
-                r = r.united(p_)
+            for _cap, _a, _sr, rect, _far in recs:
+                r = r.united(rect.adjusted(-3, -2, 3, 2))
             self._scene.setSceneRect(r)
             self._fit()
+
+    _REPAIR_MOVES = 12   # each move strictly cuts crossings, so this is a backstop
+
+    def _repair_cut_leaders(self, recs: list[list], obstacles, reserved, scene_rect,
+                            floor_y: float) -> None:
+        """UI_BUGS #2: the greedy pass places captions one at a time, so a
+        caption placed early can sit across the leader of one placed later
+        (junior_crib's booth: Moving Head L's caption lay over every short
+        leader; testing_setup: Laser R's leader ran through Wash Bar's).
+        Re-place the most-crossed caption into the nearest slot that is still
+        free of every body, caption and reserved band AND lowers its crossing
+        count; repeat until clean or no move helps. Moving one caption cannot
+        add a crossing between two others, so every move is a net gain."""
+        def leader(a, rect) -> QtCore.QLineF:
+            # same attachment as _Caption.leader_to: body centre -> nearest point
+            bx = min(max(a.x(), rect.left()), rect.right())
+            by = min(max(a.y(), rect.top()), rect.bottom())
+            return QtCore.QLineF(a.x(), a.y(), bx, by)
+
+        def hits(line: QtCore.QLineF, r: QtCore.QRectF) -> bool:
+            if r.contains(line.p1()) or r.contains(line.p2()):
+                return True
+            corners = (r.topLeft(), r.topRight(), r.bottomRight(), r.bottomLeft())
+            return any(line.intersects(QtCore.QLineF(c1, c2))[0]
+                       == QtCore.QLineF.IntersectionType.BoundedIntersection
+                       for c1, c2 in zip(corners, corners[1:] + corners[:1]))
+
+        def crossings(k: int, rect: QtCore.QRectF, far: bool) -> int:
+            """Crossings caption k takes part in if placed at ``rect``: its own
+            leader through others' captions, plus others' leaders through it."""
+            n = 0
+            if far:
+                ln = leader(recs[k][1], rect)
+                n += sum(1 for j, rj in enumerate(recs) if j != k and hits(ln, rj[3]))
+            for j, rj in enumerate(recs):
+                if j != k and rj[4] and hits(leader(rj[1], rj[3]), rect):
+                    n += 1
+            return n
+
+        ring = [(sx, sy) for sx in range(-6, 7) for sy in range(-8, 9) if sx or sy]
+        for _move in range(self._REPAIR_MOVES):
+            scored = sorted(range(len(recs)), reverse=True,
+                            key=lambda k: crossings(k, recs[k][3], recs[k][4]))
+            moved = False
+            for k in scored:
+                cur = crossings(k, recs[k][3], recs[k][4])
+                if cur == 0:
+                    break            # sorted: nobody left is involved in one
+                _cap, a, srf, _rect, _far = recs[k]
+                others = [r[3].adjusted(-3, -2, 3, 2) for i, r in enumerate(recs) if i != k]
+                for sx, sy in sorted(ring, key=lambda p_: (srf(*p_).center() - a).manhattanLength()):
+                    r = srf(sx, sy)
+                    if not scene_rect.contains(r):
+                        continue
+                    if r.bottom() > floor_y:
+                        continue     # a grown scene's side strip reaches below the
+                                     # room line; captions never go under the room
+                    if any(r.intersects(o) for o in (*obstacles, *reserved, *others)):
+                        continue
+                    far = (sx, sy) not in self._SLOTS or abs(sx) + abs(sy) >= 2
+                    if crossings(k, r, far) < cur:
+                        recs[k][3], recs[k][4] = r, far
+                        moved = True
+                        break
+                if moved:
+                    break            # re-score: this move changed the picture
+            if not moved:
+                return               # nobody involved can improve: stop
 
     def _fit(self) -> None:
         self.fitInView(self._scene.sceneRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio)

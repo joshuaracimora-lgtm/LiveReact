@@ -412,3 +412,51 @@ def test_an_edge_targets_caption_does_not_land_on_another_caption(qapp):
     assert pairs == []
     scene = view._scene.sceneRect()
     assert all(scene.contains(r) for _, r in texts)
+
+
+def _caption_rects(view) -> dict:
+    rects = {}
+    for key, cap in view._captions.items():
+        lines = cap._lines()
+        if lines:
+            r = lines[0].sceneBoundingRect()
+            for t in lines[1:]:
+                r = r.united(t.sceneBoundingRect())
+            rects[key] = r
+    return rects
+
+
+def _leader_crossings(view) -> list[tuple[str, str]]:
+    """(leader's caption, caption it cuts through) for every visible leader."""
+    from PySide6 import QtCore
+
+    rects = _caption_rects(view)
+    out = []
+    for key, cap in view._captions.items():
+        if not cap.leader.isVisible():
+            continue
+        line = cap.leader.line()
+        for other, r in rects.items():
+            if other == key:
+                continue
+            corners = (r.topLeft(), r.topRight(), r.bottomRight(), r.bottomLeft())
+            if r.contains(line.p1()) or r.contains(line.p2()) or any(
+                    line.intersects(QtCore.QLineF(c1, c2))[0]
+                    == QtCore.QLineF.IntersectionType.BoundedIntersection
+                    for c1, c2 in zip(corners, corners[1:] + corners[:1])):
+                out.append((key, other))
+    return out
+
+
+@pytest.mark.parametrize("rig_name", ["testing_setup.json", "junior_crib.json"])
+def test_no_leader_line_cuts_through_another_caption(qapp, rig_name):
+    """UI_BUGS #2 (leaders are not obstacles): the greedy pass places captions
+    one at a time, so a caption placed early sat across the leaders of later
+    ones -- junior_crib's booth (Moving Head L's caption over every short
+    leader), testing_setup (Laser R's leader through Wash Bar's caption)."""
+    from livereact.ui.floorplan import FloorPlanView
+
+    rig = load_rig(os.path.join(HERE, "rigs", rig_name))
+    view = FloorPlanView(rig, editable=True)
+    view._layout_labels()
+    assert _leader_crossings(view) == []

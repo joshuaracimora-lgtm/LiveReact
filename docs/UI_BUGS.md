@@ -17,15 +17,10 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
      capture was taken on now warns too (fixed below); same open question for it.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
-   - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
-   - leader lines, beams and wedges are not obstacles. 2026-10-28 (night 2): leaders cross other captions
-     on testing_setup (Laser R's runs between Wash Bar's title and sub-line) and junior_crib(_fan) (Laser L
-     through Moving Head L, Moving Head R through booth_edge_right). Tried three ways in `_layout_labels`
-     (strict near slots, then the old rules; plus a captions-only tier; a single distance + crossing cost):
-     each fixed testing_setup but not junior_crib, where seven bodies share ~8 ft of booth and Moving Head
-     L's caption sits over every short leader -- the greedy one-pass layout cannot clear it, and widening the
-     search parks captions 15 ft up the room. Needs a repair pass (re-place a caption whose leader got cut)
-     or the caption-size decision; reverted, not committed;
+   - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots
+     (junior_crib@small still has 5 leader crossings after the 2026-10-29 repair pass -- see Fixed --
+     bounded by the caption-size decision that is Josh's call);
+   - beams and wedges are still not obstacles (leader-vs-caption crossings fixed 2026-10-29, below);
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
@@ -44,6 +39,16 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
   rule spec/conformance.md marks PARTIAL; nothing is disabled or re-rendered. Tests:
   `tests/test_console.py::test_every_spot_on_one_side_puts_move_03_on_the_status_line`,
   `tests/test_rig.py::test_side_is_derived_from_real_x_when_a_venue_is_declared` (extended) (2026-10-29).
+
+- **A caption placed early sat across the leader lines of captions placed later** (junior_crib's booth:
+  Moving Head L's caption over every short leader; testing_setup: Laser R's leader through Wash Bar's
+  caption). The greedy one-pass layout cannot clear it, so `_layout_labels` now runs a repair pass
+  (`_repair_cut_leaders`): re-place the most-crossed caption into the nearest slot that is free of every
+  body, caption and reserved band and lowers its crossing count, until clean or no move helps. Crossings
+  (harness -> now): junior_crib(_fan) 4 -> 0, testing_setup 1 -> 0, junior_crib@small 14 -> 5 (its booth
+  really is smaller than its labels), the six others stay 0; text/text and text/body overlaps stay 0 on
+  all ten rigs. Test: `tests/test_floorplan.py::test_no_leader_line_cuts_through_another_caption`
+  (2026-10-29).
 
 - **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
   one drag moves them all, but the "aim was captured at its old position" warning only checked the head
