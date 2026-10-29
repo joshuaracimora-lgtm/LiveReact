@@ -83,12 +83,9 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-41. **P2 the channel-test screen needs the console's laser arm switch.** Josh, 2026-10-28 (answering the
-    App night's question): laser channels on `ui/channel_test.py` stay at zero unless BOTH its own "Enable
-    laser output" box is ticked AND the console's arm switch (`laser_enable`, L) is on. Two keys for a
-    laser. Test both orders, and that disarming in the console zeroes the screen's laser channels.
-42. **P6 console Help menu.** Help -> About (`ui/about.py`) and Help -> "Run first-time setup again"
-    (`FirstRunDialog`, saving only; wiring the choices into `AppConfig` stays item 40).
+45. **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
+    definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
+    folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -264,3 +261,22 @@ Hard rules for every item, whoever does it:
   field, cleared after saving) and remove the key in the OS keychain through `store_api_key()`; shows only
   whether a key is saved; keychain errors are reported without the key. Tests: `tests/test_app_api_key.py`
   (fake keyring).
+- **41. P2 the channel-test screen needs the console's laser arm switch** (2026-10-28). Laser channels on
+  `ui/channel_test.py` stay at zero unless BOTH the screen's "Enable laser output" box is ticked AND
+  `laser_armed()` (the console passes `manual.laser_enable` through `FixtureLibraryBrowser` and
+  `FixtureWizard`) is on; no switch passed = never armed. The switch is polled every 100 ms, so a disarm
+  from anywhere (button, L, MIDI, an event type) zeroes the screen; a label shows the console's arm state.
+  Tests: `tests/test_app_channel_test_arm.py` (both orders, disarm zeroes, polling, no console, par
+  unaffected, console wiring); `test_app_channel_test.py`'s single-key test now runs with the console armed.
+- **42. P6 console Help menu** (2026-10-28). The console has a Help menu: "About LiveReact…" opens
+  `AboutDialog`; "Run first-time setup again…" opens `FirstRunDialog` with the saved choices, saves only,
+  and says the setup applies at the next start (wiring into `AppConfig` stays item 40).
+  Tests: `tests/test_app_help_menu.py`.
+- **43. P6 Help -> Keyboard shortcuts** (2026-10-28). `ui/console.py` `SHORTCUTS` (key, target, what it
+  does) is the one table: `_install_shortcuts()` binds exactly these (same keys and targets as before) and
+  Help -> "Keyboard shortcuts…" lists them. Tests: `tests/test_app_shortcuts_help.py` (installed keys equal
+  the table, B and L still drive blackout and the arm switch, the dialog lists every key).
+- **44. P6 Help -> Open my LiveReact folder** (2026-10-28). Help -> "Open my LiveReact folder…" opens
+  `userdata.paths().root` in Explorer / Finder (`ConsoleWindow.open_url`, `QDesktopServices.openUrl` by
+  default, a fake in tests); when that fails the status bar says where the folder is.
+  Tests: `tests/test_app_data_folder.py`; `test_app_help_menu.py` now expects the fourth Help entry.

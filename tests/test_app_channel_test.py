@@ -38,12 +38,12 @@ LASER = {"schema": SCHEMA, "id": "acme_laser", "manufacturer": "Acme", "model": 
                                                 {"offset": 1, "function": "laser_pattern"}]}]}
 
 
-def _panel(raw, address=10, saved=None):
+def _panel(raw, address=10, saved=None, laser_armed=None):
     from livereact.ui.channel_test import ChannelTestPanel
     fb = DmxFrameBuffer()
     save = (lambda d: saved.append(d) or "mem") if saved is not None else None
     return ChannelTestPanel(load_definition(raw), address=address, frame_buffer=fb, save=save,
-                            now=lambda: "2026-10-28T04:00:00"), fb
+                            now=lambda: "2026-10-28T04:00:00", laser_armed=laser_armed), fb
 
 
 def _pass_all(p):
@@ -144,7 +144,8 @@ def test_confirmed_laser_definition_is_ready_to_drive(qapp):
 
 
 def test_laser_channels_send_zero_unless_enabled_on_this_screen(qapp):
-    p, fb = _panel(LASER, address=1)
+    # the console's arm switch is on here; item 41 (test_app_channel_test_arm.py) covers it off
+    p, fb = _panel(LASER, address=1, laser_armed=lambda: True)
     p.sliders[0].setValue(100)
     assert fb.latest()[0] == 0
     p.cb_laser_out.setChecked(True)

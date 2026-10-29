@@ -34,6 +34,27 @@ from .rig_config import RigConfigTab
 from .theme import MUTED, apply_theme, bucket_color
 from .venue_tab import VenueTab
 
+# The console's hotkeys: (key, attribute path on the window, what it does). _install_shortcuts()
+# binds exactly these and Help -> Keyboard shortcuts lists them, so the two cannot drift (item 43).
+SHORTCUTS: tuple[tuple[str, str, str], ...] = (
+    ("B", "b_black.toggle", "Blackout on/off"),
+    ("F", "b_freeze.toggle", "Freeze the look on/off"),
+    ("Right", "app.phrase_engine.skip", "Next look at the next bar"),
+    ("T", "_do_tap", "Tap tempo"),
+    ("S", "cb_synth.toggle", "Synth Sync on/off (wash follows the synths)"),
+    ("L", "cb_laser.toggle", "Arm / disarm lasers"),
+    ("K", "b_laser_cue.toggle", "Cue the laser on/off"),
+    ("J", "b_laser_hit.click", "Laser hit"),
+    ("C", "app.metronome.cue_build", "Cue the build: it is happening now"),
+    ("D", "app.metronome.arm_drop", "Arm the drop: it is next"),
+    ("Space", "_strobe_burst", "Strobe burst"),
+)
+
+
+def shortcuts_text() -> str:
+    return "\n".join(f"{key:<6} {what}" for key, _target, what in SHORTCUTS)
+
+
 log = logging.getLogger(__name__)
 
 
@@ -146,6 +167,17 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         fx_menu = self.menuBar().addMenu("&Fixtures")
         fx_menu.addAction("Fixture library…", self.open_fixture_library)
         fx_menu.addAction("Anthropic API key…", self.open_api_key)
+        # Help menu (roadmap item 42): About, and the first-run setup again (it saves only; item 40 applies it)
+        self.about_dialog = None
+        self.first_run_dialog = None
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction("About LiveReact…", self.open_about)
+        help_menu.addAction("Run first-time setup again…", self.open_first_run)
+        help_menu.addAction("Keyboard shortcuts…", self.open_shortcuts)
+        self.shortcuts_dialog = None
+        # item 44: rigs, fixtures, manuals, logs live there; tests swap open_url for a fake
+        self.open_url = QtGui.QDesktopServices.openUrl
+        help_menu.addAction("Open my LiveReact folder…", lambda: self.open_data_folder())
         self.resize(1280, 800)
 
         self._install_shortcuts()
@@ -410,20 +442,11 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.rb_laser_hold.setChecked(True)      # its toggled slot writes laser_mode
 
     def _install_shortcuts(self) -> None:
-        def sc(key, fn):
+        for key, target, _what in SHORTCUTS:
+            fn = self
+            for name in target.split("."):
+                fn = getattr(fn, name)
             QtGui.QShortcut(QtGui.QKeySequence(key), self, activated=fn)
-
-        sc("B", self.b_black.toggle)
-        sc("F", self.b_freeze.toggle)
-        sc(QtCore.Qt.Key.Key_Right, self.app.phrase_engine.skip)
-        sc("T", self._do_tap)
-        sc("S", self.cb_synth.toggle)
-        sc("L", self.cb_laser.toggle)
-        sc("K", self.b_laser_cue.toggle)
-        sc("J", self.b_laser_hit.click)
-        sc("C", self.app.metronome.cue_build)
-        sc("D", self.app.metronome.arm_drop)
-        sc(QtCore.Qt.Key.Key_Space, self._strobe_burst)
 
     # ------------------------------------------------------------------ actions
     def open_rig_manager(self):
@@ -435,7 +458,8 @@ class ConsoleWindow(QtWidgets.QMainWindow):
 
     def open_fixture_library(self):
         from .fixture_library import FixtureLibraryBrowser
-        self.fixture_library = FixtureLibraryBrowser()
+        # its channel-test screens need the console's arm switch too (item 41: two keys for a laser)
+        self.fixture_library = FixtureLibraryBrowser(laser_armed=lambda: self.app.manual.laser_enable)
         self.fixture_library.setWindowTitle("Fixture library")
         # a fixture added or confirmed there shows up in Rig Config's type list
         self.fixture_library.library_changed.connect(self.rig_config.reload_definitions)
@@ -447,6 +471,44 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         dlg = ApiKeyDialog(self)
         dlg.show()
         return dlg
+
+    def open_about(self):
+        from .about import AboutDialog
+        self.about_dialog = AboutDialog(self)
+        self.about_dialog.show()
+        return self.about_dialog
+
+    def open_shortcuts(self):
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Keyboard shortcuts")
+        v = QtWidgets.QVBoxLayout(dlg)
+        dlg.text = QtWidgets.QPlainTextEdit(shortcuts_text())
+        dlg.text.setReadOnly(True)
+        v.addWidget(dlg.text, 1)
+        b = QtWidgets.QPushButton("Close")
+        b.clicked.connect(dlg.accept)
+        v.addWidget(b)
+        dlg.resize(420, 340)
+        dlg.show()
+        self.shortcuts_dialog = dlg
+        return dlg
+
+    def open_data_folder(self):
+        """Show the user data folder in Explorer / Finder; say where it is if that fails."""
+        from ..userdata import paths
+        root = paths().root
+        if not self.open_url(QtCore.QUrl.fromLocalFile(str(root))):
+            self.statusBar().showMessage(f"Could not open the folder — it is at {root}", 15000)
+        return root
+
+    def open_first_run(self, **providers):
+        """``providers``: FirstRunDialog's audio/interface lists (tests inject them)."""
+        from .first_run import FirstRunDialog
+        self.first_run_dialog = FirstRunDialog(self, **providers)
+        self.first_run_dialog.completed.connect(
+            lambda _c: self.statusBar().showMessage("Setup saved — it applies at the next start.", 8000))
+        self.first_run_dialog.show()
+        return self.first_run_dialog
 
     def _rig_chosen(self, path: str) -> None:
         """Switch live when the app can (App.switch_rig, roadmap item 4); until then the

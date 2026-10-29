@@ -7,13 +7,16 @@ which sets ``source.confirmed`` + ``confirmed_at`` and saves through fixtures/li
 
 Confirm needs every channel marked pass. For a laser it also needs the user's values for the
 three intents (blank, static line, fan; captured from the sliders), because a GenericLaser
-outputs nothing without them. Laser channels are sent as zeros unless "Enable laser output on
-this screen" is ticked: this screen drives DMX directly, outside the show's arm switch.
+outputs nothing without them. Laser channels are sent as zeros unless BOTH "Enable laser output
+on this screen" is ticked AND the console's arm switch is on (roadmap item 41: two keys for a
+laser). ``laser_armed()`` reads ``manual.laser_enable``; without it the laser stays dark. The
+switch is polled, so disarming in the console (button, L, MIDI, an event type) zeroes this screen.
 """
 
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from datetime import datetime
 
 from PySide6 import QtCore, QtWidgets
@@ -24,6 +27,7 @@ from ..fixtures.definition import LASER_INTENTS, FixtureDefinition, LaserIntents
 UNTESTED, PASS, FAIL = "untested", "pass", "fail"
 _MARKS = (UNTESTED, PASS, FAIL)
 LOW_CONFIDENCE = 0.6
+ARM_POLL_MS = 100
 _INTENT_LABELS = {"blank": "Blank (laser off)", "line_static": "Static line", "fan": "Fan"}
 
 
@@ -36,9 +40,13 @@ class ChannelTestPanel(QtWidgets.QWidget):
 
     def __init__(self, definition: FixtureDefinition, mode: str | None = None, address: int = 1,
                  frame_buffer: DmxFrameBuffer | None = None, save=None, now=_now,
+                 laser_armed: Callable[[], bool] | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
-        """``save(definition) -> path``: where Confirm writes (default: the user library)."""
+        """``save(definition) -> path``: where Confirm writes (default: the user library).
+        ``laser_armed()``: the console's arm switch (``manual.laser_enable``); None = never armed."""
         super().__init__(parent)
+        self.laser_armed: Callable[[], bool] = laser_armed or (lambda: False)
+        self._armed = False
         self.definition = definition
         self.mode = definition.mode(mode)
         self.address = address
@@ -65,8 +73,18 @@ class ChannelTestPanel(QtWidgets.QWidget):
 
         self.cb_laser_out = QtWidgets.QCheckBox("Enable laser output on this screen")
         self.cb_laser_out.setVisible(self.is_laser)
-        self.cb_laser_out.toggled.connect(lambda _on: self._publish())
+        self.cb_laser_out.toggled.connect(lambda _on: self._on_box())
         v.addWidget(self.cb_laser_out)
+        self.l_arm = QtWidgets.QLabel("")
+        self.l_arm.setWordWrap(True)
+        self.l_arm.setVisible(self.is_laser)
+        v.addWidget(self.l_arm)
+        self.arm_timer = QtCore.QTimer(self)
+        self.arm_timer.setInterval(ARM_POLL_MS)
+        self.arm_timer.timeout.connect(self.sync_arm)
+        if self.is_laser:
+            self._armed = self._read_arm()
+            self.arm_timer.start()
 
         grid = QtWidgets.QGridLayout()
         for row, ch in enumerate(sorted(self.mode.channels, key=lambda c: c.offset)):
@@ -137,6 +155,7 @@ class ChannelTestPanel(QtWidgets.QWidget):
         v.addWidget(self.status)
         self._refresh_intents()
         self._update_confirm()
+        self._show_arm()
         self._publish()
 
     # --- output ---
@@ -150,10 +169,37 @@ class ChannelTestPanel(QtWidgets.QWidget):
         if value is not None:
             slider.setValue(int(value))
 
+    def _read_arm(self) -> bool:
+        try:
+            return bool(self.laser_armed())
+        except Exception:   # fail safe: an unreadable switch is a disarmed one
+            return False
+
+    def _on_box(self) -> None:
+        self._armed = self._read_arm()   # the switch as it is now, not as last polled
+        self._show_arm()
+        self._publish()
+
+    def sync_arm(self) -> None:
+        """Re-read the console's arm switch; republish when it changed."""
+        armed = self._read_arm()
+        if armed != self._armed:
+            self._armed = armed
+            self._show_arm()
+            self._publish()
+
+    def _show_arm(self) -> None:
+        self.l_arm.setText("Console laser arm: ARMED" if self._armed else
+                           "Console laser arm: DISARMED — arm lasers in the console (L) as well")
+
+    def laser_live(self) -> bool:
+        """Both keys turned: this screen's box and the console's arm switch."""
+        return self.cb_laser_out.isChecked() and self._armed
+
     def output(self) -> bytes:
-        """The universe this screen sends (laser channels zero unless enabled here)."""
+        """The universe this screen sends (laser channels zero unless both keys are on)."""
         uni = bytearray(UNIVERSE_SIZE)
-        if not self.is_laser or self.cb_laser_out.isChecked():
+        if not self.is_laser or self.laser_live():
             for i, v in enumerate(self.values):
                 if self.address - 1 + i < UNIVERSE_SIZE:
                     uni[self.address - 1 + i] = v

@@ -126,13 +126,16 @@ class FixtureWizard(QtWidgets.QDialog):
     added = QtCore.Signal(object)   # the confirmed, saved FixtureDefinition
 
     def __init__(self, parent: QtWidgets.QWidget | None = None, save=None,
-                 ofl_service_factory=None, threaded: bool = True, manual_page_kwargs: dict | None = None) -> None:
+                 ofl_service_factory=None, threaded: bool = True, manual_page_kwargs: dict | None = None,
+                 laser_armed=None) -> None:
         """``save``: passed to the channel-test screen (default: the user library).
         ``ofl_service_factory() -> OflService`` (default: the real one, cached in the user folder).
-        ``manual_page_kwargs``: passed to UploadManualPage (tests inject a fake reader / key)."""
+        ``manual_page_kwargs``: passed to UploadManualPage (tests inject a fake reader / key).
+        ``laser_armed()``: the console's arm switch, the channel-test screen's second laser key."""
         super().__init__(parent)
         self.setWindowTitle("Add a fixture")
         self._save = save
+        self._laser_armed = laser_armed
         self.test_panel: ChannelTestPanel | None = None
         v = QtWidgets.QVBoxLayout(self)
         self.stack = QtWidgets.QStackedWidget()
@@ -209,7 +212,7 @@ class FixtureWizard(QtWidgets.QDialog):
         if self.test_panel is not None:
             lay.removeWidget(self.test_panel)
             self.test_panel.deleteLater()
-        self.test_panel = ChannelTestPanel(definition, save=self._save)
+        self.test_panel = ChannelTestPanel(definition, save=self._save, laser_armed=self._laser_armed)
         self.test_panel.confirmed.connect(self.added.emit)
         lay.addWidget(self.test_panel)
         self.go(PAGE_TEST)
