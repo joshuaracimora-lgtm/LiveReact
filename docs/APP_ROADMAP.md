@@ -83,11 +83,10 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-47. **P2 export / import a fixture definition file.** "Export…" / "Import file…" in
-    `ui/fixture_library.py` (injectable file dialogs): export writes the selected definition's JSON
-    wherever the user picks; import validates a picked `.json` through `fixtures/definition.py`, saves it
-    to the user folder **unconfirmed** (never under a built-in id), and reloads. So two users can share
-    a fixture without sharing a whole rig. Tests first.
+48. **P3 fixture details pane.** Selecting a row in `ui/fixture_library.py` shows the definition read-only
+    beside the table: per mode, each channel's offset, function and (when present) capability ranges, plus
+    source / license / attribution and the confirmed date — what a user checks before picking a mode in
+    the patch view, without opening the channel-test screen. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -295,3 +294,10 @@ Hard rules for every item, whoever does it:
   channel-test screen before a laser built from it may output); a builtin's copy becomes `kind="user"`,
   an import keeps its provenance (`ofl_key`, attribution); taken or invalid target ids are ValueError.
   Tests: `tests/test_app_fixture_duplicate.py`.
+- **47. P2 export / import a fixture definition file** (2026-10-29). "Export…" writes the selected
+  definition's JSON wherever the user picks; "Import file…" validates a picked `.json` through
+  `fixtures/definition.py` and saves it to the user folder always **unconfirmed** (any confirmation
+  happened on someone else's hardware; a built-in id is refused), asking before replacing an existing
+  user definition. File dialogs are injectable like the other prompts. `fixtures/library.py` gains
+  `export_definition()` / `import_definition_file()`, which round-trip.
+  Tests: `tests/test_app_fixture_export.py`.

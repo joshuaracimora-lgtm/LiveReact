@@ -148,6 +148,23 @@ def copy_definition(fid: str, new_id: str) -> Path:
     return save_user_definition(dataclasses.replace(d, id=new_id, source=source))
 
 
+def export_definition(d: FixtureDefinition, path: str | Path) -> Path:
+    """Write ``d`` as definition JSON to ``path`` (the browser's Export…); the file
+    round-trips through ``import_definition_file`` on another machine."""
+    p = Path(path)
+    p.write_text(json.dumps(d.to_dict(), indent=1) + "\n", encoding="utf-8")
+    return p
+
+
+def import_definition_file(path: str | Path) -> Path:
+    """Validate the definition JSON at ``path`` and save it to the user folder --
+    always unconfirmed, because any confirmation happened on someone else's
+    hardware; a built-in id is refused by save_user_definition (roadmap item 47)."""
+    d = load_definition(Path(path))
+    source = dataclasses.replace(d.source, confirmed=False, confirmed_at=None)
+    return save_user_definition(dataclasses.replace(d, source=source))
+
+
 def save_user_definition(d: FixtureDefinition) -> Path:
     """Validate and write ``d`` to the user folder as ``<id>.json`` (atomically)."""
     if not _SAFE_ID.match(d.id) or d.id in _RESERVED:
