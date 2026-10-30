@@ -8,7 +8,10 @@ cannot be deleted. "Duplicate…" (item 46) copies any definition -- built-ins t
 a user adapts a model they cannot edit -- to a new user id, always saved unconfirmed so the
 copy goes through the channel-test screen before a laser built from it may output.
 "Export…" / "Import file…" (item 47) move one definition as a JSON file, so two users can
-share a fixture without sharing a whole rig; imports are saved unconfirmed too.
+share a fixture without sharing a whole rig; imports are saved unconfirmed too. Selecting a
+row shows the definition read-only beside the table (item 48): per mode each channel's
+function and capability ranges, plus source / license and the confirmed date — what a user
+checks before picking a mode in the patch view.
 """
 
 from __future__ import annotations
@@ -31,6 +34,31 @@ def origin_label(origin: str, source_kind: str) -> str:
     if origin == "builtin":
         return "built-in"
     return {"ofl": "imported (Open Fixture Library)", "manual_ai": "imported (manual reader)"}.get(source_kind, "yours")
+
+
+def definition_summary(d) -> str:
+    """The details pane's read-only text for one definition (roadmap item 48)."""
+    src = d.source
+    confirmed = (f"confirmed {src.confirmed_at}" if src.confirmed and src.confirmed_at
+                 else "confirmed" if src.confirmed else "not confirmed")
+    lines = [f"{d.manufacturer} {d.model} ({d.id}) — {d.category}",
+             "source: " + src.kind + (f" {src.ofl_key}" if src.ofl_key else "") + f", {confirmed}"]
+    if src.license:
+        lines.append(f"license: {src.license}")
+    if src.attribution:
+        lines.append(f"attribution: {src.attribution}")
+    for m in d.modes:
+        lines += ["", f"mode {m.name} ({len(m.channels)} ch)"]
+        for c in m.channels:
+            desc = f"  {c.offset + 1}: {c.function}"
+            if c.fine_of is not None:
+                desc += f" (fine of {c.fine_of + 1})"
+            caps = ", ".join(f"{cap.range[0]}-{cap.range[1]} {cap.label or cap.type}"
+                             for cap in c.capabilities)
+            if caps:
+                desc += " — " + caps
+            lines.append(desc)
+    return "\n".join(lines)
 
 
 class FixtureLibraryBrowser(QtWidgets.QWidget):
@@ -59,7 +87,15 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
-        v.addWidget(self.table, 1)
+        self.details = QtWidgets.QPlainTextEdit()
+        self.details.setReadOnly(True)
+        self.details.setPlaceholderText("Select a fixture to see its modes and channels.")
+        split = QtWidgets.QSplitter()
+        split.addWidget(self.table)
+        split.addWidget(self.details)
+        split.setStretchFactor(0, 3)
+        split.setStretchFactor(1, 2)
+        v.addWidget(split, 1)
         row = QtWidgets.QHBoxLayout()
         self.b_add = QtWidgets.QPushButton("Add fixture…")
         self.b_import = QtWidgets.QPushButton("Import file…")
@@ -111,6 +147,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
 
     def _update_buttons(self) -> None:
         e = self._selected_entry()
+        self.details.setPlainText(definition_summary(e.definition) if e is not None else "")
         self.b_duplicate.setEnabled(e is not None)
         self.b_export.setEnabled(e is not None)
         self.b_delete.setEnabled(e is not None and e.origin != "builtin")

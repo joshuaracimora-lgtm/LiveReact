@@ -83,10 +83,10 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-48. **P3 fixture details pane.** Selecting a row in `ui/fixture_library.py` shows the definition read-only
-    beside the table: per mode, each channel's offset, function and (when present) capability ranges, plus
-    source / license / attribution and the confirmed date — what a user checks before picking a mode in
-    the patch view, without opening the channel-test screen. Tests first.
+49. **P3 library filter box.** A search field above `ui/fixture_library.py`'s table that filters rows as
+    the user types, matching manufacturer, model, id or category case-insensitively; clearing it shows
+    everything, and the details pane / buttons keep following the (filtered) selection. Matters once a
+    library holds more than a screenful of imported fixtures. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -301,3 +301,8 @@ Hard rules for every item, whoever does it:
   user definition. File dialogs are injectable like the other prompts. `fixtures/library.py` gains
   `export_definition()` / `import_definition_file()`, which round-trip.
   Tests: `tests/test_app_fixture_export.py`.
+- **48. P3 fixture details pane** (2026-10-29). Selecting a row in the library browser shows the
+  definition read-only beside the table (a splitter): `definition_summary()` lists per mode each
+  channel's 1-based number, function, fine pairing and capability ranges with labels, plus source /
+  ofl key / license / attribution and the confirmed date (or "not confirmed"). Cleared when nothing
+  is selected. Tests: `tests/test_app_fixture_details.py`.
