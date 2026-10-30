@@ -552,6 +552,40 @@ def test_set_aim_and_bound_point_need_jog_live(qapp):
     assert mh.bounds is not None and mh.bounds != bounds
 
 
+def test_re_set_aim_keeps_the_two_point_solved_travel(qapp):
+    """UI_BUGS: SET AIM after a two-point capture rebuilt the calibration from
+    the profile's placeholder ranges, silently throwing away the solved
+    pan/tilt travel -- the touch-up the move/target warnings tell the operator
+    to do ("SET AIM again if the beam misses") un-solved the head."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(12.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    solved = (mh.calibration.pan_range_deg, mh.calibration.tilt_range_deg)
+    assert solved[0] is not None and solved[1] is not None
+    # dj_booth moved a little; the operator re-captures point 1, as the
+    # target-moved warning says to
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.s_pan.setValue(int(0.40 * 65535)); tab.s_tilt.setValue(int(0.62 * 65535))
+    tab.b_set_aim.click()
+    c = mh.calibration
+    assert c.target == "dj_booth" and c.pan01 == pytest.approx(0.40, abs=1e-3)
+    assert (c.pan_range_deg, c.tilt_range_deg) == pytest.approx(solved)
+    assert c.target2 == "back_wall"          # the cal label keeps saying 2-point
+    assert "2-point" in tab.l_cal.text()
+
+
 def test_venue_action_messages_are_not_overwritten_by_unsaved(qapp):
     """Every calibration action set its guidance on the status line and then
     _mark_dirty() replaced it with "Unsaved changes": Josh never saw "Now
@@ -708,6 +742,7 @@ def test_an_unplaced_head_says_so_in_the_panel(qapp):
     tab.b_set_aim.click()
     assert not mh.calibration.captured
     assert "not placed" in tab.status.text() and "drawn" in tab.status.text()
+
     tab.sb_z.setValue(9.0)                      # typing a value places it
     assert mh.position is not None
     assert "not placed" not in tab.grp_place.title()

@@ -599,12 +599,26 @@ class VenueTab(QtWidgets.QWidget):
             return
         name, target = tp
         pan01, tilt01 = self._pan_tilt01()
-        fx.calibration = calibrate_from_capture(
-            fx.position, fx.facing_deg, target, pan01, tilt01, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG,
+        # a re-capture only re-fixes the offsets: the pan/tilt travel a
+        # two-point capture solved is a property of the unit as hung, so it
+        # is kept (and used to solve the new offsets) instead of silently
+        # falling back to the profile's placeholder ranges
+        old = fx.calibration
+        pan_range, tilt_range = old.ranges(fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
+        cal = calibrate_from_capture(
+            fx.position, fx.facing_deg, target, pan01, tilt01, pan_range, tilt_range,
             invert_pan=self.cb_invert_pan.isChecked(), invert_tilt=self.cb_invert_tilt.isChecked(),
             target_name=name)
+        solved = old.pan_range_deg is not None or old.tilt_range_deg is not None
+        if solved:
+            cal = dataclasses.replace(cal, pan_range_deg=old.pan_range_deg,
+                                      tilt_range_deg=old.tilt_range_deg, target2=old.target2,
+                                      pan01_2=old.pan01_2, tilt01_2=old.tilt01_2)
+        fx.calibration = cal
         self._update_cal_label()
-        self._mark_dirty(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
+        self._mark_dirty(f"Captured {fx.label} on {name}."
+                         + ("  (Kept the 2-point solved travel.)" if solved else "")
+                         + " Now 'Aim at target' with another target to verify.")
 
     def _set_aim_second(self) -> None:
         """Second capture: the head is now on a DIFFERENT target. Together
