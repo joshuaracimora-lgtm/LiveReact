@@ -10,6 +10,7 @@ unconfirmed builtin laser confirmed).
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -131,6 +132,20 @@ def delete_user_definition(fid: str) -> Path:
         raise KeyError(f"no user fixture definition {fid!r}")
     p.unlink()
     return p
+
+
+def copy_definition(fid: str, new_id: str) -> Path:
+    """Save a copy of definition ``fid`` under ``new_id`` in the user folder -- always
+    unconfirmed, so an edited copy of a confirmed model goes back through the
+    channel-test screen before a laser built from it may output (roadmap item 46).
+    A builtin's copy becomes ``kind="user"``; an import keeps its provenance.
+    ValueError when ``new_id`` is taken or invalid, KeyError when ``fid`` is unknown."""
+    d = _find(fid, None)
+    if new_id in _builtin_ids() or (userdata.paths(create=False).fixtures / f"{new_id}.json").is_file():
+        raise ValueError(f"fixture id {new_id!r} is already taken; pick another id")
+    kind = "user" if d.source.kind == "builtin" else d.source.kind
+    source = dataclasses.replace(d.source, kind=kind, confirmed=False, confirmed_at=None)
+    return save_user_definition(dataclasses.replace(d, id=new_id, source=source))
 
 
 def save_user_definition(d: FixtureDefinition) -> Path:

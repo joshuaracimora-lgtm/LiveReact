@@ -4,14 +4,16 @@ Built-in models, the user's own and imported ones (Open Fixture Library, the man
 with whether each is confirmed. "Add fixture…" opens the wizard; "Test / confirm…" opens the
 channel-test screen for the selected one. "Delete…" (roadmap item 45) removes a user or
 imported definition behind a confirm box that names the user rigs still using it; built-ins
-cannot be deleted.
+cannot be deleted. "Duplicate…" (item 46) copies any definition -- built-ins too, that is how
+a user adapts a model they cannot edit -- to a new user id, always saved unconfirmed so the
+copy goes through the channel-test screen before a laser built from it may output.
 """
 
 from __future__ import annotations
 
 from PySide6 import QtCore, QtWidgets
 
-from ..fixtures.library import delete_user_definition, list_definitions, rigs_using
+from ..fixtures.library import copy_definition, delete_user_definition, list_definitions, rigs_using
 from .channel_test import ChannelTestPanel
 from .fixture_wizard import FixtureWizard
 
@@ -27,13 +29,17 @@ def origin_label(origin: str, source_kind: str) -> str:
 class FixtureLibraryBrowser(QtWidgets.QWidget):
     library_changed = QtCore.Signal()
     def __init__(self, parent: QtWidgets.QWidget | None = None, save=None, laser_armed=None,
-                 confirm=None) -> None:
+                 confirm=None, ask_text=None, error=None) -> None:
         """``laser_armed()``: the console's arm switch, passed on to every channel-test screen.
-        ``confirm(title, text) -> bool``: the delete confirm box (default: a QMessageBox)."""
+        ``confirm(title, text) -> bool``: the delete confirm box (default: a QMessageBox);
+        ``ask_text(title, label, default) -> str | None``: the duplicate id prompt (default:
+        a QInputDialog); ``error(title, text)``: a refused duplicate (default: a warning box)."""
         super().__init__(parent)
         self._save = save
         self._laser_armed = laser_armed
         self._confirm = confirm if confirm is not None else self._ask
+        self._ask_text = ask_text if ask_text is not None else self._ask_text_box
+        self._error = error if error is not None else self._error_box
         self.wizard: FixtureWizard | None = None
         self.test_panel: ChannelTestPanel | None = None
         v = QtWidgets.QVBoxLayout(self)
@@ -46,16 +52,19 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         row = QtWidgets.QHBoxLayout()
         self.b_add = QtWidgets.QPushButton("Add fixture…")
         self.b_test = QtWidgets.QPushButton("Test / confirm…")
+        self.b_duplicate = QtWidgets.QPushButton("Duplicate…")
         self.b_delete = QtWidgets.QPushButton("Delete…")
         self.b_reload = QtWidgets.QPushButton("Refresh")
         row.addWidget(self.b_add)
         row.addWidget(self.b_test)
+        row.addWidget(self.b_duplicate)
         row.addWidget(self.b_delete)
         row.addStretch(1)
         row.addWidget(self.b_reload)
         v.addLayout(row)
         self.b_add.clicked.connect(self.open_wizard)
         self.b_test.clicked.connect(self.test_selected)
+        self.b_duplicate.clicked.connect(self.duplicate_selected)
         self.b_delete.clicked.connect(self.delete_selected)
         self.b_reload.clicked.connect(self.reload)
         self.table.itemSelectionChanged.connect(self._update_buttons)
@@ -85,6 +94,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
 
     def _update_buttons(self) -> None:
         e = self._selected_entry()
+        self.b_duplicate.setEnabled(e is not None)
         self.b_delete.setEnabled(e is not None and e.origin != "builtin")
         self.b_delete.setToolTip("Built-in models cannot be deleted" if e is not None and e.origin == "builtin" else "")
 
@@ -93,11 +103,36 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         return box.question(self, title, text, box.StandardButton.Yes | box.StandardButton.No,
                             box.StandardButton.No) == box.StandardButton.Yes
 
+    def _ask_text_box(self, title: str, label: str, default: str) -> str | None:
+        text, ok = QtWidgets.QInputDialog.getText(self, title, label, text=default)
+        return text if ok else None
+
+    def _error_box(self, title: str, text: str) -> None:
+        QtWidgets.QMessageBox.warning(self, title, text)
+
     def open_wizard(self) -> FixtureWizard:
         self.wizard = FixtureWizard(self, save=self._save, laser_armed=self._laser_armed)
         self.wizard.added.connect(lambda _d: self.reload())
         self.wizard.show()
         return self.wizard
+
+    def duplicate_selected(self) -> bool:
+        """Copy the selected definition (built-ins too) to a new user id, saved unconfirmed.
+        True when a copy was saved."""
+        e = self._selected_entry()
+        if e is None:
+            return False
+        d = e.definition
+        new_id = self._ask_text("Duplicate fixture", "New fixture id:", f"{d.id}_copy")
+        if not new_id or not new_id.strip():
+            return False
+        try:
+            copy_definition(d.id, new_id.strip())
+        except (ValueError, KeyError) as exc:
+            self._error("Duplicate fixture", str(exc))
+            return False
+        self.reload()
+        return True
 
     def delete_selected(self) -> bool:
         """Delete the selected user/imported definition after a confirm box that names

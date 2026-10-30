@@ -83,11 +83,11 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-46. **P2 duplicate a fixture definition.** "Duplicate…" in `ui/fixture_library.py`: copy the selected
-    definition (built-ins too — that is how a user adapts a model they cannot edit or delete) to a new
-    user id (suggest `<id>_copy`, validated like any saved id), always saved **unconfirmed** so the copy
-    goes through the channel-test screen before a laser built from it may output;
-    `fixtures/library.py` gets the copy helper. Tests first.
+47. **P2 export / import a fixture definition file.** "Export…" / "Import file…" in
+    `ui/fixture_library.py` (injectable file dialogs): export writes the selected definition's JSON
+    wherever the user picks; import validates a picked `.json` through `fixtures/definition.py`, saves it
+    to the user folder **unconfirmed** (never under a built-in id), and reloads. So two users can share
+    a fixture without sharing a whole rig. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -288,3 +288,10 @@ Hard rules for every item, whoever does it:
   which will not; the button is disabled for built-ins and empty selections. `fixtures/library.py` gets
   `delete_user_definition()` (ValueError for a built-in id, KeyError when no user file) and `rigs_using()`
   (unreadable rig files skipped). Tests: `tests/test_app_fixture_delete.py`.
+- **46. P2 duplicate a fixture definition** (2026-10-29). "Duplicate…" in `ui/fixture_library.py` copies
+  the selected definition — built-ins too, that is how a user adapts a model they cannot edit or delete —
+  to a new user id (prompt pre-filled `<id>_copy`, injectable; refusals go to an injectable error box).
+  `fixtures/library.py` `copy_definition()`: always saved **unconfirmed** (so the copy goes through the
+  channel-test screen before a laser built from it may output); a builtin's copy becomes `kind="user"`,
+  an import keeps its provenance (`ofl_key`, attribution); taken or invalid target ids are ValueError.
+  Tests: `tests/test_app_fixture_duplicate.py`.
