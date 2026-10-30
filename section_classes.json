@@ -15,7 +15,13 @@
     {"name": "build_riser", "kind": "build", "rule": {"energy_delta": [-0.1, 1.0]}, "scene": null, "approved": false,
      "notes": "Claude 2026-10-26: a build out of a quiet section (intro, breakdown): already dark, so it only ramps."},
     {"name": "breakdown_kick_out", "kind": "breakdown", "rule": {"energy_delta": [-1.0, -0.1]}, "scene": null, "approved": false,
-     "notes": "Claude 2026-10-26: a breakdown entered from a loud section (energy_delta p50 -0.27 after a drop, 121 sections). Every tuning-track planned breakdown is in it (-0.35..-0.52); the ear breakdowns there are power-offs (STRUCT-05) and 2-fixture static washes (TIME-06)."}
+     "notes": "Claude 2026-10-26: a breakdown entered from a loud section (energy_delta p50 -0.27 after a drop, 121 sections). Every tuning-track planned breakdown is in it (-0.35..-0.52); the ear breakdowns there are power-offs (STRUCT-05) and 2-fixture static washes (TIME-06)."},
+    {"name": "outro_kick_out", "kind": "outro", "rule": {"energy_delta": [-1.0, -0.1]}, "scene": null, "approved": false,
+     "notes": "Claude 2026-10-29: the kick leaves AT the outro boundary (energy falls >= 0.1 from the section before). 101 of the library's 209 outros. Same shape as breakdown_kick_out: a power-off step-down, then the quiet fade; OUTRO stays a version of BREAK (D4/D-22, never terminal)."},
+    {"name": "outro_still_hot", "kind": "outro", "rule": {"energy": [0.4, 1.0], "energy_delta": [-0.1, 1.0]}, "scene": null, "approved": false,
+     "notes": "Claude 2026-10-29: rekordbox labels the final groove 'outro' but the music is still loud and did not fall (energy >= 0.4 and delta > -0.1, energy up to 0.71). 69 of 209 library outros. This is the shape behind Josh's open 'planned outro vs main groove to the end' question; quiet-edges dimming here fights the music. Example tracks and times in the night report (results/, 2026-10-29)."},
+    {"name": "intro_hot", "kind": "intro", "rule": {"energy": [0.35, 1.0]}, "scene": null, "approved": false,
+     "notes": "Claude 2026-10-29: a DJ-tool intro that opens already banging (energy >= 0.35; the library's intro energy p90 is 0.33, so this is the top decile: 15 of 215 intros, energy up to 0.47). Quiet-edges makes these near-dark for 8 bars against a full beat. Example tracks in the night report (results/, 2026-10-29)."}
   ],
   "palette_by_profile": {
     "approved": true,
