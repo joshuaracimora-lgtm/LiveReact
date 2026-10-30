@@ -45,6 +45,13 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
   cal readout still says "2-point"), and the status line says the solved travel was kept. Test:
   `tests/test_console.py::test_re_set_aim_keeps_the_two_point_solved_travel` (2026-10-30).
 
+- **"Aim at target (verify)" and "Set home = target" were silent on an unplaced head** (SET AIM
+  explains itself there), and with Jog live off (or Freeze on) the verify said "Aimed at …" although
+  only the sliders moved — an operator watching a beam that never moves concludes the capture is
+  wrong. Both buttons now refuse with the "not placed yet" message, and the verify appends "only the
+  sliders moved: tick Jog live …" / "Freeze is on …" while the real head is not following. Test:
+  `tests/test_console.py::test_aim_and_home_speak_when_the_head_is_unplaced_or_not_live` (2026-10-30).
+
 - **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
   one drag moves them all, but the "aim was captured at its old position" warning only checked the head
   shown in the panel. `FloorPlanView` now records every fixture a drop moved (`last_moved`) and

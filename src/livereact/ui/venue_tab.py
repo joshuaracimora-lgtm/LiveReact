@@ -666,19 +666,33 @@ class VenueTab(QtWidgets.QWidget):
     def _aim_at_target(self) -> None:
         fx = self._fx()
         tp = self._target_point()
-        if not isinstance(fx, MovingHead) or tp is None or fx.position is None:
+        if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if fx.position is None:
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
         self.s_pan.setValue(int(round(pan01 * 65535)))
         self.s_tilt.setValue(int(round(tilt01 * 65535)))
+        # say when only the sliders moved: an operator verifying a capture
+        # against a beam that never moves concludes the capture is wrong
+        if not self.cb_jog.isChecked():
+            note = "  — only the sliders moved: tick Jog live to move the real head"
+        elif self.is_frozen():
+            note = "  — Freeze is on: unfreeze (F) to see the real head move"
+        else:
+            note = ""
         self.status.setText(f"Aimed at {name}: pan {pan01:.3f} tilt {tilt01:.3f}"
-                            + ("" if ok else "  — OUT OF RANGE, clamped"))
+                            + ("" if ok else "  — OUT OF RANGE, clamped") + note)
 
     def _set_home(self) -> None:
         fx = self._fx()
         tp = self._target_point()
-        if not isinstance(fx, MovingHead) or tp is None or fx.position is None:
+        if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if fx.position is None:
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)

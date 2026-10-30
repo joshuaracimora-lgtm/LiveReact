@@ -743,6 +743,41 @@ def test_an_unplaced_head_says_so_in_the_panel(qapp):
     assert not mh.calibration.captured
     assert "not placed" in tab.status.text() and "drawn" in tab.status.text()
 
+
+def test_aim_and_home_speak_when_the_head_is_unplaced_or_not_live(qapp):
+    """UI_BUGS: 'Aim at target (verify)' and 'Set home = target' did nothing
+    silently on an unplaced head, and with Jog live off 'Aimed at ...' moved
+    only the sliders -- the operator watching a stale beam concludes the
+    capture is wrong."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    mh = app.rig.fixture("mh_l")
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    assert mh.position is None
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.status.setText("")
+    tab.b_aim.click()
+    assert "not placed" in tab.status.text()
+    tab.status.setText("")
+    tab.b_home.click()
+    assert "not placed" in tab.status.text()
+    # place + capture, then verify with Jog live off: say the head didn't move
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(12.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.b_set_aim.click()
+    tab.cb_jog.setChecked(False)
+    tab.cb_target.setCurrentText("dancefloor_centre")
+    tab.b_aim.click()
+    assert "Aimed at dancefloor_centre" in tab.status.text()
+    assert "Jog live" in tab.status.text()
+    tab.cb_jog.setChecked(True)
+    tab.b_aim.click()
+    assert "Aimed at dancefloor_centre" in tab.status.text()
+    assert "Jog live" not in tab.status.text()
     tab.sb_z.setValue(9.0)                      # typing a value places it
     assert mh.position is not None
     assert "not placed" not in tab.grp_place.title()
