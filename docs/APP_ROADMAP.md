@@ -83,9 +83,11 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-45. **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
-    definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
-    folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
+46. **P2 duplicate a fixture definition.** "Duplicate…" in `ui/fixture_library.py`: copy the selected
+    definition (built-ins too — that is how a user adapts a model they cannot edit or delete) to a new
+    user id (suggest `<id>_copy`, validated like any saved id), always saved **unconfirmed** so the copy
+    goes through the channel-test screen before a laser built from it may output;
+    `fixtures/library.py` gets the copy helper. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -280,3 +282,9 @@ Hard rules for every item, whoever does it:
   `userdata.paths().root` in Explorer / Finder (`ConsoleWindow.open_url`, `QDesktopServices.openUrl` by
   default, a fake in tests); when that fails the status bar says where the folder is.
   Tests: `tests/test_app_data_folder.py`; `test_app_help_menu.py` now expects the fourth Help entry.
+- **45. P2 delete a fixture from the library** (2026-10-29). "Delete…" in `ui/fixture_library.py` removes
+  the selected user/imported definition behind a confirm box (injectable, a QMessageBox by default) that
+  names the user-folder rigs still referencing the id and warns which keep loading (own snapshot) and
+  which will not; the button is disabled for built-ins and empty selections. `fixtures/library.py` gets
+  `delete_user_definition()` (ValueError for a built-in id, KeyError when no user file) and `rigs_using()`
+  (unreadable rig files skipped). Tests: `tests/test_app_fixture_delete.py`.
