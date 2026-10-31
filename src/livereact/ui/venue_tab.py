@@ -47,6 +47,7 @@ from ..fixtures.geometry import (
     calibrate_from_two_captures,
     ft_to_m,
     m_to_ft,
+    wrap_deg,
 )
 from ..fixtures.profiles import Laser, MotionBounds, MovingHead, _to16
 from ..fixtures.rig import Rig, RigError, save_rig
@@ -606,6 +607,22 @@ class VenueTab(QtWidgets.QWidget):
         self._update_cal_label()
         self._mark_dirty(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
 
+    def _capture_a_moved(self, fx, c: HeadCalibration) -> str:
+        """What moved since capture A was taken, or "". A capture from a file
+        that predates the record (captured_origin is None) can't be checked
+        and is allowed through, as before."""
+        def differ(a: Point3 | None, b: Point3 | None) -> bool:
+            return (a is not None and b is not None
+                    and max(abs(a.x - b.x), abs(a.y - b.y), abs(a.z - b.z)) > 1e-3)
+        if differ(c.captured_origin, fx.position):
+            return fx.label
+        if (c.captured_facing_deg is not None
+                and abs(wrap_deg(fx.facing_deg - c.captured_facing_deg)) > 0.05):
+            return f"{fx.label} (re-faced)"
+        if differ(c.captured_target_point, self.rig.venue.targets.get(c.target)):
+            return f"Target {c.target}"
+        return ""
+
     def _set_aim_second(self) -> None:
         """Second capture: the head is now on a DIFFERENT target. Together
         with the SET AIM capture this solves each axis's direction and travel
@@ -623,6 +640,12 @@ class VenueTab(QtWidgets.QWidget):
         c: HeadCalibration = fx.calibration
         if not c.captured or c.pan01 is None or c.tilt01 is None or c.target not in self.rig.venue.targets:
             self.status.setText("SET AIM on the first target before adding a second point.")
+            return
+        stale = self._capture_a_moved(fx, c)
+        if stale:
+            self.status.setText(
+                f"{stale} moved since SET AIM: two captures from different geometries solve the "
+                f"wrong direction/travel. SET AIM again on {c.target}, then ADD 2ND POINT.")
             return
         name_b, target_b = tp
         if name_b == c.target:
