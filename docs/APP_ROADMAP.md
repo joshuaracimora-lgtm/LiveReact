@@ -90,9 +90,9 @@ Hard rules for every item, whoever does it:
     definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
     folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
 
-52. **P2 Rig menu lists recent rigs.** The console's Rig menu shows the recent rigs (from `settings.py`)
-    as direct entries above "Rig manager…"; choosing one goes through the same path as the manager's
-    `rig_chosen` (switch live when the app can, else "restart to apply"). Tests first.
+53. **P6 the console remembers its window.** Size/position and the selected tab saved through
+    `settings.py` when the console closes and restored at the next start (positions clamped to a
+    visible screen). Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -283,6 +283,10 @@ Hard rules for every item, whoever does it:
   does) is the one table: `_install_shortcuts()` binds exactly these (same keys and targets as before) and
   Help -> "Keyboard shortcuts…" lists them. Tests: `tests/test_app_shortcuts_help.py` (installed keys equal
   the table, B and L still drive blackout and the arm switch, the dialog lists every key).
+- **52. P2 Rig menu lists recent rigs** (2026-10-30). The console's Rig menu shows the recent rigs
+  (missing files hidden, the demo rig marked) above "Rig manager…", rebuilt on `aboutToShow`; choosing
+  one validates the file, bumps it in the recent list and goes through the manager's `_rig_chosen` path
+  (switch live when the app can, else "restart to apply"). Tests: `tests/test_app_rig_menu.py`.
 - **51. P2 delete a saved event** (2026-10-30). `presets.delete_event(name)` (slug lookup, True only when
   a file was removed) and a "Delete event" button beside Load in `ui/override_panel.py`, behind a confirm
   box (`confirm` injectable for tests); the events combo reloads and both buttons grey out when nothing is
