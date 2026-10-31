@@ -83,9 +83,19 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-45. **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
+45. [BLOCKED: done on the unmerged agent/20261029-app branch (items 45-48 all gate-ACCEPTed there, plus
+    a new item 49, library filter box); merge that branch instead of re-doing it — this tree's
+    `fixtures/library.py` / `ui/fixture_library.py` must not be touched until then or the merge conflicts]
+    **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
     definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
     folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
+
+51. **P2 delete a saved event.** `presets.delete_event(name)` plus a "Delete event" button next to Load
+    in `ui/override_panel.py`, behind a confirm box; the combo reloads after. Tests first.
+
+52. **P2 Rig menu lists recent rigs.** The console's Rig menu shows the recent rigs (from `settings.py`)
+    as direct entries above "Rig manager…"; choosing one goes through the same path as the manager's
+    `rig_chosen` (switch live when the app can, else "restart to apply"). Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -276,6 +286,12 @@ Hard rules for every item, whoever does it:
   does) is the one table: `_install_shortcuts()` binds exactly these (same keys and targets as before) and
   Help -> "Keyboard shortcuts…" lists them. Tests: `tests/test_app_shortcuts_help.py` (installed keys equal
   the table, B and L still drive blackout and the arm switch, the dialog lists every key).
+- **50. P2 rename or delete a user rig** (2026-10-30). `ui/rig_manager.py`: "Rename…" / "Delete…" under
+  the recent list, enabled only for files inside the user's rigs folder (`in_user_rigs_folder`; the demo
+  rig and files elsewhere, e.g. a source checkout's `rigs/`, are refused). `rename_rig_file` renames the
+  file, sets the JSON `name` and refuses bad names / existing targets; the recent entry keeps its place.
+  `delete_rig_file` behind a confirm box, the recent entry forgotten. Dialogs (`ask_text`, `confirm`) are
+  injectable for tests. Tests: `tests/test_app_rig_rename_delete.py`.
 - **44. P6 Help -> Open my LiveReact folder** (2026-10-28). Help -> "Open my LiveReact folder…" opens
   `userdata.paths().root` in Explorer / Finder (`ConsoleWindow.open_url`, `QDesktopServices.openUrl` by
   default, a fake in tests); when that fails the status bar says where the folder is.
