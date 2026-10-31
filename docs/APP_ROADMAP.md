@@ -90,9 +90,6 @@ Hard rules for every item, whoever does it:
     definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
     folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
 
-51. **P2 delete a saved event.** `presets.delete_event(name)` plus a "Delete event" button next to Load
-    in `ui/override_panel.py`, behind a confirm box; the combo reloads after. Tests first.
-
 52. **P2 Rig menu lists recent rigs.** The console's Rig menu shows the recent rigs (from `settings.py`)
     as direct entries above "Rig manager…"; choosing one goes through the same path as the manager's
     `rig_chosen` (switch live when the app can, else "restart to apply"). Tests first.
@@ -286,6 +283,10 @@ Hard rules for every item, whoever does it:
   does) is the one table: `_install_shortcuts()` binds exactly these (same keys and targets as before) and
   Help -> "Keyboard shortcuts…" lists them. Tests: `tests/test_app_shortcuts_help.py` (installed keys equal
   the table, B and L still drive blackout and the arm switch, the dialog lists every key).
+- **51. P2 delete a saved event** (2026-10-30). `presets.delete_event(name)` (slug lookup, True only when
+  a file was removed) and a "Delete event" button beside Load in `ui/override_panel.py`, behind a confirm
+  box (`confirm` injectable for tests); the events combo reloads and both buttons grey out when nothing is
+  saved. Tests: `tests/test_app_event_delete.py`.
 - **50. P2 rename or delete a user rig** (2026-10-30). `ui/rig_manager.py`: "Rename…" / "Delete…" under
   the recent list, enabled only for files inside the user's rigs folder (`in_user_rigs_folder`; the demo
   rig and files elsewhere, e.g. a source checkout's `rigs/`, are refused). `rename_rig_file` renames the
