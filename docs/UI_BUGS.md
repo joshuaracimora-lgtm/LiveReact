@@ -37,6 +37,13 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Fixed
 
+- **Moving a head with only a motion box was silent**: the move/re-face warning fired only for a SET AIM
+  capture (`VenueTab._captured_warning`), but a motion box is captured the same way — the beam jogged onto
+  the venue's edges from the OLD spot — and keeps clamping every scene to the old edges after a move. The
+  warning now also names the motion box (re-add its bound points if the beam hits the wrong edges, or
+  Clear box); the box is kept, nothing is re-solved. Test:
+  `tests/test_console.py::test_moving_a_head_with_only_a_motion_box_warns_the_box_is_stale` (2026-11-01).
+
 - **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
   one drag moves them all, but the "aim was captured at its old position" warning only checked the head
   shown in the panel. `FloorPlanView` now records every fixture a drop moved (`last_moved`) and
