@@ -128,6 +128,19 @@ def load_event(name: str) -> PresetEvent:
     return ev
 
 
+def delete_event(name: str) -> bool:
+    """Remove a saved event; True when a file was deleted."""
+    try:
+        p = userdata.paths(create=False).events / f"{_slug(name)}.json"
+    except ValueError:
+        return False
+    try:
+        p.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def list_events() -> list[str]:
     """Names of the saved events (unreadable files skipped)."""
     out = []

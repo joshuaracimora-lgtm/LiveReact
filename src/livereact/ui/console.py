@@ -160,9 +160,11 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.tabs = tabs
         self.setCentralWidget(tabs)
         # Rig menu (2026-10-28, ui/rig_manager.py): pick the rig instead of --rig <path>.
+        # Recent rigs sit above "Rig manager…" (item 52), rebuilt each time the menu opens.
         self.rig_manager = None
-        rig_menu = self.menuBar().addMenu("&Rig")
-        rig_menu.addAction("Rig manager…", self.open_rig_manager)
+        self.rig_menu = self.menuBar().addMenu("&Rig")
+        self.rig_menu.aboutToShow.connect(self._rebuild_rig_menu)
+        self._rebuild_rig_menu()
         self.fixture_library = None
         fx_menu = self.menuBar().addMenu("&Fixtures")
         fx_menu.addAction("Fixture library…", self.open_fixture_library)
@@ -449,6 +451,38 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             QtGui.QShortcut(QtGui.QKeySequence(key), self, activated=fn)
 
     # ------------------------------------------------------------------ actions
+    def _rebuild_rig_menu(self) -> None:
+        from pathlib import Path
+
+        from ..settings import Settings
+        from .rig_manager import is_read_only
+        self.rig_menu.clear()
+        for r in Settings.load().recent_rigs:
+            if Path(r).is_file():
+                label = Path(r).stem + (" (demo, read-only)" if is_read_only(r) else "")
+                act = self.rig_menu.addAction(label, lambda checked=False, p=r: self._use_recent_rig(p))
+                act.setToolTip(r)
+        if self.rig_menu.actions():
+            self.rig_menu.addSeparator()
+        self.rig_menu.addAction("Rig manager…", self.open_rig_manager)
+
+    def _use_recent_rig(self, path: str) -> None:
+        """A recent rig straight from the menu: the same validate-remember-choose path as
+        the rig manager."""
+        from pathlib import Path
+
+        from ..fixtures.rig import RigError, load_rig
+        from ..settings import Settings
+        try:
+            load_rig(path)
+        except (OSError, ValueError, KeyError, RigError) as exc:
+            self.statusBar().showMessage(f"Cannot use {Path(path).name}: {exc}")
+            return
+        s = Settings.load()
+        s.add_recent_rig(path)
+        s.save()
+        self._rig_chosen(path)
+
     def open_rig_manager(self):
         from .rig_manager import RigManagerDialog
         self.rig_manager = RigManagerDialog(self)

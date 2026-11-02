@@ -40,13 +40,15 @@ class OverridePanel(QtWidgets.QWidget):
     preset_changed = QtCore.Signal(object)   # PresetEffect
 
     def __init__(self, app, parent: QtWidgets.QWidget | None = None,
-                 on_tap=None, on_burst=None) -> None:
+                 on_tap=None, on_burst=None, confirm=None) -> None:
         """``on_tap`` / ``on_burst``: the host window's own handlers, so its hotkeys and these
-        buttons share one tap-tempo state (default: the panel's own)."""
+        buttons share one tap-tempo state (default: the panel's own). ``confirm(text) ->
+        bool`` backs "Delete event" (a QMessageBox by default; tests pass a stub)."""
         super().__init__(parent)
         self.app = app
         self._on_tap = on_tap
         self._on_burst = on_burst
+        self._confirm = confirm or self._confirm_dialog
         self.tap = TapTempo()
         self._tap_beat = 0
         self.preset_event = PresetEvent()
@@ -197,9 +199,11 @@ class OverridePanel(QtWidgets.QWidget):
         f.addRow(save_row)
         self.cmb_events = QtWidgets.QComboBox()
         self.b_load_event = QtWidgets.QPushButton("Load event")
+        self.b_delete_event = QtWidgets.QPushButton("Delete event")
         load_row = QtWidgets.QHBoxLayout()
         load_row.addWidget(self.cmb_events, 1)
         load_row.addWidget(self.b_load_event)
+        load_row.addWidget(self.b_delete_event)
         f.addRow(load_row)
         self.l_preset_msg = QtWidgets.QLabel("")
         self.l_preset_msg.setWordWrap(True)
@@ -209,7 +213,13 @@ class OverridePanel(QtWidgets.QWidget):
             c.currentIndexChanged.connect(self._combo_changed)
         self.b_save_event.clicked.connect(self.save_event)
         self.b_load_event.clicked.connect(self.load_selected_event)
+        self.b_delete_event.clicked.connect(self.delete_selected_event)
         return box
+
+    def _confirm_dialog(self, text: str) -> bool:
+        buttons = QtWidgets.QMessageBox.StandardButton
+        return QtWidgets.QMessageBox.question(self, "Delete event", text,
+                                              buttons.Yes | buttons.No) == buttons.Yes
 
     @staticmethod
     def _combo(kind: str) -> QtWidgets.QComboBox:
@@ -250,7 +260,9 @@ class OverridePanel(QtWidgets.QWidget):
         self.cmb_events.clear()
         for name in presets.list_events():
             self.cmb_events.addItem(name)
-        self.b_load_event.setEnabled(self.cmb_events.count() > 0)
+        have = self.cmb_events.count() > 0
+        self.b_load_event.setEnabled(have)
+        self.b_delete_event.setEnabled(have)
 
     def save_event(self) -> None:
         name = self.e_event_name.text().strip()
@@ -260,6 +272,14 @@ class OverridePanel(QtWidgets.QWidget):
             self.l_preset_msg.setText(str(exc))
             return
         self.l_preset_msg.setText(f"Saved “{name}”.")
+        self.reload_events()
+
+    def delete_selected_event(self) -> None:
+        name = self.cmb_events.currentText()
+        if not name or not self._confirm(f"Delete event “{name}”? The saved event is removed permanently."):
+            return
+        presets.delete_event(name)
+        self.l_preset_msg.setText(f"Deleted “{name}”.")
         self.reload_events()
 
     def load_selected_event(self) -> None:
