@@ -1013,3 +1013,72 @@ def test_moving_a_target_a_head_was_captured_on_warns(qapp):
         QTest.mouseMove(view.viewport(), QtCore.QPoint(p.x(), p.y() + dy))
     QTest.mouseRelease(view.viewport(), left, none, QtCore.QPoint(p.x(), p.y() - 60))
     assert "dj_booth" in tab.status.text() and "SET AIM" in tab.status.text()
+
+
+def test_add_2nd_point_refuses_after_the_head_moved(qapp):
+    """UI_BUGS: ADD 2ND POINT after a move solved capture A's raw sliders
+    (taken at the OLD position/facing) against the NEW geometry: direction and
+    travel came out silently wrong. It must refuse until SET AIM is redone."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    assert mh.calibration.captured
+    tab.sb_x.setValue(9.0)                       # the head moves after SET AIM
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None        # refused: nothing was solved
+    assert mh.calibration.pan_range_deg is None and mh.calibration.tilt_range_deg is None
+    assert "SET AIM" in tab.status.text() and "moved" in tab.status.text()
+    # a facing edit alone is also a move of the geometry the capture used
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.b_set_aim.click()                        # re-capture at the new spot
+    tab.sb_facing.setValue(20.0)
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None and "moved" in tab.status.text()
+    # SET AIM again at the current geometry unblocks the two-point solve
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.b_set_aim.click()
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 == "back_wall"
+
+
+def test_add_2nd_point_refuses_after_the_first_target_moved(qapp):
+    """Same staleness the other way round: capture A's raw sliders point at
+    where its target WAS; a two-point solve against the target's new spot is
+    just as wrong as one after the head moved."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    assert mh.calibration.captured
+    bx, _by, _bz = tab._target_boxes["dj_booth"]
+    bx.setValue(bx.value() + 4.0)                # dj_booth moves after SET AIM
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None        # refused: nothing was solved
+    assert "dj_booth" in tab.status.text() and "SET AIM" in tab.status.text()

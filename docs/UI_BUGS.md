@@ -65,6 +65,19 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
   sliders moved: tick Jog live …" / "Freeze is on …" while the real head is not following. Test:
   `tests/test_console.py::test_aim_and_home_speak_when_the_head_is_unplaced_or_not_live` (2026-10-30).
 
+- **ADD 2ND POINT solved across a move** (found 2026-10-31 in the calibrate-flow audit): the two-point
+  solve took capture A's raw sliders (stored at SET AIM, against the head's position/facing and the
+  target's spot AT THAT MOMENT) and solved them against the CURRENT geometry, so moving or re-facing
+  the head — or moving the first target — between SET AIM and ADD 2ND POINT produced a silently wrong
+  direction/travel (the status even said "Solved ..."). `HeadCalibration` now records where capture A
+  was taken (`captured_origin`/`captured_facing_deg`/`captured_target_point`, round-tripped in the rig
+  file), and ADD 2ND POINT refuses with "SET AIM again on <target> first" when any of them changed.
+  Files from before the record have no capture geometry and are let through as before. Nothing is
+  re-solved. Tests: `tests/test_console.py::test_add_2nd_point_refuses_after_the_head_moved`,
+  `::test_add_2nd_point_refuses_after_the_first_target_moved`,
+  `tests/test_rig.py::test_calibration_remembers_where_capture_a_was_taken_and_old_files_load`
+  (2026-10-31).
+
 - **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
   one drag moves them all, but the "aim was captured at its old position" warning only checked the head
   shown in the panel. `FloorPlanView` now records every fixture a drop moved (`last_moved`) and
