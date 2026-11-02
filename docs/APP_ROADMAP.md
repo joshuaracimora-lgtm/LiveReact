@@ -83,9 +83,10 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-45. **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
-    definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
-    folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
+49. **P3 library filter box.** A search field above `ui/fixture_library.py`'s table that filters rows as
+    the user types, matching manufacturer, model, id or category case-insensitively; clearing it shows
+    everything, and the details pane / buttons keep following the (filtered) selection. Matters once a
+    library holds more than a screenful of imported fixtures. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -280,3 +281,28 @@ Hard rules for every item, whoever does it:
   `userdata.paths().root` in Explorer / Finder (`ConsoleWindow.open_url`, `QDesktopServices.openUrl` by
   default, a fake in tests); when that fails the status bar says where the folder is.
   Tests: `tests/test_app_data_folder.py`; `test_app_help_menu.py` now expects the fourth Help entry.
+- **45. P2 delete a fixture from the library** (2026-10-29). "Delete…" in `ui/fixture_library.py` removes
+  the selected user/imported definition behind a confirm box (injectable, a QMessageBox by default) that
+  names the user-folder rigs still referencing the id and warns which keep loading (own snapshot) and
+  which will not; the button is disabled for built-ins and empty selections. `fixtures/library.py` gets
+  `delete_user_definition()` (ValueError for a built-in id, KeyError when no user file) and `rigs_using()`
+  (unreadable rig files skipped). Tests: `tests/test_app_fixture_delete.py`.
+- **46. P2 duplicate a fixture definition** (2026-10-29). "Duplicate…" in `ui/fixture_library.py` copies
+  the selected definition — built-ins too, that is how a user adapts a model they cannot edit or delete —
+  to a new user id (prompt pre-filled `<id>_copy`, injectable; refusals go to an injectable error box).
+  `fixtures/library.py` `copy_definition()`: always saved **unconfirmed** (so the copy goes through the
+  channel-test screen before a laser built from it may output); a builtin's copy becomes `kind="user"`,
+  an import keeps its provenance (`ofl_key`, attribution); taken or invalid target ids are ValueError.
+  Tests: `tests/test_app_fixture_duplicate.py`.
+- **47. P2 export / import a fixture definition file** (2026-10-29). "Export…" writes the selected
+  definition's JSON wherever the user picks; "Import file…" validates a picked `.json` through
+  `fixtures/definition.py` and saves it to the user folder always **unconfirmed** (any confirmation
+  happened on someone else's hardware; a built-in id is refused), asking before replacing an existing
+  user definition. File dialogs are injectable like the other prompts. `fixtures/library.py` gains
+  `export_definition()` / `import_definition_file()`, which round-trip.
+  Tests: `tests/test_app_fixture_export.py`.
+- **48. P3 fixture details pane** (2026-10-29). Selecting a row in the library browser shows the
+  definition read-only beside the table (a splitter): `definition_summary()` lists per mode each
+  channel's 1-based number, function, fine pairing and capability ranges with labels, plus source /
+  ofl key / license / attribution and the confirmed date (or "not confirmed"). Cleared when nothing
+  is selected. Tests: `tests/test_app_fixture_details.py`.
