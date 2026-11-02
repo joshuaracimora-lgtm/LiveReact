@@ -29,6 +29,7 @@ from ..engines.color import band_levels
 from ..engines.laser_feature import MOOD_OFF, laser_color_name
 from ..engines.laser_show import MODE_FOLLOW, MODE_HOLD, MODE_ROTATE, look_names
 from ..engines.laser_trigger import DUTY_WINDOW_S
+from .health import health_warnings
 from ..tap_tempo import TapTempo
 from .floorplan import FloorPlanView
 from .rig_config import RigConfigTab
@@ -162,7 +163,20 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         tabs.addTab(self.rig_config, "Rig Config")
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
-        self.setCentralWidget(tabs)
+        # Health banner (ui/health.py, 2026-11-02 show post-mortem): what is broken, in words, above
+        # everything -- hidden while all is well.
+        self.l_health_banner = QtWidgets.QLabel("")
+        self.l_health_banner.setWordWrap(True)
+        self.l_health_banner.setStyleSheet(
+            "background:#b3261e; color:white; font-weight:bold; font-size:15px; padding:10px; border-radius:6px;")
+        self.l_health_banner.setVisible(False)
+        central = QtWidgets.QWidget()
+        cv = QtWidgets.QVBoxLayout(central)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(6)
+        cv.addWidget(self.l_health_banner)
+        cv.addWidget(tabs, 1)
+        self.setCentralWidget(central)
         # Rig menu (2026-10-28, ui/rig_manager.py): pick the rig instead of --rig <path>.
         # Recent rigs sit above "Rig manager…" (item 52), rebuilt each time the menu opens.
         self.rig_manager = None
@@ -655,6 +669,10 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         writer = self.app.writer
         dmx_ok = writer.is_open and writer.backend.name != "null-log"
         _set_dot(self.dot_dmx, dmx_ok)
+
+        warnings = health_warnings(self.app, snap, self.app.clock.monotonic())
+        self.l_health_banner.setText("\n".join(f"⚠ {w}" for w in warnings))
+        self.l_health_banner.setVisible(bool(warnings))
 
         if self.app.show_engine.silence.active:
             self.l_auto_blackout.setText("● AUTO-BLACKOUT — no music detected")

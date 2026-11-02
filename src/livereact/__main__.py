@@ -81,6 +81,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    help="--pdl-probe: pull export.pdb + the loaded track's phrase table over NFS and show a live countdown.")
     p.add_argument("--pdl-dump", default=None, help="--pdl-probe: save raw status packets + fetched files under DIR.")
     p.add_argument("--doctor", action="store_true", help="Write an environment/device diagnostics report and exit.")
+    p.add_argument("--preflight", action="store_true",
+                   help="Pre-show check of the real rig (DJ Link ports, 169.254 network, XDJ audio/MIDI, DMX adapter, "
+                        "rig file): PASS/WARN/FAIL per item, exit 1 on any FAIL. Run while LiveReact is NOT running.")
     p.add_argument("--bundle", nargs="?", const="__latest__", default=None,
                    help="Zip a session folder for sharing (default: the latest), then exit.")
     return p.parse_args(argv)
@@ -149,6 +152,11 @@ def main(argv: list[str] | None = None) -> int:
     log = logging.getLogger("livereact")
 
     # --- standalone tools (run and exit) ---
+    if args.preflight:
+        from . import preflight
+        checks = preflight.run(args.rig, args.pdl_interface)
+        print(preflight.format_checks(checks))
+        return preflight.exit_code(checks)
     if args.doctor:
         from .diagnostics import write_report
 

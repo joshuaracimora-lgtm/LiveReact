@@ -81,6 +81,8 @@ class App:
         self.clock = clock or RealClock()
         self.stop_event = threading.Event()
 
+        self.failed_inputs: dict[str, BaseException] = {}   # input name -> why it failed to start
+        self.started_at: float | None = None
         # --- output pipeline (Phase 0; real Enttec in hardware mode) ---
         self.frame_buffer = DmxFrameBuffer()
         self.backend = backend or self._build_backend()
@@ -246,9 +248,11 @@ class App:
 
             from .output.enttec import EnttecSerialBackend, select_enttec_port
 
-            if select_enttec_port(list_ports.comports()):
-                return EnttecSerialBackend()
-            log.warning("Hardware mode: no Enttec detected; output will be logged only.")
+            if not select_enttec_port(list_ports.comports()):
+                # 2026-11-02 stress test: this used to fall back to log-only for the whole session, so an
+                # Enttec plugged in after launch was never used. The writer's reopen loop finds it instead.
+                log.warning("Hardware mode: no Enttec yet -- the lights connect when it is plugged in.")
+            return EnttecSerialBackend()
         except Exception:  # noqa: BLE001
             log.exception("Hardware mode: Enttec backend unavailable — logging output only.")
         return NullLogBackend(log_every=int(self.config.dmx_rate_hz))
@@ -307,10 +311,13 @@ class App:
         )
         for t in self._core_threads:
             t.start()
+        self.started_at = self.clock.monotonic()
         for source in self.sources:
             try:
                 source.start()
-            except Exception:  # noqa: BLE001 - a failed input must not abort startup
+            except Exception as exc:  # noqa: BLE001 - a failed input must not abort startup
+                # kept for the console's health banner (ui/health.py, 2026-11-02 show post-mortem)
+                self.failed_inputs[source.name] = exc
                 log.exception("Input source %r failed to start; continuing without it", source.name)
 
     def shutdown(self) -> None:
