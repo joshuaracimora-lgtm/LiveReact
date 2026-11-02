@@ -90,10 +90,10 @@ Hard rules for every item, whoever does it:
     definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
     folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
 
-54. **P2 the patch view's type picker is searchable.** `ui/rig_config.py`: with built-ins plus the
-    user's and the rig's definitions the per-row type combo gets long — make it searchable (type a
-    few letters of the id, manufacturer or model to jump to it) without changing what a row saves.
-    Tests first.
+55. **P2 the patch view marks duplicate slot IDs.** `ui/rig_config.py`: two rows with the same
+    Slot ID silently collide in `_collect()` (the later row wins the saved slot's geometry overlay)
+    — mark them inline like address overlaps and refuse to save, with the duplicated id on the
+    status line. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -296,3 +296,9 @@ Hard rules for every item, whoever does it:
   `make_console(app)` (which passes `Settings.load()`), so a bare `ConsoleWindow(app)` — every older
   test, the UI gate checks — never reads or writes the user's file.
   Tests: `tests/test_app_console_window.py`.
+- **54. P2 the patch view's type picker is searchable** (2026-11-01). Every row's type combo in
+  `ui/rig_config.py` is editable (insert policy NoInsert, so free text can never become a type) with
+  a case-insensitive contains-match completer over the combo's own model: a few letters of the id,
+  manufacturer or model jump to the definition, picking a completion selects that item, junk text
+  leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
+  searchable at once. Tests: `tests/test_app_type_picker.py`.
