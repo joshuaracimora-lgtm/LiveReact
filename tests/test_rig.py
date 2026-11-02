@@ -144,11 +144,17 @@ def test_side_is_derived_from_real_x_when_a_venue_is_declared(caplog):
     assert rig.fixture("a").side == "left" and rig.fixture("a").x_norm == pytest.approx(-7 / 9)
     assert rig.fixture("b").side == "right" and rig.fixture("b").x_norm == pytest.approx(7 / 9)
 
-    # both on the same side of centre -> can't mirror -> MOVE-03 warning
+    # both on the same side of centre -> can't mirror -> MOVE-03 warning,
+    # recorded on the rig so the Venue tab can show it on its status line
     base["slots"][1]["position"]["x_m"] = 2.0
     with caplog.at_level(logging.WARNING, logger="livereact.fixtures.rig"):
-        _rig_from_dict(base)
+        same_side = _rig_from_dict(base)
     assert any("MOVE-03" in r.message for r in caplog.records)
+    assert any("MOVE-03" in w and "unison" in w for w in same_side.mirror_warnings)
+    from livereact.fixtures.geometry import Point3
+    same_side.fixture("b").position = Point3(8.0, 0.5, 0.3)
+    same_side.refresh_geometry()
+    assert same_side.mirror_warnings == []        # mirrorable again: the record clears
 
     # no venue: side stays exactly as declared, x_norm undefined
     legacy = {"name": "legacy", "slots": [dict(s) for s in base["slots"]]}

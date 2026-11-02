@@ -770,9 +770,13 @@ class VenueTab(QtWidgets.QWidget):
     # ------------------------------------------------------------------ save
     def _mark_dirty(self, note: str = "") -> None:
         """Flag unsaved edits; ``note`` is the action's own message, kept in
-        front (it used to be overwritten the moment it was set)."""
-        self.status.setText((note + "  ·  " if note else "")
-                            + "Unsaved changes — Save rig… writes them to the rig file.")
+        front (it used to be overwritten the moment it was set). The rig's
+        standing MOVE-03 warnings (every placed fixture of a role on one side
+        of centre -> mirrored effects run in unison) follow it: the operator
+        who dragged the heads there is on this tab, not reading the log."""
+        parts = [note, *getattr(self.rig, "mirror_warnings", ()),
+                 "Unsaved changes — Save rig… writes them to the rig file."]
+        self.status.setText("  ·  ".join(p for p in parts if p))
         self.status.setStyleSheet(f"color:{MUTED};")
 
     def _save(self) -> None:

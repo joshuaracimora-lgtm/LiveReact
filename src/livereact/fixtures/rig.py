@@ -150,8 +150,12 @@ class Rig:
         side back. Called at load and by the Venue tab after every edit.
 
         MOVE-03: if two or more fixtures of one role sit on the same side of
-        centre, a mirrored effect can't mirror -- warn, don't guess."""
+        centre, a mirrored effect can't mirror -- warn, don't guess. Each
+        warning is also kept in ``mirror_warnings`` so the Venue tab can put
+        it on its status line (spec/conformance.md MOVE-03: detection only,
+        nothing is disabled)."""
         declared = getattr(self, "_declared_sides", {})
+        self.mirror_warnings: list[str] = []
         if self.venue is None or self.venue.width_m <= 0:
             for fx in self.fixtures:
                 fx.x_norm = None
@@ -178,11 +182,11 @@ class Rig:
                 continue
             signs = {(fx.x_norm > 0) - (fx.x_norm < 0) for fx in fxs}  # type: ignore[operator]
             if len(signs) == 1 and 0 not in signs:
-                log.warning(
-                    "MOVE-03: all %d '%s' fixtures sit on the same side of centre (%s); "
-                    "mirrored effects will run in unison",
-                    len(fxs), role, ", ".join(fx.label for fx in fxs),
-                )
+                msg = (f"MOVE-03: all {len(fxs)} '{role}' fixtures sit on the same side "
+                       f"of centre ({', '.join(fx.label for fx in fxs)}); "
+                       "mirrored effects will run in unison")
+                log.warning("%s", msg)
+                self.mirror_warnings.append(msg)
 
     # --- lookups ---
     def fixture(self, slot_id: str) -> Fixture:

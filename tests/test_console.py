@@ -810,6 +810,26 @@ def test_dragging_several_heads_warns_about_each_captured_one(qapp):
     label = app.rig.fixture(other).label
     assert f"{label}'s aim was captured" in tab.status.text()
 
+def test_every_spot_on_one_side_puts_move_03_on_the_status_line(qapp):
+    """MOVE-03 (LIGHTING_BIBLE §6.2): with every placed fixture of a role on one
+    side of centre a mirrored effect runs in unison. The rig logged it; the
+    operator dragging heads on the Venue tab never saw it."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_r"))
+    tab.sb_x.setValue(25.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    assert "MOVE-03" not in tab.status.text()     # one spot placed: nothing to mirror yet
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(20.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    assert "MOVE-03" in tab.status.text() and "unison" in tab.status.text()
+    tab.sb_y.setValue(3.0)                        # an unrelated edit keeps the standing warning
+    assert "MOVE-03" in tab.status.text()
+    tab.sb_x.setValue(5.0)                        # back across the centre line: it clears
+    assert "MOVE-03" not in tab.status.text()
+
 def test_room_box_edit_writes_only_its_dimension_and_warns_about_what_falls_outside(qapp):
     """UI_BUGS: editing the room's width also rewrote length (rounded to 0.1 ft)
     and height (into a file that had none), and fixtures/targets left outside
