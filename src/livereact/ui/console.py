@@ -24,6 +24,7 @@ import logging
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core.messages import BeatMessage
+from ..settings import Settings
 from ..engines.color import band_levels
 from ..engines.laser_feature import MOOD_OFF, laser_color_name
 from ..engines.laser_show import MODE_FOLLOW, MODE_HOLD, MODE_ROTATE, look_names
@@ -113,9 +114,12 @@ def _button(text: str, role: str | None = None, checkable: bool = False) -> QtWi
 
 
 class ConsoleWindow(QtWidgets.QMainWindow):
-    def __init__(self, app) -> None:
+    def __init__(self, app, settings: Settings | None = None) -> None:
         super().__init__()
         self.app = app
+        # Window memory (item 53): only the shipped console (make_console) passes a
+        # Settings, so a bare ConsoleWindow(app) never reads or writes the user's file.
+        self.settings = settings
         self.tap = TapTempo()
         self._tap_beat = 0
         self.setWindowTitle("LiveReact — Operator Console")
@@ -179,8 +183,47 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.open_url = QtGui.QDesktopServices.openUrl
         help_menu.addAction("Open my LiveReact folder…", lambda: self.open_data_folder())
         self.resize(1280, 800)
+        self._restore_window()
 
         self._install_shortcuts()
+
+    # ------------------------------------------------------------- window memory (item 53)
+    def _restore_window(self) -> None:
+        """Apply the saved size/position/tab; a position off every screen (a monitor
+        unplugged since the last run) comes back on the primary screen instead."""
+        data = self.settings.extra.get("console_window") if self.settings else None
+        if not isinstance(data, dict):
+            return
+        try:
+            x, y, w, h = (int(data[k]) for k in ("x", "y", "w", "h"))
+        except (KeyError, TypeError, ValueError):
+            return
+        rect = QtCore.QRect(x, y, w, h)
+        screens = QtGui.QGuiApplication.screens()
+        if not any(s.availableGeometry().intersects(rect) for s in screens):
+            avail = QtGui.QGuiApplication.primaryScreen().availableGeometry()
+            w, h = min(w, avail.width()), min(h, avail.height())
+            x = max(avail.left(), min(x, avail.right() - w + 1))
+            y = max(avail.top(), min(y, avail.bottom() - h + 1))
+        self.move(x, y)
+        self.resize(w, h)
+        tab = data.get("tab")
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == tab:
+                self.tabs.setCurrentIndex(i)
+                break
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        if self.settings is not None:
+            g = self.geometry()
+            self.settings.extra["console_window"] = {
+                "x": g.x(), "y": g.y(), "w": g.width(), "h": g.height(),
+                "tab": self.tabs.tabText(self.tabs.currentIndex())}
+            try:
+                self.settings.save()
+            except OSError:
+                pass   # never block closing on a failed write
+        super().closeEvent(event)
 
     def _tab_changed(self, idx: int) -> None:
         if self.tabs.widget(idx) is self.venue_tab:
@@ -730,11 +773,16 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             self.l_synth.setText("")
 
 
+def make_console(app) -> ConsoleWindow:
+    """The shipped console: remembers its window through the user settings file (item 53)."""
+    return ConsoleWindow(app, settings=Settings.load())
+
+
 def run_console(app, fps: int = 30) -> int:
     """Open the console and refresh it at ``fps`` (blocks until the window closes)."""
     qt = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     apply_theme(qt)
-    win = ConsoleWindow(app)
+    win = make_console(app)
     win.show()
     timer = QtCore.QTimer()
     timer.timeout.connect(win.refresh)

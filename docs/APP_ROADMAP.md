@@ -83,9 +83,17 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-45. **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
+45. [BLOCKED: done on the unmerged agent/20261029-app branch (items 45-48 all gate-ACCEPTed there, plus
+    a new item 49, library filter box); merge that branch instead of re-doing it — this tree's
+    `fixtures/library.py` / `ui/fixture_library.py` must not be touched until then or the merge conflicts]
+    **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
     definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
     folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
+
+54. **P2 the patch view's type picker is searchable.** `ui/rig_config.py`: with built-ins plus the
+    user's and the rig's definitions the per-row type combo gets long — make it searchable (type a
+    few letters of the id, manufacturer or model to jump to it) without changing what a row saves.
+    Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -280,3 +288,11 @@ Hard rules for every item, whoever does it:
   `userdata.paths().root` in Explorer / Finder (`ConsoleWindow.open_url`, `QDesktopServices.openUrl` by
   default, a fake in tests); when that fails the status bar says where the folder is.
   Tests: `tests/test_app_data_folder.py`; `test_app_help_menu.py` now expects the fourth Help entry.
+- **53. P6 the console remembers its window** (2026-11-01). `ConsoleWindow(app, settings=...)` saves
+  size/position and the selected tab (by name) into `settings.extra["console_window"]` on close and
+  restores them at the next start; a position off every screen (a monitor unplugged since last run)
+  comes back clamped onto the primary screen; an unknown tab name or corrupt entry reads as the
+  default. Only the shipped console persists: `run_console` builds the window through the new
+  `make_console(app)` (which passes `Settings.load()`), so a bare `ConsoleWindow(app)` — every older
+  test, the UI gate checks — never reads or writes the user's file.
+  Tests: `tests/test_app_console_window.py`.
