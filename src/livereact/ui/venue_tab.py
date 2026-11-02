@@ -470,11 +470,20 @@ class VenueTab(QtWidgets.QWidget):
         """A SET AIM capture is solved against the position/facing it was
         taken at (geometry.calibrate_from_capture); after a move it is kept
         as is -- right if the head was re-hung the same way, wrong if the old
-        numbers were a typo. Say so; don't guess."""
-        if not isinstance(fx, MovingHead) or not fx.calibration.captured:
+        numbers were a typo. Say so; don't guess. Same for a motion box: its
+        bound points were jogged onto the venue's edges from the old spot and
+        it still clamps every scene."""
+        if not isinstance(fx, MovingHead):
             return ""
-        return (f"{fx.label}'s aim was captured at its old position/facing: check it with "
-                "Aim at target, and SET AIM again if the beam misses.")
+        parts = []
+        if fx.calibration.captured:
+            parts.append(f"{fx.label}'s aim was captured at its old position/facing: check it with "
+                         "Aim at target, and SET AIM again if the beam misses.")
+        if fx.bounds is not None:
+            parts.append(f"{fx.label}'s motion box was jogged onto the edges from its old "
+                         "position/facing and still clamps every scene: re-add its bound points "
+                         "if the beam hits the wrong edges, or Clear box.")
+        return " ".join(parts)
 
     def _update_place_title(self) -> None:
         fx = self._fx()

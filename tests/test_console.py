@@ -900,6 +900,35 @@ def test_every_spot_on_one_side_puts_move_03_on_the_status_line(qapp):
     tab.sb_x.setValue(5.0)                        # back across the centre line: it clears
     assert "MOVE-03" not in tab.status.text()
 
+
+def test_moving_a_head_with_only_a_motion_box_warns_the_box_is_stale(qapp):
+    """UI_BUGS (calibration): the move warning only fired for a SET AIM
+    capture. A head with just a motion box -- captured by jogging the beam
+    onto the venue's edges from the OLD spot -- moved silently, yet the box
+    still clamps every scene to the old edges."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.3 * 65535)); tab.b_bound_add.click()
+    tab.s_pan.setValue(int(0.7 * 65535)); tab.b_bound_add.click()
+    assert mh.bounds is not None and not mh.calibration.captured
+    tab.sb_x.setValue(7.0)
+    assert "motion box" in tab.status.text() and mh.label in tab.status.text()
+    # the remedy for a stale box is re-jogging its bound points, not SET AIM
+    assert "SET AIM" not in tab.status.text()
+    tab.sb_facing.setValue(20.0)             # re-facing moves the box's edges too
+    assert "motion box" in tab.status.text()
+    tab.b_bound_clear.click()
+    tab.sb_x.setValue(9.0)                   # no box any more: nothing to warn about
+    assert "motion box" not in tab.status.text()
+
+
 def test_room_box_edit_writes_only_its_dimension_and_warns_about_what_falls_outside(qapp):
     """UI_BUGS: editing the room's width also rewrote length (rounded to 0.1 ft)
     and height (into a file that had none), and fixtures/targets left outside
