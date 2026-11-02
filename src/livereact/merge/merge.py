@@ -88,6 +88,18 @@ class ManualParams:
     blackout: bool = False           # hard: zero everything
     freeze: bool = False             # hard: hold last frame (handled by show engine)
     synth_sync: bool = True          # wash follows the synths/stabs (engines/reactive.py); on by default
+    # Synth Sync threshold (Josh, 2026-10-29, first hardware run of the fan
+    # rig: the wash "would do these little breathing moments in between
+    # because it was reacting to the vocals and the bass and maybe the claps
+    # ... make the threshold a little higher, less reactive ... only hit on
+    # sounds that are enough to trigger that threshold"). 0..1 on the
+    # normalized mid-band envelope (engines/reactive.py SYNTH_* block): below
+    # it the wash HOLDS the section's planned level; a stab above it lifts
+    # the wash from that level toward SYNTH_CEILING by how far it clears the
+    # line. 0.0 = the original continuous follower (floor..ceiling, every
+    # wobble shown). Persisted in config.json (a taste number, like the
+    # warm/cool bias), console slider under Feel.
+    synth_threshold: float = 0.6
     # Manual laser cue (Josh, 2026-09-30): while held, the laser shows the
     # dotted line with its sweep speed following the mids + highs -- the
     # operator's taste-tuned alternative to engines/laser.py's automated
@@ -110,6 +122,13 @@ class ManualParams:
     laser_mode: str = "follow"
     laser_scene: str = "Rainbow"
     laser_drop_accent: bool = True
+    # Latched laser override (2026-10-31, AEPI rig; only rigs listing
+    # `laser_overrides` honour it -- engines/laser_fan.py). `laser_override` =
+    # the look held lit ("" = none); pressing one also sets `laser_auto_off`,
+    # which keeps the automatic lasers off -- turning the look off leaves them
+    # dark until the operator presses Resume auto. Never persisted.
+    laser_override: str = ""
+    laser_auto_off: bool = False
     # Venue-tab calibration pins (see CalibrationPins). None = nothing pinned.
     # Never persisted (config.py's _PERSIST leaves it out); cleared whenever
     # the operator leaves the Venue tab or unticks "Jog live".

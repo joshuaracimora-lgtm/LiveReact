@@ -92,7 +92,9 @@ def test_rotation_on_the_bar_grid_and_on_the_clock():
     clock = FakeClock()
     manual = ManualParams(laser_mode="rotate")
     eng = LaserShowEngine(clock, manual)
-    names = scene_names()
+    from livereact.engines.laser_show import rotation_scene_names
+    names = rotation_scene_names()          # the seen scenes only; composed ones never rotate in by themselves
+    assert names == scene_names()[:4]
     eng.tick(_snap(bar=10), rig)
     assert eng.scene_name == names[0] and eng.bars_to_next == ROTATE_BARS
     eng.tick(_snap(bar=10 + ROTATE_BARS - 1), rig)

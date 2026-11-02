@@ -60,9 +60,20 @@ class ShowSnapshot:
     planned_big_moment: bool = False     # this drop is the track's one big moment (fan / PEAK allowed)
     planned_strobe_allowed: bool = True  # quiet edges: intro/outro say no
     planned_laser_allowed: bool = True
+    planned_laser_scene: str = ""        # look notes: the laser fan's look for this section ("" = its default)
+    planned_laser_cues: tuple[tuple[str, str], ...] = ()   # look notes: (trigger, scene) for one kind of moment
     beats_to_drop: int = -1              # countdown to the next planned drop boundary (-1 = none)
     planned_roll_progress: float = -1.0  # inside a planned snare-roll lead-in: 0..1 through it (-1 = not)
+    planned_roll_ahead: bool = False     # the next planned drop boundary is a roll lead-in (no count-in strobe: the roll is the count-in)
+    planned_look: str = ""               # look notes `cues`: a timed look override running now ("whiteout"), "" = none
+    planned_section_progress: float = -1.0  # 0..1 through the current planned section (-1 = no plan)
+    planned_riser: bool = False          # a kick-free planned break: the wash rises across it in the companion colour (D-35/D-36)
+    planned_flash_white: float = 0.0     # D-36: how far strobe flashes / whiteout holds lift the song colour toward white (song brightness)
     planned_hit: float = 0.0             # the plan's hit for this section (drops: 1.0 = the big moment)
+    planned_tease_progress: float = -1.0  # P-24: 0..1 through a planned Tease (kick-free bars into a drop), -1 = none
+    planned_tease_hold: bool = False     # P-24: inside the roll a Tease runs into: the wash holds the Tease's level under the strobe
+    planned_song_palette: str = ""      # P-24: the song's drop colour (the Tease starts in it); "" = use palette
+    planned_tease_bright: bool = False   # P-24: the running Tease started inside a drop: bright, following the stab bursts
     # the song's own look set (rekordbox/song_style.py), the plan's for the whole track
     planned_strobe_style: str = "tail"   # DROP/PEAK strobe rhythm (engines/reactive.py STROBE_STYLES)
     planned_accent: str = "4"            # beat(s) of the bar the held drop wash flashes on

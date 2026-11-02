@@ -32,7 +32,7 @@ def _native(type_name: str):
 
 
 def test_one_definition_per_native_model():
-    assert NATIVE == ["ok103_wash_bar", "rgb_par", "shehds_180w_mh", "shehds_3w_laser"]
+    assert NATIVE == ["ok103_wash_bar", "rgb_par", "shehds_180w_mh", "shehds_3w_laser", "xfalights_90w_beam"]
     assert sorted(p.stem for p in BUILTIN.glob("*.json")) == NATIVE
 
 

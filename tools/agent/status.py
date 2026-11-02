@@ -3,7 +3,7 @@
     python tools/agent/status.py                      # from results/baseline/evaluation.json
     python tools/agent/status.py --baseline <file>    # any evaluation json
     python tools/agent/status.py --json               # machine-readable
-    python tools/agent/status.py --role ui            # the Bugs & UI agent's screen (2026-10-26)
+    python tools/agent/status.py --role ui            # the User-Tester agent's screen (2026-10-30; was Bugs & UI)
     python tools/agent/status.py --role app           # the App agent's screen (2026-10-27)
 
 Prints the commit, the baseline summary (mode, drop placement, sweep set), FAIL
@@ -12,8 +12,8 @@ each track's failing rules, the latest sweep's serious findings, and the agent's
 state file (results/agent/state.json) if present. Reads only; never evaluates.
 
 Families (2026-10-25, the rekordbox planner era -- docs/AGENT_BRIEF.md):
-  0  sweep findings       a crash / invariant / plan finding in the latest SWEEP.md: the Bugs & UI
-                          agent's (docs/AGENT_BRIEF_UI.md) since 2026-10-26, never the Track Classifier's
+  0  sweep findings       a crash / invariant / plan finding in the latest SWEEP.md: the User-Tester
+                          agent's (docs/AGENT_BRIEF_UI.md) since 2026-10-26, never the Preference Verifier's
   1  drop placement       drop_offset_bars_mean (loop/metrics.py), STRUCT-03, TIME-04
   2  section shape        TIME-05, LOOK-05, TIME-06, STRUCT-04, STRUCT-05, STRUCT-06, STRUCT-07
   3  per-drop character   STRUCT-02, STRUCT-08, STRUCT-09
@@ -115,6 +115,7 @@ def sweep_serious(sweep: dict | None) -> int:
 
 
 UI_BUGS = ROOT / "docs" / "UI_BUGS.md"
+UX_BACKLOG = ROOT / "docs" / "UX_BACKLOG.md"   # the User-Tester's list (2026-10-30)
 APP_ROADMAP = ROOT / "docs" / "APP_ROADMAP.md"
 # roadmap items the App agent skips (docs/APP_ROADMAP.md): Josh's, score-moving, or waiting on another item
 APP_SKIP_TAGS = ("[JOSH]", "[SHOW-CHANGE]", "[BLOCKED")
@@ -150,8 +151,8 @@ def next_family(rows: list[dict], state: dict | None = None, sweep: dict | None 
                 role: str = "tracks") -> int | None:
     """The family to work on.
 
-    Track Classifier ("tracks"): the state file's `family` when set, else the lowest open family >= 1
-    that still has failures -- never 0. Bugs & UI ("ui"): 0 while the latest sweep has serious
+    Preference Verifier ("tracks"): the state file's `family` when set, else the lowest open family >= 1
+    that still has failures -- never 0. User-Tester ("ui"): 0 while the latest sweep has serious
     findings (crash / invariant / plan), else None = work docs/UI_BUGS.md."""
     if role == "ui":
         return 0 if sweep_serious(sweep) else None
@@ -177,21 +178,39 @@ def _role_view(state: dict | None, role: str) -> dict | None:
     return view
 
 
+def _trial_line(state: dict | None, role: str) -> str:
+    """The 3-night trial verdict (record_night.trial_verdict): KEEP / STOP / TRIAL and why."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from record_night import trial_verdict
+        v, why = trial_verdict(state or {}, role)
+        return f"TRIAL VERDICT ({role}): {v} -- " + "; ".join(why)
+    except Exception as exc:  # noqa: BLE001
+        return f"TRIAL VERDICT ({role}): unavailable ({exc})"
+
+
 def render_ui(state: dict | None, sweep: dict | None) -> str:
     view = _role_view(state, "ui") or {}
     bugs = open_ui_bugs()
     nf = next_family([], state, sweep, role="ui")
-    L = [f"HEAD: {head()}", "Bugs & UI agent (docs/AGENT_BRIEF_UI.md)"]
+    L = [f"HEAD: {head()}", "User-Tester agent (docs/AGENT_BRIEF_UI.md): walk the app as a new user; docs/UX_BACKLOG.md is your list"]
     if sweep is not None:
         L.append(f"latest SWEEP ({sweep.get('date', '?')}): {sweep.get('tracks_ran', '?')}/{sweep.get('tracks_total', '?')} "
                  "tracks, " + "  ".join(f"{k}={v}" for k, v in sweep.get("counts", {}).items()))
         for f in [f for f in sweep.get("findings", []) if str(f.get("kind", "")) in SERIOUS_SWEEP_KINDS][:8]:
             L.append(f"  {f.get('kind')}: {str(f.get('track', ''))[:40]}  {str(f.get('detail', f.get('code', '')))[:100]}")
-    L.append(f"open UI bugs (docs/UI_BUGS.md): {len(bugs)}")
+    backlog = open_ui_bugs(UX_BACKLOG) if UX_BACKLOG.exists() else []
+    L.append(f"open bugs in docs/UX_BACKLOG.md: {len(backlog)}")
+    for i, b in enumerate(backlog[:5], 1):
+        L.append(f"  {i}. {b[:110]}")
+    L.append(f"open Venue-tab bugs (docs/UI_BUGS.md): {len(bugs)}")
     for i, b in enumerate(bugs[:5], 1):
         L.append(f"  {i}. {b[:110]}")
+    first = backlog[0] if backlog else (bugs[0] if bugs else "")
     L += ["", "NEXT: " + ("family 0 -- fix the sweep's serious findings first" if nf == 0
-                          else (f"UI bug 1: {bugs[0][:90]}" if bugs else "nothing open: report and stop")), ""]
+                          else ("the walk-through (docs/AGENT_BRIEF_UI.md), then bug 1: " + first[:80] if first
+                                else "the walk-through; nothing open to fix")), ""]
+    L.append(_trial_line(state, "ui"))
     L.append("agent state (results/agent/state.json, roles.ui):")
     L.append(json.dumps(view, indent=1, ensure_ascii=False))
     return "\n".join(L)
@@ -208,6 +227,7 @@ def render_app(state: dict | None) -> str:
         L.append("waiting:")
         L += [f"  - {w[:110]}" for w in waiting[:8]]
     L += ["", "NEXT: " + (f"{todo[0][:100]}" if todo else "nothing actionable: report and stop"), ""]
+    L.append(_trial_line(state, "app"))
     L.append("agent state (results/agent/state.json, roles.app):")
     L.append(json.dumps(view, indent=1, ensure_ascii=False))
     return "\n".join(L)
@@ -241,7 +261,7 @@ def render(ev: dict, state: dict | None, baseline_path: str, sweep: dict | None 
         L.append(f"    {r['rule']:9} FAIL {r['fail']:2}  (tuning {r['tuning']}, holdout {r['holdout']}{extra}){flag}")
     if not any(r["family"] == 0 for r in rows):
         L.append(f"  family 0: {FAMILIES[0][1]}  -> {sweep_serious(sweep)} serious finding(s) in the latest sweep"
-                 " (the Bugs & UI agent's)")
+                 " (the User-Tester agent's)")
     nf = next_family(rows, state, sweep)
     src = "from state.json" if state and state.get("family") is not None else "lowest family with failures"
     L += ["", f"NEXT FAMILY: {nf if nf is not None else 'none'}  ({src})", "", "per track (failing rules):"]
@@ -251,7 +271,8 @@ def render(ev: dict, state: dict | None, baseline_path: str, sweep: dict | None 
         L.append(f"  {'H' if t['holdout'] else 'T'}{drv} {t['compliance']!s:6} {t['track'][:44]:44} {' '.join(fails)}")
     L.append("")
     if state:
-        L.append("agent state (results/agent/state.json, the Track Classifier's part):")
+        L.append(_trial_line(state, "tracks"))
+        L.append("agent state (results/agent/state.json, the Preference Verifier's part):")
         L.append(json.dumps(_role_view(state, "tracks"), indent=1, ensure_ascii=False))
     else:
         L.append("agent state: none yet (results/agent/state.json missing)")

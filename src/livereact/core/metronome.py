@@ -44,6 +44,7 @@ from .show_state import ShowSnapshot, ShowState
 log = logging.getLogger(__name__)
 
 PDL_STALE_AFTER = 1.0    # seconds without a PDL message -> not fresh
+SHORT_SECTION_BEATS = 8   # a planned section shorter than this (2 bars) keeps the colours it came in with
 MIDI_STALE_AFTER = 1.0   # seconds without a MIDI message -> not fresh
 AUDIO_STALE_AFTER = 1.0  # seconds without an AudioLevelMessage -> not fresh
 # --- song structure from CDJ status packets + rekordbox phrase tables (2026-10-25, shadow mode) ---
@@ -97,7 +98,16 @@ class SectionState:
     beats_to_drop: int = -1
     planned_hit: float = 0.0
     roll_progress: float = -1.0       # inside a planned roll lead-in: 0..1 through it; -1 = not in a roll
+    roll_ahead: bool = False          # the next planned drop boundary is a roll lead-in
+    planned_look: str = ""            # look notes cues: the timed look override running now
+    section_progress: float = -1.0    # 0..1 through the planned section
+    flash_white: float = 0.0          # D-36: the plan's strobe-flash white lift
+    tease_progress: float = -1.0      # P-24: 0..1 through a planned Tease (-1 = none)
+    tease_hold: bool = False          # P-24: a roll lead-in a Tease runs into: the wash holds the Tease's level
+    tease_bright: bool = False        # P-24: the running Tease started inside a drop (bright, follows the stabs)
     style: object = None              # the plan's SongStyle (rekordbox/song_style.py); None = no plan
+    laser_scene: str = ""             # look notes: the laser fan's look in this section
+    laser_cues: tuple = ()            # look notes: (trigger, scene) pairs for the whole track
     # the deck is looping: track_beat (and everything above) is pinned at loop_pin_beat
     looping: bool = False
     loop_pin_beat: int = 0
@@ -105,6 +115,17 @@ class SectionState:
 
 _NO_SECTION = SectionState()
 ENERGY_SMOOTHING = 0.044  # EMA factor per tick (~0.2 s time constant at 100 Hz) —
+# Nominal energy of a planned section when no audio is measured (see _derive_energy): the
+# moving heads read snap.energy as their dimmer, so these are "how bright the heads sit" per
+# bucket, in the same 0..1 the audio RMS lands in. First-guess numbers for the 2026-10-31 rig.
+PLAN_ENERGY = {"break": 0.25, "build": 0.55, "drop": 0.9, "peak": 1.0, "outro": 0.2}
+# The white riser (D-35, 2026-10-30): Josh wants the rising white wash ONLY in breaks with no kicks.
+# A planned break section (intro / breakdown / verse -> bucket "break"; not the outro) whose low band
+# has been quiet counts; the plan and the audio must both agree, so with no audio there is no riser.
+# QUIET_BASS_ABS is against inputs/audio.py's gained low band (run 4 on Thriller through the XDJ:
+# intro p50 0.06, breakdown with kicks p50 0.96 / p10 0.23, build p10 0.64, drop p10 1.03).
+QUIET_BASS_ABS = 0.4
+QUIET_BASS_FOLLOW = 0.08       # per audio message (~10/s): ~1.2 s to settle
                          # MIDI-proxy fallback only; real audio bypasses this,
                          # see _derive_energy
 
@@ -761,6 +782,8 @@ class Metronome(threading.Thread):
 
         # phrase-frozen palette (engines/palette.py, see ShowSnapshot.palette)
         self.palette, self.palette_spot = palette_mod.pick(EnergyBucket.BREAK.value, 0, 0, 0)
+        self._palette_plan_track = 0   # the track the plan palette was last picked for
+        self.palette_song = ""   # P-24: the plan's drop colour (the Tease starts in it)
         self._palette_phrase: int | None = None   # phrase index (from _palette_origin_bar) the current pick was made in
         self._palette_family: str | None = None   # bucket family it was made for
         self._palette_seed: int | None = None     # track seed it was made with
@@ -774,6 +797,7 @@ class Metronome(threading.Thread):
         self._audio_band_mid = 0.333
         self._audio_band_high = 0.334
         self._audio_band_low_abs = 0.0
+        self._bass_env = 0.0
         self._audio_band_mid_abs = 0.0    # feed core/snare_trigger.py's SnareOnsetDetector (2026-09-14)
         self._audio_band_high_abs = 0.0   # same
         self._audio_high_onset_rate = 0.0  # inputs/audio.py ONSET_*: onsets/s in the high band (roll accent)
@@ -891,6 +915,8 @@ class Metronome(threading.Thread):
         self._audio_band_mid = msg.band_mid
         self._audio_band_high = msg.band_high
         self._audio_band_low_abs = msg.band_low_abs
+        # quiet-bass detector for the white riser (D-35): a slow follower of the low band
+        self._bass_env += QUIET_BASS_FOLLOW * (float(msg.band_low_abs) - self._bass_env)
         self._audio_band_mid_abs = msg.band_mid_abs
         self._audio_band_high_abs = msg.band_high_abs
         self._audio_high_onset_rate = msg.high_onset_rate
@@ -958,6 +984,12 @@ class Metronome(threading.Thread):
         # needs ENERGY_SMOOTHING applied here.
         if self._is_audio_fresh(now):
             self._energy = self._audio_rms
+        elif self._section.plan_active and self._section.planned_bucket:
+            # No audio, a driving plan (2026-10-29, the bench run with no XDJ audio on the Mac:
+            # the MIDI proxy below sat at a flat 0.20 all night and the moving heads with it).
+            # The planned section's nominal energy, smoothed like the proxy; the big moment full.
+            target = 1.0 if self._section.big_moment else PLAN_ENERGY.get(self._section.planned_bucket, 0.3)
+            self._energy += ENERGY_SMOOTHING * (target - self._energy)
         else:
             # Louder deck's fader + how "open" its EQ is -> a coarse energy proxy.
             if self._midi["fader_a"] >= self._midi["fader_b"]:
@@ -1791,14 +1823,27 @@ class Metronome(threading.Thread):
         if plan is not None:
             # pinned for the whole track (also through a short status gap): the auto state
             # machine is not advanced, so it resumes cleanly if the plan ever lets go
+            cur, _ = plan.at_beat(sec.track_beat)
+            if (cur is not None and cur.length < SHORT_SECTION_BEATS and cur.beat > 0
+                    and self._palette_plan_track == sec.track_id):
+                # 2026-10-30 run 6: Thriller's 4-beat "up" between the drop and its roll flipped the
+                # colours drop -> build -> drop inside one bar (Josh: "it was just doing too much")
+                return
+            self._palette_plan_track = sec.track_id
             bucket = self.look_bucket.value
             self.palette, self.palette_spot = palette_mod.pick(bucket, plan.palette_seed, 0, 0)
+            # P-24: the song's own colour (its drop colour) for the Tease, whatever bucket is showing
+            song, _ = palette_mod.pick("drop", plan.palette_seed, 0, 0)
+            self.palette_song = palette_mod.song_pair("drop", plan.palette, song, song)[0] if plan.palette else song
             if plan.palette:   # D-23 / look notes: the song's colour and its one companion
                 self.palette, self.palette_spot = palette_mod.song_pair(bucket, plan.palette, self.palette,
                                                                         self.palette_spot)
                 if plan.style.spots == "split" and palette_mod.family(bucket) == "drop":
                     # song_style.py: this song's heads carry its companion colour in the drop
                     self.palette_spot = palette_mod.COMPANION.get(plan.palette, self.palette_spot)
+            # D-36: the kick-free break's riser rises in the companion colour (engines/reactive.py reads
+            # planned_riser); Josh on the white intro riser: "extremely bright and didn't match what was
+            # beforehand and after". No palette swap.
             return
         self._derive_palette_auto()
 
@@ -1967,7 +2012,17 @@ class Metronome(threading.Thread):
             planned_hit=ps.hit if ps is not None else 0.0,
             roll_progress=(min(1.0, max(0.0, (track_beat - ps.beat) / max(1, ps.end_beat - ps.beat)))
                            if ps is not None and ps.roll else -1.0),
+            roll_ahead=plan.roll_ahead(track_beat) if plan is not None else False,
+            planned_look=plan.cue_look(track_beat) if plan is not None else "",
+            section_progress=(min(1.0, max(0.0, (track_beat - ps.beat) / max(1, ps.end_beat - ps.beat)))
+                              if ps is not None else -1.0),
+            flash_white=plan.flash_white if plan is not None else 0.0,
+            tease_progress=plan.tease_at(track_beat) if plan is not None else -1.0,
+            tease_hold=plan.tease_hold(track_beat) if plan is not None else False,
+            tease_bright=plan.tease_bright(track_beat) if plan is not None else False,
             style=plan.style if plan is not None else None,
+            laser_scene=ps.laser_scene if ps is not None else "",
+            laser_cues=tuple(plan.laser_cues) if plan is not None else (),
             looping=looping, loop_pin_beat=loop_pin_beat,
         )
         if self.phrases_mode != "drive":
@@ -2014,7 +2069,10 @@ class Metronome(threading.Thread):
         if early_target is not None and getattr(plan.at_beat(early_target)[0], "roll", False):
             early_target = None   # the plan already starts that drop on its roll (planner PLAN_ROLL_BEATS)
         # (not while looping: a looped roll is the DJ holding the tension, not starting the drop)
+        # D-36 / P-24: only a drop that earns a lead-in starts on the roll; before a lesser drop the build
+        # says strobe_allowed=False and the roll stays the Tease (no drop look, no colour change early)
         if (self._roll_start_pending and ROLL_START_COMMITS and early_target is not None and not sec.looping
+                and sec.strobe_allowed
                 and sec.beats_to_drop <= PLAN_ROLL_WINDOW_BEATS and self._base_committed != EnergyBucket.DROP
                 and self._is_audio_fresh(now)):
             self._roll_start_pending = False
@@ -2086,8 +2144,11 @@ class Metronome(threading.Thread):
             if self._drop_arm_source != "dj":
                 self._drop_armed_until = now + 2 * self._bar_s()
                 self._drop_arm_source = "rekordbox"
-            # the pre-drop blackout bridge -- never held open by a loop pinned on the last beat
-            self._pending_drop_release = sec.beats_to_drop <= 1 and not sec.looping
+            # the pre-drop blackout bridge -- never held open by a loop pinned on the last beat, and not
+            # between a Tease and the roll it runs into (P-24, Josh: "the transition between the bright
+            # light and then the strobe needs to be smooth, it cant jump from intense to not intense")
+            tease_into_roll = sec.tease_progress >= 0.0 and sec.roll_ahead
+            self._pending_drop_release = sec.beats_to_drop <= 1 and not sec.looping and not tease_into_roll
         elif self._drop_arm_source == "rekordbox" and not (0 < sec.beats_to_drop <= rules.prearm_beats):
             self._drop_armed_until = None
             self._drop_arm_source = ""
@@ -2132,6 +2193,17 @@ class Metronome(threading.Thread):
 
     def _is_midi_fresh(self, now: float) -> bool:
         return self._last_midi_time is not None and (now - self._last_midi_time) < MIDI_STALE_AFTER
+
+    def _riser_active(self, now: float) -> bool:
+        """D-35/D-36: a kick-free planned break -> the wash rises across the section in the break's own
+        (companion) colour (engines/reactive.py). Plan AND audio must agree."""
+        sec = self._section
+        return bool(sec.plan_active and sec.planned_bucket == "break" and self._is_audio_fresh(now)
+                    and self._bass_env < QUIET_BASS_ABS)
+
+    def _tease_active(self) -> bool:
+        """P-24: a planned Tease is running (drive mode only, like every planned look)."""
+        return bool(self._section.plan_active and self._section.tease_progress >= 0.0)
 
     def _is_audio_fresh(self, now: float) -> bool:
         return self._last_audio_time is not None and (now - self._last_audio_time) < AUDIO_STALE_AFTER
@@ -2203,10 +2275,21 @@ class Metronome(threading.Thread):
             planned_scene=self._section.planned_scene,
             planned_big_moment=self._section.big_moment,
             planned_strobe_allowed=self._section.strobe_allowed,
-            planned_laser_allowed=self._section.laser_allowed,
+            planned_laser_allowed=self._section.laser_allowed and not self._tease_active(),   # P-24: no lasers in a Tease
+            planned_laser_scene=self._section.laser_scene if self._section.plan_active else "",
+            planned_laser_cues=self._section.laser_cues if self._section.plan_active else (),
             beats_to_drop=self._section.beats_to_drop,
             planned_roll_progress=self._section.roll_progress if self._section.plan_active else -1.0,
+            planned_roll_ahead=self._section.roll_ahead if self._section.plan_active else False,
+            planned_look=self._section.planned_look if self._section.plan_active else "",
+            planned_section_progress=self._section.section_progress if self._section.plan_active else -1.0,
+            planned_riser=self._riser_active(now),
+            planned_flash_white=self._section.flash_white if self._section.plan_active else 0.0,
             planned_hit=self._section.planned_hit if self._section.plan_active else 0.0,
+            planned_tease_progress=self._section.tease_progress if self._tease_active() else -1.0,
+            planned_tease_hold=self._section.tease_hold if self._section.plan_active else False,
+            planned_song_palette=self.palette_song if self._section.plan_active else "",
+            planned_tease_bright=self._section.tease_bright and self._tease_active(),
             **self._style_fields(),
             in_transition=now < self._transition_until,
             free_running=not self._is_pdl_fresh(now),

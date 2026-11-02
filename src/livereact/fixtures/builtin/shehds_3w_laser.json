@@ -6,8 +6,9 @@
  "category": "laser",
  "source": {
   "kind": "builtin",
-  "attribution": "LiveReact (fixtures/profiles.py)",
-  "confirmed": false
+  "attribution": "LiveReact (fixtures/profiles.py) + the manufacturer's manual 'SHEHDS 3000mW RGB Laser' (12CH/25CH, lasersystem v2.8; manuals/shehds_3w_laser/SHEHDS_3000mW_RGB_Laser_12-25CH_manual.pdf). confidence 1.0 = seen on the real unit (docs/laser_findings.md), 0.9 = printed in the manual, not yet seen",
+  "confirmed": false,
+  "pdf_sha256": "ad88af4c4642d498411b96ad7346c6358709105c2587c9e965c18069fcd5c19a"
  },
  "physical": {
   "laser": {
@@ -29,7 +30,9 @@
         41
        ],
        "type": "no_function",
-       "label": "laser off"
+       "label": "laser off",
+       "confidence": 1.0,
+       "source_page": 4
       },
       {
        "range": [
@@ -37,15 +40,59 @@
         83
        ],
        "type": "mode",
-       "label": "manual patterns"
+       "label": "manual control (DMX drives the pattern channels)",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        84,
+        125
+       ],
+       "type": "mode",
+       "label": "auto run: built-in animation programs (never used)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        126,
+        167
+       ],
+       "type": "mode",
+       "label": "auto run: built-in beam programs (never used)",
+       "confidence": 0.9,
+       "source_page": 4
       },
       {
        "range": [
         168,
+        209
+       ],
+       "type": "mode",
+       "label": "sound active: built-in beam programs (never used)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        210,
         251
        ],
        "type": "mode",
-       "label": "sound active (never used)"
+       "label": "sound active: built-in animation programs (never used)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        252,
+        255
+       ],
+       "type": "mode",
+       "label": "manual control (duplicate of 42-83)",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
@@ -56,11 +103,83 @@
      "capabilities": [
       {
        "range": [
+        0,
+        31
+       ],
+       "type": "laser_pattern",
+       "label": "pattern group 1 (contents unmapped)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        32,
+        63
+       ],
+       "type": "laser_pattern",
+       "label": "pattern group 2 (contents unmapped)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        64,
+        95
+       ],
+       "type": "laser_pattern",
+       "label": "pattern group 3 (contents unmapped)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
         96,
         127
        ],
        "type": "laser_pattern",
-       "label": "dotted line group"
+       "label": "pattern group 4 (the line/beam group: 118 draws a line, seen)",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
+        159
+       ],
+       "type": "laser_pattern",
+       "label": "pattern group 5 (contents unmapped)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        160,
+        191
+       ],
+       "type": "laser_pattern",
+       "label": "pattern group 6 (contents unmapped)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        192,
+        223
+       ],
+       "type": "laser_pattern",
+       "label": "pattern group 7 (contents unmapped)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        224,
+        255
+       ],
+       "type": "laser_pattern",
+       "label": "pattern group 8 (contents unmapped)",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
@@ -72,17 +191,211 @@
       {
        "range": [
         0,
+        15
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 1 of the selected group (seen with group 4: the line)",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        16,
+        31
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 2 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        32,
+        47
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 3 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        48,
+        63
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 4 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        64,
+        79
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 5 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        80,
+        95
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 6 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        96,
+        111
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 7 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        112,
+        127
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 8 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
+        143
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 9 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        144,
+        159
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 10 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        160,
+        175
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 11 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        176,
+        191
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 12 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        192,
+        207
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 13 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        208,
+        223
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 14 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        224,
+        239
+       ],
+       "type": "laser_pattern",
+       "label": "pattern 15 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        240,
         255
        ],
        "type": "laser_pattern",
-       "label": "sub-pattern"
+       "label": "pattern 16 of the selected group",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
     {
      "offset": 3,
      "function": "laser_rotate",
-     "default": 0
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        0
+       ],
+       "type": "laser_rotate",
+       "label": "no rotation",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        1,
+        127
+       ],
+       "type": "laser_rotate",
+       "label": "static rotation angle (Z axis)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
+        191
+       ],
+       "type": "laser_rotate",
+       "label": "clockwise rotation, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        192,
+        255
+       ],
+       "type": "laser_rotate",
+       "label": "anticlockwise rotation, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
+      }
+     ]
     },
     {
      "offset": 4,
@@ -92,10 +405,22 @@
       {
        "range": [
         0,
+        127
+       ],
+       "type": "generic",
+       "label": "horizontal flip: static angle (X-axis tilt of the pattern; 0 = flat)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
         255
        ],
        "type": "generic",
-       "label": "horizontal flip (unverified)"
+       "label": "horizontal flip: rotation speed, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
@@ -107,10 +432,22 @@
       {
        "range": [
         0,
+        127
+       ],
+       "type": "generic",
+       "label": "vertical flip: static angle (Y-axis tilt of the pattern; 0 = flat)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
         255
        ],
        "type": "generic",
-       "label": "vertical flip (unverified)"
+       "label": "vertical flip: rotation speed, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
@@ -125,7 +462,9 @@
         127
        ],
        "type": "laser_x",
-       "label": "static position (unverified)"
+       "label": "horizontal position, static (not yet seen; 0 = centre per the manual)",
+       "confidence": 0.9,
+       "source_page": 4
       },
       {
        "range": [
@@ -133,7 +472,9 @@
         255
        ],
        "type": "laser_x",
-       "label": "sweep speed"
+       "label": "horizontal sweep speed, slow to fast",
+       "confidence": 1.0,
+       "source_page": 4
       }
      ]
     },
@@ -148,7 +489,19 @@
         127
        ],
        "type": "laser_y",
-       "label": "vertical position (unverified)"
+       "label": "vertical position, static (BEAM HEIGHT: real mount only)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
+        255
+       ],
+       "type": "laser_y",
+       "label": "vertical sweep speed, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
@@ -163,7 +516,49 @@
         0
        ],
        "type": "generic",
-       "label": "scale static (only safe value)"
+       "label": "full size, held",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        1,
+        63
+       ],
+       "type": "generic",
+       "label": "static size (smaller as the value rises; 1-63 never probed, the manual says static)",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        64,
+        127
+       ],
+       "type": "generic",
+       "label": "shrinking, slow to fast (64 seen shrinking; 96 seen as shrink-then-snap)",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
+        191
+       ],
+       "type": "generic",
+       "label": "growing, slow to fast (128 seen growing)",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        192,
+        255
+       ],
+       "type": "generic",
+       "label": "zoom in and out, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
@@ -175,10 +570,32 @@
       {
        "range": [
         0,
+        0
+       ],
+       "type": "generic",
+       "label": "no painting: the whole pattern is drawn at once",
+       "confidence": 1.0,
+       "source_page": 4
+      },
+      {
+       "range": [
+        1,
+        127
+       ],
+       "type": "generic",
+       "label": "painting style 1: the pattern draws itself in gradually, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
         255
        ],
        "type": "generic",
-       "label": "painting speed (unverified)"
+       "label": "painting style 2, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     },
@@ -193,7 +610,9 @@
         127
        ],
        "type": "generic",
-       "label": "scan speed (untested)"
+       "label": "scan speed: solid outline, slow to fast (not yet seen)",
+       "confidence": 0.9,
+       "source_page": 4
       },
       {
        "range": [
@@ -201,7 +620,9 @@
         255
        ],
        "type": "generic",
-       "label": "pattern lattice (dots)"
+       "label": "dots: the outline becomes a lattice of points (190 seen)",
+       "confidence": 1.0,
+       "source_page": 4
       }
      ]
     },
@@ -212,11 +633,24 @@
      "capabilities": [
       {
        "range": [
+        0,
+        7
+       ],
+       "type": "laser_color",
+       "label": "no custom colour: the pattern's own colours",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
         8,
         15
        ],
        "type": "laser_color",
-       "label": "white"
+       "label": "white",
+       "confidence": 1.0,
+       "source_page": 4,
+       "color": "#ffffff"
       },
       {
        "range": [
@@ -224,7 +658,10 @@
         23
        ],
        "type": "laser_color",
-       "label": "red"
+       "label": "red",
+       "confidence": 0.9,
+       "source_page": 4,
+       "color": "#ff0000"
       },
       {
        "range": [
@@ -232,7 +669,10 @@
         31
        ],
        "type": "laser_color",
-       "label": "yellow"
+       "label": "yellow",
+       "confidence": 0.9,
+       "source_page": 4,
+       "color": "#ffff00"
       },
       {
        "range": [
@@ -240,7 +680,10 @@
         39
        ],
        "type": "laser_color",
-       "label": "green"
+       "label": "green",
+       "confidence": 1.0,
+       "source_page": 4,
+       "color": "#00ff00"
       },
       {
        "range": [
@@ -248,7 +691,10 @@
         47
        ],
        "type": "laser_color",
-       "label": "cyan"
+       "label": "cyan",
+       "confidence": 0.9,
+       "source_page": 4,
+       "color": "#00ffff"
       },
       {
        "range": [
@@ -256,7 +702,10 @@
         55
        ],
        "type": "laser_color",
-       "label": "blue"
+       "label": "blue",
+       "confidence": 0.9,
+       "source_page": 4,
+       "color": "#0000ff"
       },
       {
        "range": [
@@ -264,7 +713,40 @@
         63
        ],
        "type": "laser_color",
-       "label": "purple"
+       "label": "purple",
+       "confidence": 0.9,
+       "source_page": 4,
+       "color": "#a020f0"
+      },
+      {
+       "range": [
+        64,
+        127
+       ],
+       "type": "laser_color",
+       "label": "colours change on their own, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        128,
+        191
+       ],
+       "type": "laser_color",
+       "label": "line rainbow ('flowing water'): colours run along the line, slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
+      },
+      {
+       "range": [
+        192,
+        255
+       ],
+       "type": "laser_color",
+       "label": "colour follows the painting (gradual drawing), slow to fast",
+       "confidence": 0.9,
+       "source_page": 4
       }
      ]
     }

@@ -151,8 +151,10 @@ def test_laser_show_controls_only_for_show_rigs(qapp):
     assert app.manual.laser_mode == "rotate"
 
 
-def test_presets_without_apply_preset_only_store(qapp):
+def test_presets_without_apply_preset_only_store(qapp, monkeypatch):
+    # App gained apply_preset (D-38, 2026-10-30); the panel's fallback for an app without it still matters
     from livereact.merge.merge import ManualParams
+    monkeypatch.delattr(App, "apply_preset")
     app, p = _panel()
     assert not hasattr(app, "apply_preset")
     before = ManualParams(**vars(app.manual))
@@ -195,3 +197,41 @@ def test_save_without_a_name_reports(qapp):
     p.b_save_event.click()
     assert "name" in p.l_preset_msg.text()
     assert p.cmb_events.count() == 0
+
+
+def _aepi_panel():
+    app = App(AppConfig(demo=True, config_path=None, rig_path="rigs/aepi.json"))
+    app.manual.laser_enable = False
+    return _panel(app)
+
+
+def test_override_looks_only_on_a_rig_that_lists_them(qapp):
+    _, p = _panel()
+    assert p.laser_override_buttons == {} and p.b_laser_resume is None
+    _, p = _aepi_panel()
+    assert list(p.laser_override_buttons) == ["Rainbow", "Green", "White"]
+    assert p.b_laser_resume is not None and not p.b_laser_resume.isEnabled()
+
+
+def test_override_latches_auto_off_until_resume(qapp):
+    app, p = _aepi_panel()
+    m = app.manual
+    p.laser_override_buttons["Green"].click()
+    assert (m.laser_override, m.laser_auto_off) == ("Green", True)
+    p.laser_override_buttons["White"].click()              # one look at a time
+    assert m.laser_override == "White" and not p.laser_override_buttons["Green"].isChecked()
+    p.laser_override_buttons["White"].click()              # off: dark, auto still off
+    assert (m.laser_override, m.laser_auto_off) == ("", True)
+    assert p.b_laser_resume.isEnabled()
+    p.b_laser_resume.click()
+    assert (m.laser_override, m.laser_auto_off) == ("", False)
+    assert not p.b_laser_resume.isEnabled()
+
+
+def test_switching_to_a_rig_without_overrides_clears_them(qapp):
+    app, p = _aepi_panel()
+    p.laser_override_buttons["Rainbow"].click()
+    app.rig.laser_overrides = ()
+    p.build_laser_overrides()
+    assert p.laser_override_buttons == {}
+    assert (app.manual.laser_override, app.manual.laser_auto_off) == ("", False)

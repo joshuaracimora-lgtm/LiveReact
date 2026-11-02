@@ -834,14 +834,14 @@
     },
     "PLAN_ROLL_MIN_BUILD_BEATS": {
       "module": "livereact.rekordbox.planner",
-      "default": 40,
+      "default": 4,
       "type": "int",
       "tag": "tunable",
       "range": [
-        16,
+        4,
         64
       ],
-      "note": "planner: a roll lead-in is only split off when the build keeps at least this many beats (TIME-02 8-bar build look + the look change's lag)"
+      "note": "planner: a roll lead-in is only split off when the build keeps at least this many beats (was 40 until 2026-10-29, D-33: Thriller's 36-beat builds never got their roll; now one bar, so a build must be longer than the roll)"
     },
     "PLAN_ROLL_RISE": {
       "module": "livereact.rekordbox.planner",

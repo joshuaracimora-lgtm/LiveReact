@@ -98,6 +98,20 @@ def test_synth_sync_checkbox_and_shortcut_drive_manual_params(qapp):
     _ = QtCore  # PySide6 import kept explicit for clarity
 
 
+def test_synth_threshold_slider_drives_manual_params(qapp):
+    """2026-10-29: the Feel slider is the live trim for the Synth Sync
+    threshold (ManualParams.synth_threshold, persisted by config.py)."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    assert win.s_synth_thr.value() == int(round(app.manual.synth_threshold * 100))
+    win.s_synth_thr.setValue(75)
+    assert app.manual.synth_threshold == 0.75
+    win.s_synth_thr.setValue(0)
+    assert app.manual.synth_threshold == 0.0
+
+
 def test_laser_arming_checkbox_and_shortcut_drive_manual_params(qapp):
     """2026-09-16: arming is per track by hand (never persisted; demo mode
     alone pre-arms so its drop scenes can show the laser) -- the checkbox
@@ -923,3 +937,40 @@ def test_moving_a_target_a_head_was_captured_on_warns(qapp):
         QTest.mouseMove(view.viewport(), QtCore.QPoint(p.x(), p.y() + dy))
     QTest.mouseRelease(view.viewport(), left, none, QtCore.QPoint(p.x(), p.y() - 60))
     assert "dj_booth" in tab.status.text() and "SET AIM" in tab.status.text()
+
+
+def test_show_tab_fits_a_laptop_screen(qapp):
+    """UI_BUGS (layout, 2026-10-29): with the Manual Override panel open the Show
+    tab's control column (Lasers / Manual Override / Presets, Safety, Feel) needed
+    1387 px on a MacBook with 863 px to spend, so the 1280 x 800 the console asks
+    for was overridden and the window was born taller than the screen: the Presets
+    and Feel groups could not be reached. The column scrolls now, and the startup
+    size is clamped to the screen."""
+    from PySide6 import QtCore, QtWidgets
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    win.show()
+    qapp.processEvents()
+    avail = qapp.primaryScreen().availableGeometry()
+    assert win.height() <= avail.height() and win.width() <= avail.width()
+    # a 1280 x 800 window must be able to hold it with room for the title bar
+    assert win.minimumSizeHint().height() <= 700, win.minimumSizeHint()
+
+    win.resize(1280, 800)
+    qapp.processEvents()
+    assert (win.width(), win.height()) == (1280, 800)
+    scroll = win.show_controls_scroll
+    assert isinstance(scroll, QtWidgets.QScrollArea)
+    # the controls scroll vertically but are never clipped sideways
+    assert scroll.horizontalScrollBar().maximum() == 0
+    assert scroll.widget().width() >= scroll.widget().minimumSizeHint().width()
+    for b in (win.b_cue, win.b_arm, win.b_burst, win.b_skip, win.b_laser_cue, win.b_laser_hit, win.b_tap):
+        assert scroll.widget().isAncestorOf(b) and b.isVisibleTo(win)
+    # the mouse wheel scrolls the column instead of turning a Presets combo or a Feel slider
+    for cls in (QtWidgets.QComboBox, QtWidgets.QAbstractSlider, QtWidgets.QAbstractSpinBox):
+        for child in scroll.widget().findChildren(cls):
+            if isinstance(child, QtWidgets.QScrollBar):
+                continue
+            assert child.focusPolicy() == QtCore.Qt.FocusPolicy.StrongFocus, child

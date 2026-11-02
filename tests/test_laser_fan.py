@@ -127,6 +127,29 @@ def test_audio_loss_goes_dark():
     assert not eng.active
 
 
+def test_a_driving_plan_on_a_playing_deck_is_music_too():
+    """2026-10-29, the bench with no XDJ audio on the Mac: the plan ran the whole track and the fan
+    fired on the big moment in the engine, but LASER-12's gate read "no audio" as signal loss and
+    kept the lasers dark. A driving plan + fresh Pro DJ Link + PLAY is proof of music; a paused
+    deck or a stale link is not."""
+    eng, clock, rig = _engine()
+    alive = dict(audio_fresh=False, plan_active=True, playing=True, planned_laser_allowed=True)
+    _run(eng, clock, rig, _snap(bucket="build", bar=10, section_kind="build", **alive), 2 * BAR_S)
+    assert not eng.active and eng.primed                      # ready, not dark
+    clock.advance(0.05)
+    c = eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, section_kind="drop", **alive), rig)
+    assert eng.active and eng.trigger == "drop"
+    assert c.values[rig.fixture("laser_l").offset] != 0      # CH1 lit on the frame
+    # the deck pauses: dark now
+    clock.advance(0.05)
+    eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, section_kind="drop", **dict(alive, playing=False)), rig)
+    assert not eng.active and not eng.primed
+    # a plan that is not driving (shadow mode) does not count
+    eng2, clock2, rig2 = _engine()
+    _run(eng2, clock2, rig2, _snap(bucket="build", bar=10, audio_fresh=False, plan_active=False, playing=True), BAR_S)
+    assert not eng2.primed
+
+
 def test_a_planned_roll_holds_the_fan_for_the_bass_hit_after_it():
     """2026-10-28: the roll is the start of the drop, but the fan belongs to the hit after the roll."""
     eng, clock, rig = _engine()
@@ -139,3 +162,91 @@ def test_a_planned_roll_holds_the_fan_for_the_bass_hit_after_it():
     clock.advance(0.05)
     eng.tick(_snap(bar=20, planned_roll_progress=-1.0, **roll), rig)        # the chorus: the bass is back
     assert eng.active and eng.trigger == "drop"
+
+
+# --- the look notes' scene per moment (2026-10-29) ---------------------------------------------------
+
+def test_without_a_plan_the_fan_shows_rainbow_in_the_palettes_colour():
+    eng, clock, rig = _engine()
+    c = _drop(eng, clock, rig)
+    laser = rig.fixture("laser_l")
+    assert eng.scene_name == "Rainbow"
+    assert tuple(c.values[laser.offset:laser.offset + 11]) == lf.FAN_SCENE[:11]
+    assert c.values[laser.offset + 11] == Laser.COLOR_RED
+
+
+def test_the_tracks_laser_scene_is_primed_and_fired():
+    from livereact.engines.laser_scenes import get_scene
+    eng, clock, rig = _engine()
+    plan = dict(plan_active=True, planned_laser_scene="Spinning Line")
+    c = _run(eng, clock, rig, _snap(bucket="build", bar=10, **plan), 2 * BAR_S)
+    laser = rig.fixture("laser_l")
+    spin = get_scene("Spinning Line").values
+    assert not eng.active and eng.scene_name == "Spinning Line"
+    assert c.values[laser.offset] == 0 and tuple(c.values[laser.offset + 1:laser.offset + 11]) == spin[1:11]  # primed
+    clock.advance(0.05)
+    c = eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, **plan), rig)
+    assert eng.active and eng.trigger == "drop" and eng.scene_name == "Spinning Line"
+    assert tuple(c.values[laser.offset:laser.offset + 11]) == spin[:11]
+    assert c.values[laser.offset + 11] == Laser.COLOR_RED       # a palette scene: the show's colour, not the file's
+    assert eng.candidates[-1]["verdict"] == "fired" and eng.candidates[-1]["scene"] == "Spinning Line"
+
+
+def test_a_cue_for_the_trigger_beats_the_tracks_scene_and_a_fixed_colour_stays():
+    from livereact.engines.laser_scenes import get_scene
+    eng, clock, rig = _engine()
+    plan = dict(plan_active=True, planned_laser_scene="Spinning Line",
+                planned_laser_cues=(("drop", "Blue Sweep"), ("wub", "Breathing Dots")))
+    _run(eng, clock, rig, _snap(bucket="build", bar=10, **plan), 2 * BAR_S)
+    clock.advance(0.05)
+    c = eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, palette="blood_red", **plan), rig)
+    laser = rig.fixture("laser_l")
+    assert eng.active and eng.trigger == "drop" and eng.scene_name == "Blue Sweep"
+    assert tuple(c.values[laser.offset:laser.offset + 12]) == get_scene("Blue Sweep").values
+    assert eng.color == Laser.COLOR_BLUE and eng.color_name == "blue"   # fixed colour: blue whatever the palette
+
+
+def test_the_scene_is_held_for_the_whole_moment_even_if_the_plan_changes_its_mind():
+    eng, clock, rig = _engine()
+    plan = dict(plan_active=True, planned_laser_scene="Spinning Line")
+    _run(eng, clock, rig, _snap(bucket="build", bar=10, **plan), 2 * BAR_S)
+    clock.advance(0.05)
+    eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, **plan), rig)
+    _run(eng, clock, rig, _snap(bucket="drop", bar=12, drop_start_bar=12, plan_active=True,
+                                planned_laser_scene="Painted Line"), BAR_S)
+    assert eng.active and eng.scene_name == "Spinning Line"
+
+
+def test_an_unknown_scene_name_falls_back_to_rainbow_never_dark():
+    eng, clock, rig = _engine()
+    plan = dict(plan_active=True, planned_laser_scene="Renamed Since")
+    c = _drop_with(eng, clock, rig, plan)
+    laser = rig.fixture("laser_l")
+    assert eng.active and eng.scene_name == "Rainbow" and c.values[laser.offset] == lf.FAN_SCENE[0]
+
+
+def _drop_with(eng, clock, rig, plan: dict):
+    _run(eng, clock, rig, _snap(bucket="build", bar=10, **plan), 2 * BAR_S)
+    clock.advance(0.05)
+    return eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, **plan), rig)
+
+
+def test_a_moment_stays_inside_its_section_no_start_in_the_last_bar_and_ends_when_the_drop_does():
+    """D-35 (run 4, 2026-10-30): a wub moment opened a beat before the planned build and lit 2 bars of
+    it. The lasers belong to the most intense parts only."""
+    eng, clock, rig = _engine()
+    alive = dict(audio_fresh=True, plan_active=True, playing=True, planned_laser_allowed=True)
+    _run(eng, clock, rig, _snap(bucket="build", bar=10, section_kind="build", **alive), 2 * BAR_S)
+    clock.advance(0.05)
+    # drop entry in the last bar of its section: refused
+    eng.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, section_kind="drop", beats_to_next_section=3, **alive), rig)
+    assert not eng.active and eng.candidates[-1]["verdict"] == "section ends"
+    # a fresh drop with room ahead: fires, then the plan moves to a build -> the moment ends at once
+    eng2, clock2, rig2 = _engine()
+    _run(eng2, clock2, rig2, _snap(bucket="build", bar=10, section_kind="build", **alive), 2 * BAR_S)
+    clock2.advance(0.05)
+    eng2.tick(_snap(bucket="drop", bar=12, drop_start_bar=12, section_kind="drop", beats_to_next_section=40, **alive), rig2)
+    assert eng2.active
+    clock2.advance(0.05)
+    c = eng2.tick(_snap(bucket="build", bar=12, drop_start_bar=12, section_kind="build", beats_to_next_section=30, **alive), rig2)
+    assert not eng2.active and c.values[rig2.fixture("laser_l").offset] == 0

@@ -1,0 +1,131 @@
+{
+ "schema": "livereact-fixture/1",
+ "id": "xfalights_90w_beam",
+ "manufacturer": "XFALIGHTS",
+ "model": "90W LED Beam Moving Head (RGBW)",
+ "category": "moving_head",
+ "source": {
+  "kind": "builtin",
+  "attribution": "LiveReact (fixtures/profiles.py) -- channel map INFERRED from the OEM's 14CH chart, not the unit's manual",
+  "confirmed": false
+ },
+ "physical": {
+  "pan_deg": 540.0,
+  "tilt_deg": 180.0,
+  "pan_max_deg_s": 260.0
+ },
+ "modes": [
+  {
+   "name": "15ch",
+   "channels": [
+    {
+     "offset": 0,
+     "function": "pan",
+     "default": 128
+    },
+    {
+     "offset": 1,
+     "function": "pan_fine",
+     "default": 0,
+     "fine_of": 0
+    },
+    {
+     "offset": 2,
+     "function": "tilt",
+     "default": 128
+    },
+    {
+     "offset": 3,
+     "function": "tilt_fine",
+     "default": 0,
+     "fine_of": 2
+    },
+    {
+     "offset": 4,
+     "function": "pan_tilt_speed",
+     "default": 128
+    },
+    {
+     "offset": 5,
+     "function": "dimmer",
+     "default": 0
+    },
+    {
+     "offset": 6,
+     "function": "strobe",
+     "default": 0
+    },
+    {
+     "offset": 7,
+     "function": "red",
+     "default": 0
+    },
+    {
+     "offset": 8,
+     "function": "green",
+     "default": 0
+    },
+    {
+     "offset": 9,
+     "function": "blue",
+     "default": 0
+    },
+    {
+     "offset": 10,
+     "function": "white",
+     "default": 0
+    },
+    {
+     "offset": 11,
+     "function": "macro",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        0
+       ],
+       "type": "no_function",
+       "label": "off (LiveReact keeps 0)"
+      }
+     ]
+    },
+    {
+     "offset": 12,
+     "function": "generic",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        255
+       ],
+       "type": "generic",
+       "label": "colour macro speed"
+      }
+     ]
+    },
+    {
+     "offset": 13,
+     "function": "macro",
+     "default": 0,
+     "capabilities": [
+      {
+       "range": [
+        0,
+        0
+       ],
+       "type": "no_function",
+       "label": "DMX control; auto/sound off (LiveReact keeps 0)"
+      }
+     ]
+    },
+    {
+     "offset": 14,
+     "function": "reset",
+     "default": 0
+    }
+   ]
+  }
+ ]
+}

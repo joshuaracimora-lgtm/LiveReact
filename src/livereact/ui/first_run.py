@@ -22,6 +22,7 @@ OUTPUTS = (("enttec", "Enttec USB DMX interface"), ("artnet", "Art-Net (network)
            ("sacn", "sACN / E1.31 (network)"), ("demo", "Demo: no lights connected"))
 START_DEMO, START_ADD = "demo_rig", "add_fixtures"
 SETUP_KEY = "setup"
+AVAILABLE_OUTPUTS = ("enttec", "demo")   # the backends this build has (launch.SUPPORTED_OUTPUTS)
 
 
 def audio_devices() -> list[str]:
@@ -62,10 +63,14 @@ class FirstRunDialog(QtWidgets.QDialog):
         ol.addWidget(QtWidgets.QLabel("How are your lights connected?"))
         self.output_buttons: dict[str, QtWidgets.QRadioButton] = {}
         for key, text in OUTPUTS:
-            rb = QtWidgets.QRadioButton(text)
+            rb = QtWidgets.QRadioButton(text if key in AVAILABLE_OUTPUTS else f"{text} — coming later")
+            # 2026-10-30: there is no Art-Net / sACN backend yet (output/ has Enttec + demo only); offering
+            # them as live choices sent a user's lights nowhere with no error.
+            rb.setEnabled(key in AVAILABLE_OUTPUTS)
             self.output_buttons[key] = rb
             ol.addWidget(rb)
-        self.output_buttons.get(prev.get("output"), self.output_buttons["demo"]).setChecked(True)
+        saved = prev.get("output") if prev.get("output") in AVAILABLE_OUTPUTS else "demo"
+        self.output_buttons[saved].setChecked(True)
         ol.addStretch(1)
         self.stack.addWidget(out)
 

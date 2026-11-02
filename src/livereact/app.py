@@ -81,6 +81,8 @@ class App:
         self.clock = clock or RealClock()
         self.stop_event = threading.Event()
 
+        self.failed_inputs: dict[str, BaseException] = {}   # input name -> why it failed to start
+        self.started_at: float | None = None
         # --- output pipeline (Phase 0; real Enttec in hardware mode) ---
         self.frame_buffer = DmxFrameBuffer()
         self.backend = backend or self._build_backend()
@@ -128,31 +130,7 @@ class App:
         # sparingly"): dark by default, 2-bar moments on the drop hit / PEAK
         # blocks / a big wub, plus the J hit and the K cue -- engines/laser_trigger.py.
         self._midi_hit_down = False  # MIDI "laser_hit" rising-edge state
-        if self.rig.laser_profile == "feature":
-            self.laser_engine = LaserFeatureEngine(self.clock, manual=self.manual)
-        elif self.rig.laser_profile == "trigger":
-            self.laser_engine = LaserTriggerEngine(self.clock, manual=self.manual)
-        elif self.rig.laser_profile == "fan":
-            # "fan" (2026-10-28): the Junior Crib fan fired by the music after big
-            # drops, colour from the triggering sound's band -- engines/laser_fan.py
-            self.laser_engine = LaserFanEngine(self.clock, manual=self.manual)
-        elif self.rig.laser_profile == "show":
-            # "show" (2026-10-08, Sophia's Thai): the lasers hold a picked
-            # scene for the whole set -- engines/laser_show.py, the console's
-            # Laser Show tab. Josh: the gate must not keep them dark here, so
-            # the arm switch starts ON for this profile (L still disarms,
-            # B still blacks out everything instantly).
-            self.laser_engine = LaserShowEngine(self.clock, manual=self.manual)
-            self.manual.laser_enable = True
-        elif self.rig.laser_profile == "manual":
-            # "manual" (2026-10-10, Junior Crib): no music input at all -- the
-            # operator drives each head from the Venue tab's manual section
-            # (engines/laser_manual.py). Armed at launch like "show" so the
-            # section's ON actually lights a head; L still disarms, B blacks out.
-            self.laser_engine = LaserManualEngine(self.clock, manual=self.manual)
-            self.manual.laser_enable = True
-        else:
-            self.laser_engine = LaserEngine(self.clock, manual=self.manual)
+        self.laser_engine = self._make_laser_engine(self.rig)
         # Merge is LTP-by-priority per channel kind (merge/merge.py), so list
         # order is cosmetic: Reactive (25) base, Phrase (50) look, Laser (60)
         # owns the laser channels, Transition (100) lift.
@@ -175,6 +153,80 @@ class App:
         self.recorder = None
         if self.config.record and self.config.session_dir:
             self._setup_recording(self.config.session_dir)
+
+
+    def _make_laser_engine(self, rig: Rig):
+        """The laser engine for ``rig.laser_profile`` (the comments below explain each profile)."""
+        if rig.laser_profile == "feature":
+            return LaserFeatureEngine(self.clock, manual=self.manual)
+        elif rig.laser_profile == "trigger":
+            return LaserTriggerEngine(self.clock, manual=self.manual)
+        elif rig.laser_profile == "fan":
+            # "fan" (2026-10-28): the Junior Crib fan fired by the music after big
+            # drops, colour from the triggering sound's band -- engines/laser_fan.py
+            return LaserFanEngine(self.clock, manual=self.manual)
+        elif rig.laser_profile == "show":
+            # "show" (2026-10-08, Sophia's Thai): the lasers hold a picked
+            # scene for the whole set -- engines/laser_show.py, the console's
+            # Laser Show tab. Josh: the gate must not keep them dark here, so
+            # the arm switch starts ON for this profile (L still disarms,
+            # B still blacks out everything instantly).
+            self.manual.laser_enable = True
+            return LaserShowEngine(self.clock, manual=self.manual)
+        elif rig.laser_profile == "manual":
+            # "manual" (2026-10-10, Junior Crib): no music input at all -- the
+            # operator drives each head from the Venue tab's manual section
+            # (engines/laser_manual.py). Armed at launch like "show" so the
+            # section's ON actually lights a head; L still disarms, B blacks out.
+            self.manual.laser_enable = True
+            return LaserManualEngine(self.clock, manual=self.manual)
+        else:
+            return LaserEngine(self.clock, manual=self.manual)
+
+    # ------------------------------------------------------------------ live seams (roadmap item 4)
+    def switch_rig(self, path: str) -> None:
+        """Play a different rig without a restart (the Rig manager's "Use selected", 2026-10-30).
+
+        Loads ``path`` first (a bad file raises and nothing changes), then swaps the rig and the laser
+        engine into the running show at the next tick. Lasers are ALWAYS disarmed by a switch -- a new
+        rig is a new room -- and Venue-tab pins are cleared. The engines that do not depend on the rig
+        (phrase, reactive, transition) keep their state, so the music position is not lost."""
+        rig = load_rig(path)
+        self.manual.calibration = None
+        self.manual.laser_enable = False
+        laser = self._make_laser_engine(rig)
+        self.manual.laser_enable = False          # a "show"/"manual" profile arms at launch, never on a switch
+        engines = [laser if e is self.laser_engine else e for e in self.engines]
+        self.show_engine.replace_rig(rig, engines, laser)
+        self.rig, self.laser_engine, self.engines = rig, laser, engines
+        self.config.rig_path = str(path)
+        if self.recorder is not None:
+            self.recorder.laser_engine = laser
+            self.recorder.rig = rig
+        log.info("Switched rig to %s (%d fixtures, laser profile %s); lasers disarmed",
+                 path, len(rig.fixtures), rig.laser_profile)
+
+    def apply_preset(self, effect) -> list[str]:
+        """Apply a preset (presets.PresetEffect) to the running show (the Manual Override panel).
+
+        Today that is its ``ManualParams`` part -- warm/cool bias, brightness and strobe ceilings, the
+        laser ban -- applied in place so every engine sees it on the next tick. The colour-scheme
+        palette, the genre's catalog and the movement switch have no engine hook yet (roadmap item 31):
+        they are returned as "not applied" so the console can say so instead of pretending."""
+        new = effect.apply_to(self.manual)
+        for f in ("master_brightness", "strobe_cap", "warm_cool_bias", "laser_enable", "synth_sync", "synth_threshold"):
+            setattr(self.manual, f, getattr(new, f))
+        self.preset_effect = effect
+        missing = []
+        if effect.palette:
+            missing.append(f"colour scheme {effect.palette!r}")
+        if effect.catalog_kwargs:
+            missing.append("genre looks")
+        if not effect.movement:
+            missing.append("no-movement")
+        if missing:
+            log.info("Preset applied (brightness/strobe/bias/lasers); not yet supported: %s", ", ".join(missing))
+        return missing
 
     def _norm_fingerprint(self) -> dict:
         """What the persisted normalizer range is only valid for: the same static
@@ -246,9 +298,11 @@ class App:
 
             from .output.enttec import EnttecSerialBackend, select_enttec_port
 
-            if select_enttec_port(list_ports.comports()):
-                return EnttecSerialBackend()
-            log.warning("Hardware mode: no Enttec detected; output will be logged only.")
+            if not select_enttec_port(list_ports.comports()):
+                # 2026-11-02 stress test: this used to fall back to log-only for the whole session, so an
+                # Enttec plugged in after launch was never used. The writer's reopen loop finds it instead.
+                log.warning("Hardware mode: no Enttec yet -- the lights connect when it is plugged in.")
+            return EnttecSerialBackend()
         except Exception:  # noqa: BLE001
             log.exception("Hardware mode: Enttec backend unavailable — logging output only.")
         return NullLogBackend(log_every=int(self.config.dmx_rate_hz))
@@ -307,10 +361,13 @@ class App:
         )
         for t in self._core_threads:
             t.start()
+        self.started_at = self.clock.monotonic()
         for source in self.sources:
             try:
                 source.start()
-            except Exception:  # noqa: BLE001 - a failed input must not abort startup
+            except Exception as exc:  # noqa: BLE001 - a failed input must not abort startup
+                # kept for the console's health banner (ui/health.py, 2026-11-02 AEPI post-mortem)
+                self.failed_inputs[source.name] = exc
                 log.exception("Input source %r failed to start; continuing without it", source.name)
 
     def shutdown(self) -> None:

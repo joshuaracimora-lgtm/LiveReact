@@ -28,11 +28,12 @@ from ..engines.color import band_levels
 from ..engines.laser_feature import MOOD_OFF, laser_color_name
 from ..engines.laser_show import MODE_FOLLOW, MODE_HOLD, MODE_ROTATE, look_names
 from ..engines.laser_trigger import DUTY_WINDOW_S
+from .health import health_warnings
 from ..tap_tempo import TapTempo
 from .floorplan import FloorPlanView
 from .rig_config import RigConfigTab
 from .theme import MUTED, apply_theme, bucket_color
-from .venue_tab import VenueTab
+from .venue_tab import VenueTab, _WheelGuard
 
 # The console's hotkeys: (key, attribute path on the window, what it does). _install_shortcuts()
 # binds exactly these and Help -> Keyboard shortcuts lists them, so the two cannot drift (item 43).
@@ -112,6 +113,54 @@ def _button(text: str, role: str | None = None, checkable: bool = False) -> QtWi
     return b
 
 
+class _VScrollArea(QtWidgets.QScrollArea):
+    """A column that scrolls vertically but keeps its content's minimum width,
+    so a short window scrolls the controls instead of growing past the screen
+    (and a narrow one still cannot clip them)."""
+
+    def __init__(self, content: QtWidgets.QWidget) -> None:
+        super().__init__()
+        self.setWidget(content)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.viewport().setAutoFillBackground(False)
+        content.setAutoFillBackground(False)
+        # As on the Venue panel: combos / sliders / spin boxes take the wheel
+        # only while focused, so the wheel scrolls the column, not a value.
+        self._wheel_guard = _WheelGuard(self)
+        for cls in (QtWidgets.QAbstractSpinBox, QtWidgets.QComboBox, QtWidgets.QAbstractSlider):
+            for child in content.findChildren(cls):
+                if isinstance(child, QtWidgets.QScrollBar):
+                    continue
+                child.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+                child.installEventFilter(self._wheel_guard)
+
+    def _content_width(self) -> int:
+        w = self.widget()
+        extra = self.verticalScrollBar().sizeHint().width() + 2 * self.frameWidth()
+        return (w.minimumSizeHint().width() if w is not None else 0) + extra
+
+    def minimumSizeHint(self) -> QtCore.QSize:  # noqa: N802 (Qt override)
+        return QtCore.QSize(self._content_width(), 0)
+
+    def sizeHint(self) -> QtCore.QSize:  # noqa: N802 (Qt override)
+        w = self.widget()
+        h = w.sizeHint().height() if w is not None else 0
+        return QtCore.QSize(max(self._content_width(), w.sizeHint().width() if w is not None else 0), h)
+
+
+def _fits_the_screen(wanted: QtCore.QSize, margin: int = 48) -> QtCore.QSize:
+    """``wanted`` shrunk to the primary screen's available area (minus the
+    title bar), so the console never starts taller or wider than the screen."""
+    screen = QtGui.QGuiApplication.primaryScreen()
+    if screen is None:
+        return wanted
+    avail = screen.availableGeometry().size()
+    return wanted.boundedTo(QtCore.QSize(max(avail.width() - margin, 640), max(avail.height() - margin, 480)))
+
+
 class ConsoleWindow(QtWidgets.QMainWindow):
     def __init__(self, app) -> None:
         super().__init__()
@@ -132,7 +181,13 @@ class ConsoleWindow(QtWidgets.QMainWindow):
 
         split = QtWidgets.QSplitter()
         split.addWidget(self._build_left_column())
-        split.addWidget(self._build_right_column())
+        # The control column (Lasers / Manual Override / Presets, Safety,
+        # Feel) is taller than a laptop screen once the Manual Override panel
+        # is open (2026-10-29: 1387 px on a MacBook with 863 px to spend, so
+        # the window was born taller than the screen and the bottom could not
+        # be reached). It scrolls vertically; its width still counts.
+        self.show_controls_scroll = _VScrollArea(self._build_right_column())
+        split.addWidget(self.show_controls_scroll)
         split.setSizes([720, 520])
         outer.addWidget(split, 1)
 
@@ -158,7 +213,20 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         tabs.addTab(self.rig_config, "Rig Config")
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
-        self.setCentralWidget(tabs)
+        # Health banner (ui/health.py, 2026-11-02 AEPI post-mortem): what is broken, in words, above
+        # everything -- hidden while all is well.
+        self.l_health_banner = QtWidgets.QLabel("")
+        self.l_health_banner.setWordWrap(True)
+        self.l_health_banner.setStyleSheet(
+            "background:#b3261e; color:white; font-weight:bold; font-size:15px; padding:10px; border-radius:6px;")
+        self.l_health_banner.setVisible(False)
+        central = QtWidgets.QWidget()
+        cv = QtWidgets.QVBoxLayout(central)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(6)
+        cv.addWidget(self.l_health_banner)
+        cv.addWidget(tabs, 1)
+        self.setCentralWidget(central)
         # Rig menu (2026-10-28, ui/rig_manager.py): pick the rig instead of --rig <path>.
         self.rig_manager = None
         rig_menu = self.menuBar().addMenu("&Rig")
@@ -178,7 +246,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         # item 44: rigs, fixtures, manuals, logs live there; tests swap open_url for a fake
         self.open_url = QtGui.QDesktopServices.openUrl
         help_menu.addAction("Open my LiveReact folder…", lambda: self.open_data_folder())
-        self.resize(1280, 800)
+        self.resize(_fits_the_screen(QtCore.QSize(1280, 800)))
 
         self._install_shortcuts()
 
@@ -356,10 +424,18 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         # band) and strobes pause -- see engines/reactive.py's SYNTH_* block.
         self.cb_synth = QtWidgets.QCheckBox("Synth Sync (S) — wash follows the synths")
         self.cb_synth.setChecked(m.synth_sync)
+        # Synth threshold (Josh, 2026-10-29): below it the wash holds the
+        # section's level; only a stab above it lifts the bar. 0 = follow
+        # every wobble. Persisted (config.py _PERSIST).
+        self.s_synth_thr = _slider(0, 95, int(round(m.synth_threshold * 100)))
+        self.s_synth_thr.setToolTip("Synth Sync threshold: the wash holds the section level and only "
+                                    "lifts on mid-band stabs above this fraction of the loudest recent "
+                                    "stab. 0 = follow everything (the original Synth Sync).")
         fl.addRow("Master brightness", self.s_bright)
         fl.addRow("Strobe cap", self.s_strobe)
         fl.addRow("Warm ← → Cool", self.s_warm)
         fl.addRow("", self.cb_synth)
+        fl.addRow("Synth threshold", self.s_synth_thr)
         v.addWidget(feel)
         v.addStretch(1)
 
@@ -368,6 +444,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.s_strobe.valueChanged.connect(lambda x: setattr(m, "strobe_cap", x / 100))
         self.s_warm.valueChanged.connect(lambda x: setattr(m, "warm_cool_bias", x / 100))
         self.cb_synth.toggled.connect(lambda on: setattr(m, "synth_sync", on))
+        self.s_synth_thr.valueChanged.connect(lambda x: setattr(m, "synth_threshold", x / 100))
         self.b_black.toggled.connect(self._set_blackout)
         self.b_freeze.toggled.connect(lambda on: setattr(m, "freeze", on))
         return w
@@ -505,20 +582,66 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         """``providers``: FirstRunDialog's audio/interface lists (tests inject them)."""
         from .first_run import FirstRunDialog
         self.first_run_dialog = FirstRunDialog(self, **providers)
-        self.first_run_dialog.completed.connect(
-            lambda _c: self.statusBar().showMessage("Setup saved — it applies at the next start.", 8000))
+        self.first_run_dialog.completed.connect(self._first_run_done)
         self.first_run_dialog.show()
         return self.first_run_dialog
 
+    def _first_run_done(self, choices: dict) -> None:
+        """Act on the setup now where the running app can (2026-10-30): "add my own fixtures" opens the
+        fixture library at once; output / audio / network become the next launch's defaults (launch.py)."""
+        from .first_run import START_ADD
+        if choices.get("start_with") == START_ADD:
+            self.open_fixture_library()
+        self.statusBar().showMessage("Setup saved. Output, audio and DJ-network choices are used the next time "
+                                     "LiveReact starts.", 15000)
+
     def _rig_chosen(self, path: str) -> None:
-        """Switch live when the app can (App.switch_rig, roadmap item 4); until then the
-        choice is remembered (recent rigs) and applies at the next start."""
+        """Switch live (App.switch_rig, 2026-10-30): the show plays the new rig on the next tick and the
+        console's floor plan, Venue and Rig Config tabs are rebuilt for it. Lasers are disarmed."""
         switch = getattr(self.app, "switch_rig", None)
-        if callable(switch):
-            switch(path)
-            self.statusBar().showMessage(f"Switched to {path}", 8000)
-        else:
+        if not callable(switch):
             self.statusBar().showMessage(f"Rig chosen: {path} — restart LiveReact with this rig to apply it.")
+            return
+        try:
+            switch(path)
+        except Exception as exc:  # noqa: BLE001 - a bad rig file must not take the console down
+            self.statusBar().showMessage(f"Could not switch to {path}: {exc}", 15000)
+            return
+        self._rebuild_rig_views()
+        self.statusBar().showMessage(f"Now playing rig: {self.app.rig.name or path} — lasers disarmed (press L to arm)", 15000)
+
+    def _rebuild_rig_views(self) -> None:
+        """Replace every widget built from the old rig: the Show tab's floor plan, the Venue tab, the
+        Rig Config tab, and the Laser Show tab (present only for the "show" laser profile)."""
+        app = self.app
+        rig_path = getattr(app.config, "rig_path", None)
+        old_view = self.rig_view
+        self.rig_view = FloorPlanView(app.rig, editable=False)
+        parent_layout = old_view.parentWidget().layout() if old_view.parentWidget() is not None else None
+        if parent_layout is not None:
+            parent_layout.replaceWidget(old_view, self.rig_view)
+        old_view.deleteLater()
+        self.override_panel.build_laser_overrides()   # AEPI's latched looks: only on rigs that list them
+        current = self.tabs.currentIndex()
+        for w in (self.laser_show_tab, self.venue_tab, self.rig_config):
+            if w is not None:
+                i = self.tabs.indexOf(w)
+                if i >= 0:
+                    self.tabs.removeTab(i)
+                w.deleteLater()
+        app.manual.calibration = None
+        self.venue_tab = VenueTab(app.rig, rig_path,
+                                  on_pins=lambda pins: setattr(app.manual, "calibration", pins),
+                                  is_frozen=lambda: app.manual.freeze, active=False)
+        self.laser_show_tab = None
+        if getattr(app.rig, "laser_profile", "") == "show":
+            self.laser_show_tab = self._build_laser_show_tab()
+            self.tabs.addTab(self.laser_show_tab, "Laser Show")
+        self.tabs.addTab(self.venue_tab, "Venue")
+        self.rig_config = RigConfigTab(app.rig, rig_path)
+        self.rig_config_tab = self.rig_config
+        self.tabs.addTab(self.rig_config, "Rig Config")
+        self.tabs.setCurrentIndex(min(current, self.tabs.count() - 1) if current == 0 else 0)
 
     def _set_blackout(self, on: bool) -> None:
         self.app.manual.blackout = on
@@ -578,6 +701,10 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         writer = self.app.writer
         dmx_ok = writer.is_open and writer.backend.name != "null-log"
         _set_dot(self.dot_dmx, dmx_ok)
+
+        warnings = health_warnings(self.app, snap, self.app.clock.monotonic())
+        self.l_health_banner.setText("\n".join(f"⚠ {w}" for w in warnings))
+        self.l_health_banner.setVisible(bool(warnings))
 
         if self.app.show_engine.silence.active:
             self.l_auto_blackout.setText("● AUTO-BLACKOUT — no music detected")
@@ -721,7 +848,11 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             self.l_arm.setText("")
 
         if self.app.reactive_engine.synth_sync_active:
-            self.l_synth.setText("● SYNTH SYNC — wash follows the mids; strobes cut through")
+            thr = self.app.manual.synth_threshold
+            if thr > 0:
+                self.l_synth.setText(f"● SYNTH SYNC — wash holds the section level, hits on stabs above {thr:.2f}; strobes cut through")
+            else:
+                self.l_synth.setText("● SYNTH SYNC — wash follows the mids; strobes cut through")
             self.l_synth.setStyleSheet(_DOT_OK)
         elif self.app.manual.synth_sync:
             self.l_synth.setText("● SYNTH SYNC armed — waiting for real audio")
@@ -736,6 +867,16 @@ def run_console(app, fps: int = 30) -> int:
     apply_theme(qt)
     win = ConsoleWindow(app)
     win.show()
+    # First launch: the setup opens by itself (2026-10-30; before, a new user had to find it in Help).
+    try:
+        from ..settings import Settings
+        from .first_run import needs_first_run
+        # only on a plain launch (no --hardware / --rig): an operator starting a show with flags
+        # (tools/run_show.sh) never gets a dialog over the console
+        if needs_first_run(Settings.load()) and app.config.demo and not app.config.rig_path:
+            win.open_first_run()
+    except Exception:  # noqa: BLE001 - a broken settings file must not stop the console
+        pass
     timer = QtCore.QTimer()
     timer.timeout.connect(win.refresh)
     timer.start(int(1000 / fps))

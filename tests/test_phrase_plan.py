@@ -63,3 +63,21 @@ def test_peak_shows_the_catalog_peak_look_not_the_hook():
     for bar in range(10, 14):
         eng.tick(_snap(bar, "peak", "Drop Strobe Stab"), rig)   # the plan names the hook; PEAK must look bigger
     assert eng._current.name == "Peak Full Rig" or (eng._next and eng._next.name == "Peak Full Rig")
+
+
+def test_a_planned_look_change_starts_on_the_boundary_tick_not_the_next_bar():
+    """2026-10-29: the drop look ran 2 bars into every planned build/breakdown (a bar waiting for the
+    local bar line, then the 1-bar fade). The plan's boundary is the bar line: the fade starts now."""
+    eng, rig = _engine(full=True)
+    for bar in range(0, 6):
+        eng.tick(_snap(bar, "drop", "Drop Strobe Stab", beat_phase=0.0), rig)
+    assert eng._current.name == "Drop Strobe Stab"
+    # mid-bar (the local bar counter has not ticked over), the plan moves to a build
+    eng.tick(_snap(5, "build", "Build Riser Wash", beat_phase=0.5), rig)
+    assert eng._next is not None and eng._next.name == "Build Riser Wash"   # the fade began this tick
+    # and a planned look change with NO bucket change (hook repeat -> different look) too
+    eng2, rig2 = _engine(full=True)
+    for bar in range(0, 6):
+        eng2.tick(_snap(bar, "drop", "Drop Strobe Stab", beat_phase=0.0), rig2)
+    eng2.tick(_snap(5, "drop", "Drop Wash Slam Clear", beat_phase=0.5), rig2)
+    assert (eng2._next is not None and eng2._next.name == "Drop Wash Slam Clear") or eng2._current.name == "Drop Wash Slam Clear"

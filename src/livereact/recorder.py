@@ -155,6 +155,10 @@ class SessionRecorder(threading.Thread):
             "beats_to_next": snap.beats_to_next_section,
             "plan_active": snap.plan_active,
             "planned_scene": snap.planned_scene,
+            "planned_look": snap.planned_look,              # look-note cue running now (whiteout), D-34
+            "planned_tease": round(snap.planned_tease_progress, 3),  # P-24: 0..1 through a Tease, -1 = none
+            "planned_tease_hold": snap.planned_tease_hold,
+            "planned_roll_ahead": snap.planned_roll_ahead,  # next drop boundary is a roll lead-in, D-34
             "big_moment": snap.planned_big_moment,
             "beats_to_drop": snap.beats_to_drop,
             "crossfader": round(snap.crossfader, 3),
@@ -231,6 +235,9 @@ class SessionRecorder(threading.Thread):
             if trigger is not None:  # engines/laser_trigger.py (2026-10-06)
                 record["laser_trigger"] = trigger                              # drop / peak / wub / hit / cue / ""
                 record["laser_budget"] = round(self.laser_engine.budget, 3)     # lit share of the duty window
+                scene = getattr(self.laser_engine, "scene_name", None)
+                if scene is not None:  # engines/laser_fan.py (2026-10-29): the look notes' scene for this moment
+                    record["laser_scene"] = scene
         # scenes/movement.py (2026-10-05): which post-drop head shape the DROP/PEAK
         # looks are running this tick ("" outside those buckets)
         record["head_movement"] = drop_movement_name(snap) if snap.bucket in ("drop", "peak") else ""

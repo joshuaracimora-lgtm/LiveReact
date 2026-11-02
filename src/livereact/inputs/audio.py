@@ -118,6 +118,18 @@ ONSET_FLOOR = 0.01         # ... plus this absolute floor (mean-per-bin magnitud
 ONSET_REFRACTORY_S = 0.06  # one onset per this (counted in blocks)
 ONSET_RATE_WINDOW_S = 1.0  # onsets/s = count over this trailing window
 
+# Dead-stream recovery (2026-11-02, AEPI show post-mortem): at 22:45:07 on
+# 2026-10-31 the XDJ's capture stream stopped delivering blocks -- MIDI kept
+# arriving, so the device was still there -- and nothing noticed: the analysis
+# thread just waited on an empty ring for 44 minutes and the show sat in its
+# no-audio BREAK look (the "stale blue bar"). A live stream delivers a block
+# every ~23 ms even in silence, so no block for STALL_S means the stream is
+# dead, not quiet: close it, refresh PortAudio's device list (it is cached at
+# init, so a re-enumerated XDJ is invisible without this), find the device
+# again by name and reopen, retrying with a capped backoff until it is back.
+STALL_S = 2.0
+REOPEN_BACKOFF_S = (1.0, 2.0, 5.0)   # waits between failed reopen attempts (last one repeats)
+
 
 class AudioInputError(RuntimeError):
     pass
@@ -139,6 +151,9 @@ class AudioAnalyzer(InputSource):
         self._thread: threading.Thread | None = None
         self._ring: "queue.SimpleQueue | None" = None
         self._sr = 44100
+        self._sd = None
+        self._device_name: str | None = None   # the opened device's name: found again by it after a USB re-enumeration
+        self.reopens = 0                       # successful dead-stream recoveries (telemetry / tests)
 
         # analysis state (owned solely by the analysis thread)
         self._low_mask = None
@@ -178,18 +193,45 @@ class AudioAnalyzer(InputSource):
                 "sounddevice is not installed. Install it before using audio "
                 "analysis; see this module's docstring."
             ) from exc
-        import numpy as np  # lazy, same reasoning
+        self._sd = sd
+        self._ring = queue.SimpleQueue()
+        try:
+            self._open_stream()
+        except AudioInputError:
+            if self.device is not None:
+                raise   # an explicit --audio-device that is not there: say so at launch
+            # Auto-detect found no XDJ yet (2026-11-02 stress test: it was never retried, so plugging the
+            # XDJ in after launch did nothing until a restart). Wait for it: the analysis thread's stall
+            # check keeps reopening, and the console's banner says NO AUDIO meanwhile.
+            log.warning("No XDJ audio device yet -- LiveReact will pick it up when it is plugged in")
+        self._thread = threading.Thread(target=self._run, name="audio-analyzer", daemon=False)
+        self._thread.start()
 
+    def _resolve_device(self, sd):
+        """The device to open: the explicit --audio-device, else the XDJ. After the first open the
+        device's NAME wins, so a re-enumerated device (new index) is still found."""
+        if self._device_name is not None:
+            for i, info in enumerate(sd.query_devices()):
+                if info["name"] == self._device_name and info["max_input_channels"] > 0:
+                    return i
+            raise AudioInputError(f"audio device {self._device_name!r} is not on the bus")
         device = self.device if self.device is not None else self._find_device(sd)
         if isinstance(device, str) and device.strip().isdigit():
             # argparse hands --audio-device over as a str; sounddevice treats
             # a str as a name substring, so "1" matched nothing (2026-10-08)
             device = int(device.strip())
+        return device
+
+    def _open_stream(self) -> None:
+        """Open and start the capture stream on the resolved device (start() and every reopen)."""
+        import numpy as np  # lazy, same reasoning as sounddevice
+
+        sd = self._sd
+        device = self._resolve_device(sd)
         info = sd.query_devices(device)
         self._sr = int(info["default_samplerate"])
         self._setup_bands(np)
 
-        self._ring = queue.SimpleQueue()
         # An explicit --audio-device with fewer inputs than the XDJ's (5, 6) --
         # e.g. the laptop mic as a fallback when the XDJ drops off USB
         # (2026-09-16 house party) -- uses every channel it has instead.
@@ -197,12 +239,14 @@ class AudioAnalyzer(InputSource):
         channels = CHANNELS if n_in >= max(CHANNELS) else tuple(range(1, n_in + 1))
         channel_idx = [c - 1 for c in channels]  # 0-based, for indexing captured frames
 
+        ring = self._ring
+
         def _callback(indata, frames, time_info, status):
             # REAL-TIME SAFETY: do the absolute minimum here — see module docstring.
             # No FFT, no analysis, nothing that can stall the audio thread.
             if status:
                 log.debug("Audio stream status: %s", status)
-            self._ring.put_nowait(indata[:, channel_idx].mean(axis=1).copy())
+            ring.put_nowait(indata[:, channel_idx].mean(axis=1).copy())
 
         self._stream = sd.InputStream(
             device=device,
@@ -214,25 +258,60 @@ class AudioAnalyzer(InputSource):
             callback=_callback,
         )
         self._stream.start()
+        self._device_name = str(info["name"])
         log.info(
             "Audio analyzer listening on device %r (%d Hz, channels %s, stream latency %.0fms)",
             device, self._sr, channels, self._stream.latency * 1000,
         )
 
-        self._thread = threading.Thread(target=self._run, name="audio-analyzer", daemon=False)
-        self._thread.start()
+    def _close_stream(self) -> None:
+        stream, self._stream = self._stream, None
+        if stream is None:
+            return
+        try:
+            stream.stop()
+            stream.close()
+        except Exception:  # noqa: BLE001 - a dead stream often refuses to close cleanly
+            log.debug("Error closing a dead audio stream", exc_info=True)
+
+    def _refresh_devices(self) -> None:
+        """Make PortAudio rescan the bus (its device list is fixed at initialize)."""
+        sd = self._sd
+        try:
+            sd._terminate()
+            sd._initialize()
+        except Exception:  # noqa: BLE001 - a fake/older sounddevice without these: reopen anyway
+            log.debug("Could not refresh the PortAudio device list", exc_info=True)
+
+    def _recover(self) -> bool:
+        """The stream stopped delivering: reopen it until it is back or the app stops."""
+        log.warning("Audio stream stalled (no audio for %.0f s) on %r -- reopening",
+                    STALL_S, self._device_name)
+        attempt = 0
+        while not self.stop_event.is_set():
+            self._close_stream()
+            self._refresh_devices()
+            try:
+                self._open_stream()
+            except Exception as exc:  # noqa: BLE001 - device gone, busy, or mid-enumeration: retry
+                wait = REOPEN_BACKOFF_S[min(attempt, len(REOPEN_BACKOFF_S) - 1)]
+                if attempt == 0 or attempt % 10 == 0:
+                    log.warning("Audio reopen failed (%s); retrying every %.0f s", exc, wait)
+                attempt += 1
+                self.stop_event.wait(wait)
+                continue
+            self.reopens += 1
+            log.warning("Audio stream recovered after %d attempt(s)", attempt + 1)
+            return True
+        return False
 
     def stop(self) -> None:
-        if self._stream is not None:
-            try:
-                self._stream.stop()
-                self._stream.close()
-            except Exception:  # noqa: BLE001
-                log.exception("Error closing audio stream")
-            self._stream = None
+        # The thread first: a reopen in flight could otherwise start a new stream after this close
+        # (2026-11-02 stress test). It exits within one ring timeout or one reopen backoff.
         if self._thread is not None:
-            self._thread.join(timeout=2.0)
+            self._thread.join(timeout=6.0)
             self._thread = None
+        self._close_stream()
 
     # ------------------------------------------------------------------ device selection
     @staticmethod
@@ -258,7 +337,8 @@ class AudioAnalyzer(InputSource):
     def _run(self) -> None:
         import numpy as np
 
-        dt_block = BLOCK / self._sr
+        sr = self._sr
+        dt_block = BLOCK / sr
         # Plain Python floats, deliberately: a numpy float64 here turned
         # `_rms_smooth`, hence snap.energy and everything derived from it,
         # into numpy scalars, and a comparison on one of those produced a
@@ -268,11 +348,22 @@ class AudioAnalyzer(InputSource):
         release = float(1 - np.exp(-dt_block / RELEASE_S))
         self._agc_attack, self._agc_release = self._agc_coeffs()  # real sample rate now known
         self._onset_coeffs()
+        last_block = self.clock.monotonic()
         while not self.stop_event.is_set():
             try:
                 block = self._ring.get(timeout=0.5)
             except queue.Empty:
+                if self._sd is not None and self.clock.monotonic() - last_block >= STALL_S:
+                    if self._recover() and self._sr != sr:   # a reopen at another rate: redo the coefficients
+                        sr = self._sr
+                        dt_block = BLOCK / sr
+                        attack = float(1 - np.exp(-dt_block / ATTACK_S))
+                        release = float(1 - np.exp(-dt_block / RELEASE_S))
+                        self._agc_attack, self._agc_release = self._agc_coeffs()
+                        self._onset_coeffs()
+                    last_block = self.clock.monotonic()
                 continue
+            last_block = self.clock.monotonic()
             try:
                 self._analyze_block(block, attack, release, np)
             except Exception:  # noqa: BLE001 - never let the analysis thread die on one bad block

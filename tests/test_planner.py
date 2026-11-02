@@ -110,16 +110,21 @@ def test_parse_pwv5_bit_layout():
     assert parse_pwv5(b"PMAI" + b"\x00" * 24) is None
 
 
+# These two test section ABSORPTION on 12-bar builds; since 2026-10-29 such a build also gets a roll lead-in
+# (tested below), which is not what they are about -- rolls off.
+NO_ROLL = PlanRules(roll_beats=0)
+
+
 def test_micro_phrases_are_absorbed():
     # chorus 2 bars, up 2 bars, chorus 16 bars (SWEETER-style): the micro phrases join the build
     spec = [(1, 1, "intro"), (17, 2, "up"), (65, 5, "chorus"), (73, 2, "up"), (81, 5, "chorus"), (145, 6, "outro")]
-    plan = plan_track(_table(spec, end=177), track_id=1, bpm=120.0)
+    plan = plan_track(_table(spec, end=177), track_id=1, bpm=120.0, rules=NO_ROLL)
     assert [(s.kind, s.beat, s.end_beat) for s in plan.sections] == [
         ("intro", 1, 17), ("build", 17, 81), ("drop", 81, 145), ("outro", 145, 177)]
     # a 4-bar chorus between two builds (TIME-11 wants 8 bars of DROP) is absorbed; the first
     # section is never absorbed even when short; a 4-bar build is fine
     spec2 = [(1, 1, "intro"), (9, 2, "up"), (41, 5, "chorus"), (57, 2, "up"), (73, 5, "chorus"), (137, 6, "outro")]
-    plan2 = plan_track(_table(spec2, end=169), track_id=1, bpm=120.0)
+    plan2 = plan_track(_table(spec2, end=169), track_id=1, bpm=120.0, rules=NO_ROLL)
     assert [(s.kind, s.beat, s.end_beat) for s in plan2.sections] == [
         ("intro", 1, 9), ("build", 9, 73), ("drop", 73, 137), ("outro", 137, 169)]
 
@@ -130,17 +135,17 @@ def test_short_breakdown_after_a_drop_joins_its_successor():
     # where the drop ends
     spec = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (113, 2, "up"), (145, 5, "chorus"),
             (209, 6, "outro")]
-    plan = plan_track(_table(spec, end=241), track_id=1, bpm=120.0)
+    plan = plan_track(_table(spec, end=241), track_id=1, bpm=120.0, rules=NO_ROLL)
     assert [(s.kind, s.beat, s.end_beat) for s in plan.sections] == [
         ("intro", 1, 33), ("drop", 33, 97), ("build", 97, 145), ("drop", 145, 209), ("outro", 209, 241)]
     # before an outro: the outro starts on the breakdown
     spec2 = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (113, 6, "outro")]
-    plan2 = plan_track(_table(spec2, end=145), track_id=1, bpm=120.0)
+    plan2 = plan_track(_table(spec2, end=145), track_id=1, bpm=120.0, rules=NO_ROLL)
     assert [(s.kind, s.beat, s.end_beat) for s in plan2.sections] == [
         ("intro", 1, 33), ("drop", 33, 97), ("outro", 97, 145)]
     # between two drops it stays inside the drop (no 4-bar break run, TIME-11)
     spec3 = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (113, 5, "chorus"), (177, 6, "outro")]
-    plan3 = plan_track(_table(spec3, end=209), track_id=1, bpm=120.0)
+    plan3 = plan_track(_table(spec3, end=209), track_id=1, bpm=120.0, rules=NO_ROLL)
     assert [(s.kind, s.beat, s.end_beat) for s in plan3.sections] == [
         ("intro", 1, 33), ("drop", 33, 177), ("outro", 177, 209)]
 
@@ -180,11 +185,27 @@ def test_the_end_of_a_long_build_is_planned_as_the_drops_roll_lead_in():
     assert "up=roll**@65" in plan.summary()
 
 
-def test_no_roll_lead_in_when_the_build_would_get_too_short_or_rolls_are_off():
-    # a 12-bar build: splitting 8 bars off would leave 4 bars of build look (TIME-02 wants 8 + the look's lag)
+def test_a_short_build_keeps_its_roll_lead_in_and_gives_up_build_beats_instead():
+    """2026-10-29 (Thriller on the bench): the old 40-beat build guard refused the roll on every build
+    under 72 beats, so the strobe only counted in over the last 2 bars. A 12-bar build now keeps the full
+    8-bar roll with one bar of build left; a 9-bar build (Thriller's 36 beats) too."""
     short = [(1, 1, "intro"), (17, 2, "up"), (65, 5, "chorus"), (129, 6, "outro")]
     plan = plan_track(_table(short, end=161), track_id=1, bpm=120.0)
-    assert [(s.kind, s.beat) for s in plan.sections] == [("intro", 1), ("build", 17), ("drop", 65), ("outro", 129)]
+    assert [(s.kind, s.beat, s.roll) for s in plan.sections] == [
+        ("intro", 1, False), ("build", 17, False), ("drop", 33, True), ("drop", 65, False), ("outro", 129, False)]
+    thriller = [(1, 1, "intro"), (17, 2, "up"), (53, 5, "chorus"), (117, 6, "outro")]   # 36-beat build
+    plan = plan_track(_table(thriller, end=149), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat, s.end_beat, s.roll) for s in plan.sections] == [
+        ("intro", 1, 17, False), ("build", 17, 21, False), ("drop", 21, 53, True), ("drop", 53, 117, False),
+        ("outro", 117, 149, False)]
+
+
+def test_no_roll_lead_in_when_the_build_is_not_longer_than_the_roll_or_rolls_are_off():
+    # an 8-bar build is not longer than the 8-bar roll by the one-bar guard: it stays a build
+    eight = [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (113, 6, "outro")]
+    plan = plan_track(_table(eight, end=145), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat) for s in plan.sections] == [("intro", 1), ("build", 17), ("drop", 49), ("outro", 113)]
+    assert not any(s.roll for s in plan.sections)
     off = plan_track(_table(ROLL, end=193), track_id=1, bpm=120.0, rules=PlanRules(roll_beats=0))
     assert [(s.kind, s.beat) for s in off.sections] == [("intro", 1), ("build", 17), ("drop", 97), ("outro", 161)]
     assert not any(s.roll for s in off.sections)
@@ -207,3 +228,35 @@ def test_big_moment_ranks_the_drop_not_its_roll_lead_in_and_look_notes_count_dro
     assert [s.beat for s in first.sections if s.big_moment] == [49]
     second = plan_track(table, track_id=1, bpm=120.0, waveform=wave, look=LookNotes(big_moment={"drop": 2}))
     assert [s.beat for s in second.sections if s.big_moment] == [161, 193]
+
+
+def test_roll_ahead_is_true_only_while_the_next_drop_boundary_is_a_roll_lead_in():
+    plan = plan_track(_table(ROLL, end=193), track_id=1, bpm=120.0)      # build 17-65, roll 65-97, drop 97-161
+    assert plan.roll_ahead(30) and plan.roll_ahead(64)
+    assert not plan.roll_ahead(70)       # inside the roll: the chorus it runs into is not a boundary
+    assert not plan.roll_ahead(120)      # no drop ahead
+    plain = plan_track(_table(ROLL, end=193), track_id=1, bpm=120.0, rules=PlanRules(roll_beats=0))
+    assert not plain.roll_ahead(30)
+
+
+def test_only_drops_near_the_loudest_get_a_roll_lead_in_or_a_strobe_before_them():
+    """D-36 (Thriller, 2026-10-30): the first chorus at 88 % of the big moment "isn't building up to a
+    high-intensity part" -- no roll, no count-in before it; drops within 10 % of the loudest keep theirs."""
+    from livereact.rekordbox.planner import ROLL_STROBE_MIN_SHARE
+    # two 12-bar builds into two choruses; the second chorus is the loud one
+    spec = [(1, 1, "intro"), (17, 2, "up"), (65, 5, "chorus"), (129, 3, "down"), (161, 2, "up"), (209, 5, "chorus"), (273, 6, "outro")]
+    table = _table(spec, end=305)
+    quiet_first = _wave(loud_beats=(209, 273), quiet_level=4, loud_level=28)   # first chorus sits at the 14 level
+    plan = plan_track(table, track_id=1, bpm=120.0, waveform=quiet_first)
+    kinds = [(s.kind, s.beat, s.roll, s.strobe_allowed) for s in plan.sections]
+    assert ("build", 17, False, False) in kinds            # the build before the lesser drop: no strobe
+    assert not any(s.roll and s.beat < 129 for s in plan.sections)   # and no roll lead-in into it
+    assert any(s.roll and s.beat == 177 for s in plan.sections)      # the loud chorus keeps its 8-bar roll
+    assert next(s for s in plan.sections if s.kind == "build" and s.beat == 161).strobe_allowed
+    assert 0.0 <= plan.flash_white <= 1.0
+    # both choruses equally loud: both get their lead-in
+    both = _wave(loud_beats=(65, 273), quiet_level=4, loud_level=28)
+    plan2 = plan_track(table, track_id=1, bpm=120.0, waveform=both)
+    rolls = [s.beat for s in plan2.sections if s.roll]
+    assert len(rolls) == 2 and rolls[0] in (33, 49) and rolls[1] == 177   # 49 = the crescendo half-roll (the loud level starts at 65)
+    assert ROLL_STROBE_MIN_SHARE == 0.9

@@ -80,18 +80,12 @@ from .laser import laser_color_for_palette
 # CH5/6 flips · CH7 horizontal (128-255 sweep speed) · CH8 vertical ·
 # CH9 size (nonzero = breathing) · CH10 painting speed · CH11 scan (0-127
 # speed, 128-255 dot lattice) · CH12 colour.
-LASER_SCENES: dict[str, tuple[int, ...]] = {
-    # Read off Josh's QLC+ "RAINBOW" scene screenshot (2026-10-08), 12-ch mode.
-    "Rainbow":        (80, 119, 0, 0, 0, 0, 255, 71, 255, 255, 127, 255),
-    # Rainbow with everything slowed down: half the sweep, half the painting
-    # and scan speeds. Same shape, same colour band, same size cycling.
-    "Slow Rainbow":   (80, 119, 0, 0, 0, 0, 170, 71, 255, 128, 64, 255),
-    # The hardware-verified dotted line (set_dotted_line_sweep's bytes) in
-    # the Rainbow scene's colour band, sweeping at a medium speed, held size.
-    "Rainbow Dots":   (60, 118, 0, 0, 0, 0, 200, 71, 0, 0, 190, 255),
-    # The verified dotted line in blue (CH12 51), the fastest confirmed sweep.
-    "Blue Sweep":     (60, 118, 0, 0, 0, 0, 240, 71, 0, 0, 190, 51),
-}
+# The static scenes live in scenes/laser_scenes.json (engines/laser_scenes.py loads, checks and
+# describes them; 2026-10-29). The first four are Sophia's verbatim looks, unchanged; the rest are
+# composed from the manufacturer's channel table and marked "manual" until seen on the unit.
+from .laser_scenes import scene_values as _scene_values
+
+LASER_SCENES: dict[str, tuple[int, ...]] = _scene_values()
 DEFAULT_SCENE = "Rainbow"
 
 LOOK_FAN = "Fan"
@@ -135,8 +129,15 @@ _SWEEP_MIN, _SWEEP_MAX = Laser.SWEEP_SPEED_MIN, Laser.SWEEP_SPEED_MAX
 
 
 def scene_names() -> list[str]:
-    """The static scenes (what rotate mode steps through)."""
+    """Every static scene in the library (the Laser Show tab's buttons)."""
     return list(LASER_SCENES)
+
+
+def rotation_scene_names() -> list[str]:
+    """What rotate mode steps through: only the scenes SEEN on the unit (Sophia's four), so a
+    scene composed from the manual and not yet watched never comes up on its own at a set."""
+    from .laser_scenes import library
+    return [sc.name for sc in library() if sc.status == "seen"] or list(LASER_SCENES)
 
 
 def look_names() -> list[str]:
@@ -164,7 +165,7 @@ class LaserShowEngine:
         self.clock = clock
         self.manual = manual if manual is not None else ManualParams()
         self._wub = BandEnvelope(clock, normalize_tau_s=NORMALIZE_TAU_S)
-        self._names = scene_names()
+        self._names = rotation_scene_names()
         self._selected = ""              # the last ManualParams.laser_scene we saw
         self._origin_bar: int | None = None
         self._origin_t = 0.0

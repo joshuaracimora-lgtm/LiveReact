@@ -13,7 +13,7 @@ deliberately overridden.
 DARK by default.  A MOMENT lights the lasers for MOMENT_BARS bars and then
 they go dark again.  Moments come from:
 
-  AUTO triggers (each needs fresh audio AND fresh Pro DJ Link -- LASER-12):
+  AUTO triggers (each needs music_present() -- audio, or a driving plan on a playing deck -- AND fresh Pro DJ Link -- LASER-12):
     drop   the bucket ENTERS DROP from below (the hit itself): the big one
     peak   a sustained PEAK (hit >= PEAK_MIN_HIT): one moment per
            PEAK_BLOCK_BARS-bar block boundary, counted from drop_start_bar
@@ -67,11 +67,15 @@ from .envelope import NORMALIZE_TAU_S, BandEnvelope
 from .laser import LASER_MIN_HIT_INTENSITY, LASER_SWEEP_BASE, laser_color_for_palette
 
 MOMENT_BARS = 2.0            # one laser moment lasts this many bars
-PEAK_BLOCK_BARS = 8          # a sustained PEAK gets one moment per block of this many bars
+# 2026-10-29 bench (Thriller, big moment 19 bars): moments at bars 0 and 16 of the peak -- the 8-bar block
+# edge at bar 8 fell inside the 8-bar gap. Josh: "if it fires for 2 bars, it should fire again in another
+# 4 bars, while the energy is still high" -> 2 on / 4 off: 6-bar blocks, a 4-bar gap. The duty window
+# widened to 5 min so a 20-bar peak at that cadence fits (4 moments ~14 s) and the cap still bounds a set.
+PEAK_BLOCK_BARS = 6          # a sustained PEAK gets one moment per block of this many bars
 PEAK_MIN_HIT = LASER_MIN_HIT_INTENSITY
-MIN_GAP_BARS = 8.0           # darkness required between auto moments (end -> next start)
-DUTY_WINDOW_S = 120.0        # the duty rule's rolling window
-DUTY_MAX = 0.10              # LASER-14: lit for at most this share of the window (auto only)
+MIN_GAP_BARS = 4.0           # darkness required between auto moments (end -> next start)
+DUTY_WINDOW_S = 300.0        # the duty rule's rolling window
+DUTY_MAX = 0.15              # LASER-14: lit for at most this share of the window (auto only)
 WUB_TRIGGER = 0.9            # the normalised low-band envelope that counts as "that sound"
 FAN_BASE = LASER_SWEEP_BASE  # 0.5: a moment's sweep idles here, the wub adds on top
 CUE_FLOOR = 0.0              # the held cue: stab 0 = the slowest confirmed sweep
@@ -82,6 +86,19 @@ TRIGGER_WUB = "wub"
 TRIGGER_HIT = "hit"
 TRIGGER_CUE = "cue"
 AUTO_TRIGGERS = (TRIGGER_DROP, TRIGGER_PEAK, TRIGGER_WUB)
+
+
+def music_present(snap: ShowSnapshot) -> bool:
+    """LASER-12's liveness test: is there live proof the music is playing?
+
+    Real audio is one proof. Since 2026-10-29 a DRIVING track plan is the other: Pro DJ Link
+    status fresh, the deck reporting PLAY, and the plan built from its phrase table active.
+    Found on the bench (Junior Crib fan rig, no XDJ audio on the Mac): the plan ran every
+    section and the fan engine fired on the big moment, but this gate read "no audio" as
+    "signal lost" and kept the lasers dark all night, manual cues included. A paused deck,
+    a stale link or no plan still means dark -- the rule's intent (never hold a laser on a
+    dead signal) is unchanged; only what counts as the signal grew."""
+    return bool(snap.audio_fresh or (snap.plan_active and snap.pdl_fresh and snap.playing))
 
 MOOD_OFF = "off"
 MOOD_READY = "ready"
@@ -195,7 +212,7 @@ class LaserTriggerEngine:
         self.stab = self._stab.update(snap.audio_band_mid_abs + snap.audio_band_high_abs, snap.audio_fresh)
         self.color = self.color_l = self.color_r = laser_color_for_palette(snap.palette)
 
-        if not snap.audio_fresh:                      # LASER-12: audio loss = dark, now
+        if not music_present(snap):                   # LASER-12: signal loss = dark, now
             self._end_moment(now)
             self._prev_bucket = None
             self.mood = MOOD_OFF

@@ -66,11 +66,45 @@ MIN_BUILD_BEATS = 16         # builds may be 4 bars
 # the phrase engine's look change after the bucket enters BUILD (seen on the sweep: an 8-bar build shows
 # 'Rising Tide' for 6 bars).
 PLAN_ROLL_BEATS = 32              # params.json knob (tunable)
-PLAN_ROLL_MIN_BUILD_BEATS = 40    # params.json knob (tunable)
+# Was 40 (TIME-02's 8-bar build look + lag) until 2026-10-29: on the bench, Thriller (BVRNOUT remix) has
+# 36-beat builds, so the 40-beat guard refused every roll and the strobe only counted in over the last
+# 2 bars -- Josh: "the strobing didn't match the snare roll ... that's not a true build-up". With the
+# guard at one bar the planner's 8-bar roll lands on 76.74-91.98 s and 145.31-160.55 s against Josh's
+# ear notes 76.73-90.06 (groove 91.96) and 145.30-158.63 (groove 160.54). The roll never eats a build
+# that is not longer than itself: an 8-bar build stays a build (the roll IS Josh's drop, D-21, but a
+# whole-build roll would turn every short build into a 7-bar strobe -- not tried on hardware).
+PLAN_ROLL_MIN_BUILD_BEATS = 4     # params.json knob (tunable)
 # Waveform energy over bars 4..2 before the drop over bars 8..6 (the last bar of each half skipped: it holds
 # the pre-drop gap). Tuning tracks: all 5 four-bar ear rolls rise 1.23-1.96x, 7 of the 8 eight-bar ones
 # 0.21-1.14x (the eighth, a clap drop, 1.44x).
 PLAN_ROLL_RISE = 1.2              # params.json knob (tunable)
+# D-36 (2026-10-30): a roll lead-in -- and any strobe before the drop -- only for drops within this share
+# of the song's loudest drop. Josh on Thriller's first chorus (88 % of the big moment): "I wouldn't really
+# classify that as a buildup ... LiveReact ... would be able to tell that that buildup isn't building up to
+# a high-intensity part." Lesser drops still land as drops, with no strobe lead-in.
+ROLL_STROBE_MIN_SHARE = 0.9
+# The Tease (P-24, 2026-10-30, Josh: "when the kicks and claps leave, yet the intensity is still high ...
+# usually before a drop to tease the incoming drop"): the kick-free bars right before a drop at least
+# TEASE_MIN_SHARE of the song's loudest drop (looser than the roll strobe's share -- Josh: "Tease loose,
+# strobe strict"). A bar is kick-free when rekordbox's colour waveform keeps its low band (red, 0..7) at or
+# under TEASE_KICK_RED at the beat onsets: kick bars read 6-7 there on every track checked (Tongue Tied,
+# Thriller), the kick-free stretches 0-4.5. A drum bar alone between kick-free bars is a hit, not the
+# groove (Tongue Tied 1:22.8): the Tease runs through it (the show punches it live).
+TEASE_MIN_SHARE = 0.7
+# ... and only on an intense song (Josh, 2026-10-30: "the justification for a tease [is] the intensity of the
+# song ... It should only trigger when it is an intense song"): the mean waveform height of its drops at least
+# TEASE_SONG_MIN_DROP_ENERGY -- the top ~40 % of the 351-track Mac library (Thriller 0.574, 79th percentile;
+# Tongue Tied 0.674, 96th; ANOTR "Vertigo" 0.19 and FISHER "Ocean" 0.43 stay out). A song under it keeps the
+# P-20 riser in its kick-free breaks. Ear-note tease cues are orders and ignore it.
+TEASE_SONG_MIN_DROP_ENERGY = 0.53
+TEASE_KICK_RED = 4.5
+TEASE_MAX_BEATS = 64       # a Tease is the last 16 bars at most before its drop; earlier kick-free bars keep the break
+                           # look (library check 2026-10-30: uncapped, 25 % of the 633 Teases ran past 24 s, the longest 88 s)
+# A drop rekordbox leaves inside an "up" phrase (Tongue Tied: the kick returns at 1:28.7, bar 46, mid
+# phrase, so the planner held one 50 s build): a run of at least TEASE_SPLIT_MIN_BEATS kick bars after at
+# least TEASE_SPLIT_MIN_FREE_BEATS kick-free ones inside a build, loud enough for a Tease, is a drop.
+TEASE_SPLIT_MIN_BEATS = 16
+TEASE_SPLIT_MIN_FREE_BEATS = 8
 
 # default section energies when no waveform is available (ranking then falls back to length)
 _KIND_ENERGY = {"drop": 0.8, "build": 0.5, "verse": 0.4, "breakdown": 0.2, "intro": 0.15, "outro": 0.2}
@@ -90,6 +124,7 @@ class PlanRules:
     roll_beats: int = field(default_factory=lambda: PLAN_ROLL_BEATS)               # 0 = no roll lead-ins
     roll_min_build_beats: int = field(default_factory=lambda: PLAN_ROLL_MIN_BUILD_BEATS)
     roll_rise: float = field(default_factory=lambda: PLAN_ROLL_RISE)
+    roll_min_share: float = field(default_factory=lambda: ROLL_STROBE_MIN_SHARE)
 
 
 @dataclass(frozen=True)
@@ -110,6 +145,7 @@ class PlannedSection:
     fill_beat: int | None = None      # rekordbox's fill-in flag (unused yet; the scorer's STRUCT-01 vocabulary)
     cls: str = ""                     # section class (rekordbox/section_classes.py); "" = none matched
     roll: bool = False                # a roll lead-in (PLAN_ROLL_BEATS): a drop section the next drop continues
+    laser_scene: str = ""             # look notes: the fan's look here ("" = its default); the big moment's cue wins
 
     @property
     def length(self) -> int:
@@ -131,6 +167,47 @@ class TrackPlan:
     palette: str = ""                      # look notes hook_palette: one hue for the drop family, else the seed walk
     mood_words: tuple[str, ...] = ()       # look notes mood, for the tools / report
     style: SongStyle = DEFAULT_STYLE       # the song's own look set (song_style.py), held for the whole track
+    laser_scene: str = ""                  # look notes laser_scene: the fan's look on every moment ("" = default)
+    laser_cues: tuple[tuple[str, str], ...] = ()   # look notes laser_cues: (trigger, scene) for one kind of moment
+    cues: tuple[tuple[int, int, str], ...] = ()    # look notes cues as (beat, end_beat, look): timed look overrides
+    flash_white: float = 0.0                       # D-36: song brightness 0..1 -> how white the strobe flashes / holds are
+    teases: tuple[tuple[int, int], ...] = ()       # P-24: Tease windows as (beat, end_beat), kick-free bars into a drop
+    teases_bright: tuple[int, ...] = ()            # P-24: start beats of the Teases that start inside a drop (bright)
+
+    def cue_look(self, beat: int) -> str:
+        """The timed look override running at ``beat`` ("" = none). Later cues win on an overlap."""
+        look = ""
+        for b0, b1, name in self.cues:
+            if b0 <= beat < b1:
+                look = name
+        return look
+
+    def tease_at(self, beat: int) -> float:
+        """Progress 0..1 through the Tease running at ``beat``; -1.0 = none (P-24)."""
+        for b0, b1 in self.teases:
+            if b0 <= beat < b1:
+                return min(1.0, max(0.0, (beat - b0) / max(1, b1 - b0)))
+        return -1.0
+
+    def tease_bright(self, beat: int) -> bool:
+        """The Tease running at ``beat`` started inside a drop (an ear-note cue): bright, following the stabs."""
+        return any(b0 <= beat < b1 and b0 in self.teases_bright for b0, b1 in self.teases)
+
+    def tease_hold(self, beat: int) -> bool:
+        """``beat`` is inside a roll lead-in a Tease runs straight into: the wash holds the Tease's level
+        under the roll strobe (P-24, Josh: "it cant jump from intense to not intense")."""
+        for s in self.sections:
+            if s.roll and s.beat <= beat < s.end_beat:
+                return any(b1 == s.beat for _, b1 in self.teases)
+        return False
+
+    def roll_ahead(self, beat: int) -> bool:
+        """The next planned drop boundary strictly ahead of ``beat`` is a roll lead-in (PlannedSection.roll):
+        the roll is the count-in, so the strobe count-in stays quiet (engines/reactive.py)."""
+        for i, s in enumerate(self.sections):
+            if s.kind == "drop" and s.beat > beat and not self.continues_roll(i):
+                return bool(s.roll)
+        return False
 
     def at_beat(self, beat: int) -> tuple[PlannedSection | None, PlannedSection | None]:
         if not self.sections:
@@ -209,6 +286,48 @@ def _pick(pool: dict[str, list[str]], bucket: str, seed: int) -> str:
     if not names:
         return ""
     return names[seed % len(names)]
+
+
+def _timed_cues(look: "LookNotes", seconds, end_beat: int) -> tuple[tuple[int, int, str], ...]:
+    """Look-note cues as (beat, end_beat, look). A cue given in seconds lands on the first grid beat at
+    or after that time (the grid is the XDJ's own, so Josh's ear times taken from the file line up)."""
+    out = []
+    for c in look.cues:
+        if c.beat is not None:
+            b = int(c.beat)
+        else:
+            b = None
+            for cand in range(1, max(2, int(end_beat)) + 1):
+                t = seconds(cand)
+                if t is not None and t >= float(c.t) - 1e-6:
+                    b = cand
+                    break
+            if b is None:
+                continue   # past the end of the grid
+        out.append((b, b + int(c.beats), c.look))
+    return tuple(out)
+
+
+def _bar_kick_red(waveform: ColorWaveform | None, seconds, bar_beat: int) -> float | None:
+    """The waveform's low band (red, 0..7) at the four beat onsets of the bar starting at ``bar_beat``
+    (the loudest red in the first eighth of each beat, averaged): ~7 with a kick, low without one."""
+    if waveform is None:
+        return None
+    ts = [seconds(bar_beat + k) for k in range(5)]
+    if any(t is None for t in ts):
+        return None
+    vals = []
+    for a, b in zip(ts, ts[1:]):
+        i0, i1 = waveform.window(a, a + max(1e-3, (b - a) / 8.0))
+        if i1 <= i0:
+            return None
+        vals.append(max(waveform.reds[i0:i1]))
+    return sum(vals) / len(vals)
+
+
+def _kick_free(waveform: ColorWaveform | None, seconds, bar_beat: int) -> bool | None:
+    red = _bar_kick_red(waveform, seconds, bar_beat)
+    return None if red is None else red <= TEASE_KICK_RED
 
 
 def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float = 0.0,
@@ -330,15 +449,58 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
         before, last = waveform.energy(ts[0], ts[1]), waveform.energy(ts[2], ts[3])
         return before > 0 and last >= rules.roll_rise * before
 
+    # --- P-24: a drop rekordbox left inside a build (see TEASE_SPLIT_*) ---
+    if waveform is not None:
+        loudest0 = max((float(x["energy"]) for x in merged if x["kind"] == "drop"), default=0.0)
+        split: list[dict] = []
+        for m in merged:
+            if m["kind"] != "build" or loudest0 <= 0.0:
+                split.append(m)
+                continue
+            bars = list(range(m["beat"], m["end_beat"] - 3, 4))
+            free = [_kick_free(waveform, seconds, b) for b in bars]
+            pieces: list[dict] = []
+            cur = dict(m)
+            k = 0
+            while k < len(bars):
+                if free[k] is False and k * 4 >= TEASE_SPLIT_MIN_FREE_BEATS and all(free[max(0, k - TEASE_SPLIT_MIN_FREE_BEATS // 4):k]):
+                    j = k
+                    while j < len(bars) and free[j] is False:
+                        j += 1
+                    b0, b1 = bars[k], (bars[j] if j < len(bars) else m["end_beat"])
+                    e = energy_of(b0, b1, 0.0)
+                    if b1 - b0 >= TEASE_SPLIT_MIN_BEATS and e >= TEASE_MIN_SHARE * loudest0 and b0 > cur["beat"]:
+                        pieces.append(dict(cur, end_beat=b0, energy=energy_of(cur["beat"], b0, cur["energy"])))
+                        pieces.append(dict(m, beat=b0, end_beat=b1, kind="drop", bucket=mapping.bucket_for_section("drop"),
+                                           energy=e, phrases=1, fill_beat=None))
+                        cur = dict(m, beat=b1, fill_beat=m["fill_beat"])
+                        log.debug("plan %s: drop inside the build at beat %d-%d (energy %.2f)", title, b0, b1, e)
+                    k = j
+                    continue
+                k += 1
+            if cur["beat"] < m["end_beat"]:
+                if pieces and m["end_beat"] - cur["beat"] < rules.min_build_beats and pieces[-1]["kind"] == "drop":
+                    pieces[-1]["end_beat"] = m["end_beat"]   # a stub after the drop belongs to it
+                else:
+                    pieces.append(dict(cur, end_beat=m["end_beat"],
+                                       energy=energy_of(cur["beat"], m["end_beat"], cur["energy"]) if pieces else cur["energy"]))
+            split.extend(pieces)
+        merged = split
+
     rolled: list[dict] = []
+    loudest = max((float(x["energy"]) for x in merged if x["kind"] == "drop"), default=0.0)
     for i, m in enumerate(merged):
         build = rolled[-1] if rolled else None
-        if m["kind"] == "drop" and build is not None and build["kind"] == "build" and rules.roll_beats > 0:
+        if m["kind"] == "drop":
+            # D-36: only a drop near the song's loudest earns a lead-in (roll strobe, count-in)
+            m["lead_in"] = loudest <= 0.0 or float(m["energy"]) >= rules.roll_min_share * loudest
+        if (m["kind"] == "drop" and m["lead_in"] and build is not None and build["kind"] == "build"
+                and rules.roll_beats > 0):
             blen = build["end_beat"] - build["beat"]
             rb = rules.roll_beats // 2 if crescendo(m["beat"], rules.roll_beats // 2) else rules.roll_beats
             if rb > 0 and blen - rb >= rules.roll_min_build_beats:
                 start = build["end_beat"] - rb
-                roll = dict(build, beat=start, kind="drop", bucket="drop", roll=True, phrases=1,
+                roll = dict(build, beat=start, kind="drop", bucket="drop", roll=True, phrases=1, lead_in=True,
                             energy=energy_of(start, build["end_beat"], _KIND_ENERGY["drop"]),
                             fill_beat=build["fill_beat"])
                 build["end_beat"] = start
@@ -350,6 +512,54 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
     for i, m in enumerate(merged):
         m["index"] = i
     raw = merged
+
+    # --- P-24: the Tease windows (kick-free bars straight into a drop near enough the loudest) ---
+    teases: list[tuple[int, int]] = []
+    bright: list[int] = []
+    drop_spans = [(seconds(x["beat"]), seconds(x["end_beat"])) for x in raw if x["kind"] == "drop" and not x.get("roll")]
+    drop_spans = [(a, b) for a, b in drop_spans if a is not None and b is not None and b > a]
+    song_drop_energy = (sum(waveform.energy(a, b) for a, b in drop_spans) / len(drop_spans)
+                        if waveform is not None and drop_spans else 0.0)
+    if waveform is not None and loudest > 0.0 and song_drop_energy >= TEASE_SONG_MIN_DROP_ENERGY:
+        def section_at(beat: int) -> dict | None:
+            return next((x for x in raw if x["beat"] <= beat < x["end_beat"]), None)
+        for i, m in enumerate(raw):
+            if m["kind"] != "drop" or (i > 0 and raw[i - 1].get("roll") and raw[i - 1]["end_beat"] == m["beat"]):
+                continue   # not a boundary: the drop a roll lead-in runs into has already landed
+            body = raw[i + 1] if m.get("roll") and i + 1 < len(raw) else m
+            if float(body["energy"]) < TEASE_MIN_SHARE * loudest:
+                continue
+            start, hit_used, b = m["beat"], False, m["beat"] - 4
+            while b >= 1 and m["beat"] - b <= TEASE_MAX_BEATS:
+                host = section_at(b)
+                if host is None or host["kind"] in ("drop", "outro"):
+                    break
+                free = _kick_free(waveform, seconds, b)
+                if free is None:
+                    break
+                if not free:
+                    # one drum bar between kick-free ones is a hit, not the groove coming back
+                    if hit_used or start == m["beat"] or not _kick_free(waveform, seconds, b - 4):
+                        break
+                    hit_used = True
+                start = b if free else start
+                b -= 4
+            if start < m["beat"]:
+                teases.append((start, m["beat"]))
+    if look is not None:
+        for b0, b1, name in _timed_cues(look, seconds, table.end_beat):
+            if name == "tease":   # an ear-note Tease (Josh's times win where the waveform cannot see one)
+                # it runs to the next drop boundary (a roll lead-in counts) when that is within 16 bars,
+                # so the hand-off lands on the drop; else for the cue's own beats
+                nxt = next((x["beat"] for i, x in enumerate(raw) if x["kind"] == "drop" and x["beat"] > b0
+                            and not (i > 0 and raw[i - 1].get("roll") and raw[i - 1]["end_beat"] == x["beat"])), None)
+                if nxt is not None and nxt - b0 <= 64:
+                    b1 = nxt
+                teases = [w for w in teases if w[1] <= b0 or w[0] >= b1] + [(b0, b1)]
+                host = next((x for x in raw if x["beat"] <= b0 < x["end_beat"]), None)
+                if host is not None and host["kind"] == "drop":
+                    bright.append(b0)   # it starts inside a drop: bright, following the stabs (engines/tease.py)
+    teases.sort()
 
     # --- the loudest drop section is the big moment ---
     # a roll lead-in and the drop it runs into are one run: one hit, one big moment (Josh's drop IS the roll)
@@ -391,7 +601,16 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
             strobe_allowed = is_drop and not quiet
         else:
             strobe_allowed = (is_drop or kind == "build") and not quiet
+        if kind == "build":
+            # D-36: no count-in / roll accent before a drop that is not one of the song's intense parts
+            nxt = next((x for x in raw if x["kind"] == "drop" and x["beat"] >= r["end_beat"]), None)
+            if nxt is not None and not nxt.get("lead_in", True):
+                strobe_allowed = False
         laser_allowed = not quiet
+        laser_scene = ""
+        if look is not None:
+            cues = dict(look.laser_cues)
+            laser_scene = (cues.get("big_moment", "") if big else "") or look.laser_scene or ""
         if look is not None and kind in ("intro", "outro"):
             edge = look.intro if kind == "intro" else look.outro
             if edge.laser is not None:
@@ -407,6 +626,7 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
             laser_allowed=laser_allowed,
             fill_beat=r["fill_beat"],
             roll=bool(r.get("roll")),
+            laser_scene=laser_scene,
         ))
     # --- the song's own look set (song_style.py, 2026-10-28): its build and break looks replace the pool's ---
     features = song_features(sections, seconds=seconds, waveform=waveform)
@@ -421,7 +641,14 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
                      hook_scene=hook_scene, sections=tuple(sections),
                      big_moment_index=big_run[0] if big_run else None, rules=rules,
                      palette=palette,
-                     mood_words=tuple(look.mood) if look is not None else (), style=style)
+                     mood_words=tuple(look.mood) if look is not None else (), style=style,
+                     laser_scene=(look.laser_scene or "") if look is not None else "",
+                     laser_cues=tuple(look.laser_cues) if look is not None else (),
+                     cues=tuple(c for c in _timed_cues(look, seconds, table.end_beat) if c[2] != "tease")
+                     if look is not None else (),
+                     teases=tuple(teases),
+                     teases_bright=tuple(bright),
+                     flash_white=round(features.unit("brightness"), 3) if features is not None else 0.0)
     if classes is not None and classes.classes:
         plan = _apply_classes(plan, classes, table, grid=grid, waveform=waveform, bpm=bpm, look=look)
     log.debug("%s", plan.summary())

@@ -37,6 +37,16 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
 
 ## Fixed
 
+- **The console was born taller than a laptop screen** (Josh, MacBook, 2026-10-29: "the bottom of the UI
+  console is cut off"): with the Manual Override panel open (the Show tab opens it) the control column --
+  Lasers / Manual Override / Presets, Safety / Overrides, Feel -- had a 1387 px minimum against 863 px of
+  usable screen, so `resize(1280, 800)` was overridden by Qt and Presets / Feel sat below the Dock. Not a
+  Mac font quirk: 934 px even with the stylesheet off. `ConsoleWindow` now puts that column in
+  `_VScrollArea` (scrolls vertically, keeps the column's minimum width so nothing clips sideways; combos
+  and sliders take the wheel only while focused, as the Venue panel's do) and clamps the startup size to
+  the screen (`_fits_the_screen`). Window minimum 1387 -> 580 px. Test:
+  `tests/test_console.py::test_show_tab_fits_a_laptop_screen` (2026-10-29).
+
 - **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
   one drag moves them all, but the "aim was captured at its old position" warning only checked the head
   shown in the panel. `FloorPlanView` now records every fixture a drop moved (`last_moved`) and

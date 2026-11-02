@@ -96,6 +96,9 @@ class ProDjLinkListener(InputSource):
         self._thread: threading.Thread | None = None
         self._last_beat_in_bar: int | None = None
         self._seen_device = False
+        # any packet on any port (keepalives keep coming while every deck is paused, beats do not):
+        # the console's health banner tells "XDJ off the network" from "nothing playing" by it
+        self.last_packet_time: float | None = None
         self._started_at = 0.0
         self._announcer = None
         self.identity = None
@@ -224,6 +227,7 @@ class ProDjLinkListener(InputSource):
 
     def _handle_packet(self, sock: socket.socket, data: bytes, addr: tuple[str, int] = ("", 0)) -> None:
         port = sock.getsockname()[1]
+        self.last_packet_time = self.clock.monotonic()
         try:
             if port == BEAT_PORT:
                 self._handle_beat(data)

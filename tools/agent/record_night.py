@@ -84,14 +84,47 @@ def main() -> int:
     p.add_argument("--note", default="")
     p.add_argument("--question", action="append", default=[])
     p.add_argument("--role", choices=ROLES, default="tracks")
+    # 2026-10-30 (D-37): a night is judged by what changed for a USER, not by the agent's report
+    p.add_argument("--journeys-improved", type=int, default=None, help="walkthrough journeys that got better (gate)")
+    p.add_argument("--bugs-closed", type=int, default=None, help="UX_BACKLOG / UI_BUGS entries moved to Fixed with a test")
+    p.add_argument("--prefs-improved", type=int, default=None, help="preferences whose failing-track count went down")
+    p.add_argument("--out-of-scope", type=int, default=None, help="commits that touched looks/scenes/palettes/knobs unasked")
     a = p.parse_args()
     sp = Path(a.state)
     sp.parent.mkdir(parents=True, exist_ok=True)
-    st = record(load(sp), date=a.date, branch=a.branch, role=a.role, commits=a.commits, gate=a.gate,
+    impact = {k: v for k, v in (('journeys_improved', a.journeys_improved), ('bugs_closed', a.bugs_closed),
+                                  ('prefs_improved', a.prefs_improved), ('out_of_scope', a.out_of_scope)) if v is not None}
+    st = record(load(sp), **impact, date=a.date, branch=a.branch, role=a.role, commits=a.commits, gate=a.gate,
                 tests=a.tests, family=a.family, subgoal=a.subgoal, note=a.note, questions=a.question)
     sp.write_text(json.dumps(st, indent=1, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(st["nights"][-1]))
     return 0
+
+
+
+TRIAL_NIGHTS = 3
+
+
+def trial_verdict(state: dict, role: str) -> tuple[str, list[str]]:
+    """KEEP / STOP / TRIAL for one agent over its last TRIAL_NIGHTS recorded nights (D-37, 2026-10-30).
+
+    STOP after any night with zero user-visible impact (no journey improved, no backlog bug closed with a
+    test, no preference improved) or with an out-of-scope commit. Josh: "they would commit no meaningful
+    changes that actually influenced the app itself." KEEP after TRIAL_NIGHTS nights with impact every night."""
+    nights = [n for n in state.get("nights", []) if (n.get("role") or "tracks") == role
+              and any(k in n for k in ("journeys_improved", "bugs_closed", "prefs_improved"))][-TRIAL_NIGHTS:]
+    why = []
+    for n in nights:
+        impact = int(n.get("journeys_improved") or 0) + int(n.get("bugs_closed") or 0) + int(n.get("prefs_improved") or 0)
+        if int(n.get("out_of_scope") or 0) > 0:
+            why.append(f"{n['date']}: {n['out_of_scope']} out-of-scope commit(s)")
+        elif impact == 0:
+            why.append(f"{n['date']}: no user-visible change")
+    if why:
+        return "STOP", why
+    if len(nights) >= TRIAL_NIGHTS:
+        return "KEEP", [f"{len(nights)} nights, each with user-visible impact"]
+    return "TRIAL", [f"{len(nights)} of {TRIAL_NIGHTS} trial nights recorded"]
 
 
 if __name__ == "__main__":

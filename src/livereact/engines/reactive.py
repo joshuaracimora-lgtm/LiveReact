@@ -36,6 +36,7 @@ from ..core.rise import RISE_FULL, RISE_ON
 from ..core.snare_trigger import RollRiseDetector
 from ..scenes.base import scene_color, spot_color
 from .envelope import NORMALIZE_TAU_S, BandEnvelope
+from .palette import rgb as palette_rgb
 
 # Synth Sync (Josh, 2026-09-15): "in a lot of UKG songs the most prominent
 # noise is the synths or the stabs... a feature on the UI I could click and
@@ -79,6 +80,34 @@ SYNTH_GAIN = 0.236
 # model's slow breathing level at this depth. Subtle by design: a pad swell
 # or a stab lifts the wash by at most this much on top of the 15-35% breath.
 BREAK_SYNTH_DEPTH = 0.15
+
+
+def synth_wash_level(section_level: float, synth_level: float, threshold: float) -> float:
+    """The Synth Sync wash level for this tick.
+
+    `threshold` <= 0 is the original follower (2026-09-15): the wash sits on
+    the normalized mid-band envelope, SYNTH_FLOOR..SYNTH_CEILING, so every
+    wobble in the mids (vocal chops, claps, snare body -- amplitude in one
+    band can't tell instruments apart) shows on the bar. Josh watched that on
+    the first hardware run of the fan rig (2026-10-29, session-20261029-213015:
+    wash brightness tracked the mic's mid envelope at r=0.56, "little breathing
+    moments in between ... reacting to the vocals and the bass and maybe the
+    claps") and asked for a threshold: "only hit on sounds that are enough to
+    trigger that threshold." Above 0 the wash HOLDS `section_level` (the
+    bucket/plan model's level for this section) and a stab that clears the
+    line lifts it toward SYNTH_CEILING by how far it clears: a hit reads as a
+    hit against a steady floor, nothing below the line moves the bar. The
+    envelope is self-normalized (envelope.py NORMALIZE_TAU_S): the line is
+    "this much of the loudest stab in the last few seconds", so it holds on a
+    quiet break and a loud drop alike. In the 10-29 recording a 0.6 line passed
+    ~63 of the ~134 beats a minute at 134.8 BPM, 0.7 ~53; the operator trims it
+    live (console Feel slider, persisted in config.json)."""
+    if threshold <= 0.0:
+        return SYNTH_FLOOR + (SYNTH_CEILING - SYNTH_FLOOR) * synth_level
+    if synth_level < threshold or threshold >= 1.0:
+        return section_level
+    excess = (synth_level - threshold) / (1.0 - threshold)
+    return section_level + max(0.0, SYNTH_CEILING - section_level) * min(1.0, excess)
 
 # STROBE_THRESHOLD (a fixed energy_norm > 0.85 gate, RETIRED 2026-09-14) used
 # to be the sole gate on the reactive strobe, in ANY bucket. Two real problems
@@ -326,6 +355,53 @@ BUILD_COUNTIN_BEATS = 8           # planned drop within this many beats (2 bars)
 # (SAFE-01), so a roll that lasts several bars is legal as-is; the accent
 # ends with the roll or the build (the commit into the drop).
 STROBE_ROLL_FLASH_DMX = 255
+STROBE_GAP_LEVEL = 0.42   # the wash between strobe flashes (gamma 2.2: byte ~40, dim but visibly on)
+ROLL_ACCENT_NOPLAN_MIN_ENERGY = 0.5   # no plan: the live roll accent only this loud (run 6's intro read 0.00)
+# The PLANNED roll's strobe (D-35, 2026-10-30, Josh: "let's not listen to what the Bible says this
+# time ... increase the shutter speed where it starts and where it ends by a significant amount. I want
+# it to match the beats of the snare rolls"): the flashes are LOCKED TO THE BEAT GRID, not a free clock --
+# 8th notes for the first half of the roll, 16ths for the second (~4.5 -> ~9 Hz at 135 BPM), ON for the
+# first half of each subdivision. Brightness climbs ROLL_FLASH_START_DMX -> STROBE_ROLL_FLASH_DMX over
+# the roll (the dimmer curve is gamma 2.2 with a 31 floor: the old 160 start was already ~36 % light and
+# read as "starts at the same brightness"). This knowingly exceeds SAFE-01's 4 Hz sustained line inside
+# planned rolls only (docs/13 D-35, spec/conformance.md SAFE-01); the 10-25 Hz band stays out of reach:
+# a subdivision faster than ROLL_GRID_MAX_HZ drops back to the slower one (16ths pass 10 Hz at 150 BPM).
+ROLL_FLASH_START_DMX = 40
+ROLL_GRID_SUBDIVISIONS = (2, 4)      # flashes per beat: 8ths, then 16ths
+ROLL_GRID_SPLIT = 0.5                # roll progress where the subdivision steps up
+ROLL_GRID_MAX_HZ = 9.9
+ROLL_ACCENT_WINDOW_BEATS = 32        # a live roll in a planned build counts only this close to its drop
+
+
+def flash_colour(palette_name: str, white: float) -> tuple[float, float, float]:
+    """D-36: the colour of a strobe flash (and of a whiteout hold): the song's palette colour lifted
+    toward white by ``white`` (0..1, the plan's brightness feature). Josh: "the strobe can be white
+    sometimes ... on more intense songs have the strobe set to white or a brighter color. Make sure it
+    matches the color gradient, always." A dark, bass-heavy song flashes in its own colour; a bright
+    one near white; the hold after a roll is the same tint, not a jump from orange to white."""
+    r, g, b = palette_rgb(palette_name)
+    w = max(0.0, min(1.0, white))
+    return (r + (1.0 - r) * w, g + (1.0 - g) * w, b + (1.0 - b) * w)
+
+
+def planned_roll_subdivision(progress: float, bpm: float) -> int:
+    """Flashes per beat inside a planned roll at this progress and tempo (see ROLL_GRID_*)."""
+    sub = ROLL_GRID_SUBDIVISIONS[1] if progress >= ROLL_GRID_SPLIT else ROLL_GRID_SUBDIVISIONS[0]
+    beat_hz = (bpm if bpm > 0 else 120.0) / 60.0
+    while sub > 1 and sub * beat_hz > ROLL_GRID_MAX_HZ:
+        sub //= 2
+    return max(1, sub)
+
+
+def planned_roll_flash(progress: float, beat_phase: float, bpm: float) -> tuple[bool, int]:
+    """(flash ON this tick?, flash byte) for a planned roll: ON for the first half of each
+    subdivision of the beat; the byte climbs ROLL_FLASH_START_DMX -> STROBE_ROLL_FLASH_DMX."""
+    p = max(0.0, min(1.0, progress))
+    sub = planned_roll_subdivision(p, bpm)
+    on = ((max(0.0, min(0.999999, beat_phase)) * sub) % 1.0) < 0.5
+    byte = round(ROLL_FLASH_START_DMX + (STROBE_ROLL_FLASH_DMX - ROLL_FLASH_START_DMX) * p)
+    return on, byte
+
 
 # Color: the phrase-frozen palette entry on the snapshot (engines/palette.py,
 # picked by core/metronome.py). This engine used to keep its own 16-bar
@@ -381,7 +457,6 @@ PEAK_BOOST = 0.03  # added to the held DROP level, clamped to 1.0
 # light that's roughly 40-55% output. NOT yet tuned by eye on hardware.
 DROP_HELD_LOW = 0.66
 DROP_HELD_HIGH = 0.76
-
 
 def _drop_held_level(drop_hit_intensity: float) -> float:
     """Map the once-captured hit intensity (core/metronome.py's
@@ -445,6 +520,7 @@ def _beat4_flash(snap: ShowSnapshot, held: float) -> float:
 BUILD_RAMP_BARS = 8.0   # the Bible's own typical build length
 BUILD_LOW = 0.2         # Bible: "20->95%"
 BUILD_HIGH = 0.95
+BUILD_STEADY = 0.45     # a planned build's held wash level (D-35): mid, in the companion colour
 
 # BREAK (`break_low_wash`; renamed from BREAKDOWN, Phase 2, naming match only
 # -- same concept): "a break has no transients to chase, so only a slow
@@ -608,6 +684,8 @@ class ReactiveLayerEngine:
         # starts). Recorded: the roll ended 2.0-2.8 s before each hit and the
         # rise strobe filled that gap.
         self._breath = False
+        self._grid_on: bool | None = None  # a planned roll's beat-locked flash phase (overrides the clock)
+        self.flash_rgb: tuple[float, float, float] = (1.0, 1.0, 1.0)  # D-36: this tick's flash colour
         self._prev_roll = False
         self.snare_roll_active = False  # exposed for the console/tests/recorder
         self.roll_ratio = 0.0            # exposed for the recorder: the detector's live ratio
@@ -643,14 +721,16 @@ class ReactiveLayerEngine:
         if (not self.synth_sync_active and snap.audio_fresh
                 and EnergyBucket(snap.bucket) in (EnergyBucket.BREAK, EnergyBucket.OUTRO)):
             wash_level = min(1.0, wash_level + BREAK_SYNTH_DEPTH * self.synth_level)  # see BREAK_SYNTH_DEPTH
-        if self.synth_sync_active:
+        if self.synth_sync_active and not (snap.plan_active and EnergyBucket(snap.bucket) == EnergyBucket.BUILD):
+            # Not in a planned build (2026-10-30 run 6, Josh: the riser "just wasn't really in sync with the
+            # music"): the mid-band spikes landed off the beat over the build's held level; the build owns it.
             # The synth owns the wash LEVEL: envelope-driven brightness. The
             # automated strobes (build ramp, roll accent, drop-tail burst) are
             # NOT suppressed any more -- a strobe overrides the synth level
             # while it runs, then the wash hands straight back (Josh,
             # 2026-09-19). No real audio -> the normal bucket level above,
             # never dark.
-            wash_level = SYNTH_FLOOR + (SYNTH_CEILING - SYNTH_FLOOR) * self.synth_level
+            wash_level = synth_wash_level(wash_level, self.synth_level, self.manual.synth_threshold)
         self.wash_level = wash_level
         self.strobe_level = strobe
 
@@ -660,7 +740,12 @@ class ReactiveLayerEngine:
         # channel together -- ON at exactly STROBE_FLASH_DMX, OFF at 0 -- on
         # the same DMX frame. The wash bar's native ch2 is never written here.
         on_phase = self._strobe_clock.advance(strobe)
+        if self._grid_on is not None:
+            on_phase = self._grid_on   # a planned roll: the beat grid is the clock (D-35)
         self.strobe_on = strobe > 0 and on_phase
+        # D-36: what colour a flash is. COLOR is LTP by priority and every Phrase look outranks this
+        # layer, so core/show_engine.py paints this onto the merged frame while strobe_on.
+        self.flash_rgb = flash_colour(snap.palette, snap.planned_flash_white)
         for fx in rig.by_role("wash"):
             if isinstance(fx, (Par, WashBar)):
                 # VERIFIED ON HARDWARE: Par has a real dimmer channel, same as
@@ -668,7 +753,9 @@ class ReactiveLayerEngine:
                 # left the dimmer at 0 and the real fixture never lit).
                 fx.set_color(c, r, g, b)
                 if strobe > 0:
-                    fx.set_intensity(c, 0.0)
+                    # between flashes a dim floor in the wash colour, never dark (2026-10-30 run 6: a full
+                    # cut between flashes read as "the lights would just cut out")
+                    fx.set_intensity(c, STROBE_GAP_LEVEL)
                     if on_phase:
                         # Written as a final BYTE, not through set_intensity's
                         # gamma+floor curve (fixtures/profiles.py's
@@ -704,14 +791,28 @@ class ReactiveLayerEngine:
         self.roll_ratio = self._roll.ratio
         self.roll_path = self._roll.path
         self.roll_rate_base = self._roll.rate_base
-        roll_rate = STROBE_MAX if self.snare_roll_active else 0.0  # ends with the roll or on the commit
+        # The live detector's accent (D-35 gate, 2026-10-30): in drive mode only where the plan allows a
+        # strobe AND the music is at or heading into a drop -- run 4 on Thriller strobed through the intro
+        # (62 of 71 ticks), the breakdown and the outro on rolls the detector heard in vocals and hats.
+        # P-24: not inside a Tease -- the planned roll after it owns the strobe (the Tease hands over to it)
+        accent_ok = self.snare_roll_active and self._roll_accent_allowed(snap) and snap.planned_tease_progress < 0.0
+        roll_rate = STROBE_MAX if accent_ok else 0.0  # ends with the roll or on the commit
         if self._prev_roll and not self.snare_roll_active and snap.drop_armed:
             self._breath = True   # the roll just ended: silence until the hit
         if self.snare_roll_active or not snap.drop_armed:
             self._breath = False  # a new roll, the drop landed, or the arming lapsed
         self._prev_roll = self.snare_roll_active
         ambient_rate = self._strobe_rate(snap)  # BUILD: sets strobe_flash_dmx to the ramp's byte...
-        if roll_rate > 0:
+        self._grid_on = None
+        if snap.planned_roll_progress >= 0.0 and snap.planned_strobe_allowed:
+            # The PLANNED roll (rekordbox/planner.py PLAN_ROLL_BEATS, D-21) owns the strobe for its whole
+            # length, with or without audio, and over the live detector (which flattened roll 1 of run 4
+            # to a constant 4 Hz / 255): beat-locked flashes, dim -> full (planned_roll_flash, D-35).
+            on, byte = planned_roll_flash(snap.planned_roll_progress, snap.beat_phase, snap.bpm)
+            roll_rate = STROBE_MAX
+            self.strobe_flash_dmx = byte
+            self._grid_on = on
+        elif accent_ok:
             self.strobe_flash_dmx = STROBE_ROLL_FLASH_DMX  # ...which the roll accent overrides
         if EnergyBucket(snap.bucket) not in (EnergyBucket.DROP, EnergyBucket.PEAK):
             # The pre-drop strobe (armed + rising, whatever bucket the
@@ -724,6 +825,26 @@ class ReactiveLayerEngine:
         else:
             ambient = self._ambient_gate.apply(ambient_rate)
         return max(ambient, roll_rate)
+
+    @staticmethod
+    def _roll_accent_allowed(snap: ShowSnapshot) -> bool:
+        """Where the live roll detector may strobe. Driving plan: only where the plan allows a strobe, in a
+        build whose drop is within 8 bars. No plan: in a build, drop or peak, and only while the music is
+        loud (ROLL_ACCENT_NOPLAN_MIN_ENERGY) -- never in a break or an intro.
+
+        2026-10-30 run 6 (Josh): "there was still a lot of strobing in the intro ... There should never be
+        strobing like that in the intro, especially when intensity is that low" -- the first track of the
+        session had no plan yet and the detector strobed the intro at energy_norm 0.00; and with a plan
+        it heard "rolls" in Thriller's drops (vocals, hats), whose flashes read as "the lights would just
+        cut out and turn to blue or white". Inside a drop only the planned strobes fire now."""
+        bucket = EnergyBucket(snap.bucket)
+        if not snap.plan_active:
+            if snap.energy_norm < ROLL_ACCENT_NOPLAN_MIN_ENERGY:
+                return False
+            return bucket in (EnergyBucket.BUILD, EnergyBucket.DROP, EnergyBucket.PEAK)
+        if not snap.planned_strobe_allowed:
+            return False
+        return bucket == EnergyBucket.BUILD and 0 < snap.beats_to_drop <= ROLL_ACCENT_WINDOW_BEATS
 
     def _strobe_rate(self, snap: ShowSnapshot) -> float:
         """Ambient strobe rate, DROP/PEAK only, and only during the last
@@ -743,6 +864,8 @@ class ReactiveLayerEngine:
         bucket = EnergyBucket(snap.bucket)
         if bucket not in (EnergyBucket.DROP, EnergyBucket.PEAK):
             return self._build_strobe_rate(snap)  # armed + rising, in whatever bucket the classifier thinks
+        if snap.plan_active and snap.planned_tease_progress >= 0.0:
+            return 0.0   # P-24: no phrase-tail burst inside a Tease (run 6: six flashes into Thriller's 1:04 Tease)
         # Phrase origin: the metronome's own drop_start_bar (the bar the
         # rise was FIRST seen in -- see ShowSnapshot.drop_start_bar) when it
         # has one; the bar this engine saw the bucket flip in otherwise.
@@ -773,8 +896,16 @@ class ReactiveLayerEngine:
         # rise detector is quiet -- the plan knows the downbeat, the ear-rule is the same.
         if self._breath:
             return 0.0   # the roll just ended: silence until the hit, whatever armed it
+        if snap.plan_active and (not snap.planned_strobe_allowed or snap.planned_tease_progress >= 0.0):
+            # D-36 / P-24: the plan arms every drop (count-in prearm), but before a lesser drop the build
+            # has no strobe at all -- armed + rising strobed Tongue Tied's Tease 1:21-1:28 into its 82 % drop --
+            # and inside a Tease the planned roll after it is the only strobe (1:48-1:52 strobed before the roll)
+            return 0.0
         countdown = 0.0
-        if (snap.plan_active and snap.planned_strobe_allowed and snap.drop_armed
+        # No count-in into a planned roll lead-in (2026-10-29, Thriller on the bench): the count-in ran
+        # 2 Hz -> 4 Hz over the last 2 bars of the build, then the roll's own escalation started over at
+        # 2 Hz -- Josh: "build up into a drop into a build up". The roll IS the count-in.
+        if (snap.plan_active and snap.planned_strobe_allowed and snap.drop_armed and not snap.planned_roll_ahead
                 and 0 < snap.beats_to_drop <= BUILD_COUNTIN_BEATS):
             countdown = 1.0 - (snap.beats_to_drop - 1) / float(BUILD_COUNTIN_BEATS)
         if countdown <= 0.0 and not (snap.drop_armed and snap.rising):
@@ -851,6 +982,12 @@ class ReactiveLayerEngine:
         elif energy_bucket == EnergyBucket.PEAK:
             held = min(1.0, _drop_held_level(snap.drop_hit_intensity) + PEAK_BOOST)
             target = _beat4_flash(snap, held)  # same beat-4 accent
+        elif energy_bucket == EnergyBucket.BUILD and snap.plan_active:
+            # D-35 (2026-10-30): a planned build between two intense parts holds a steady mid level in
+            # the song's companion colour (engines/palette.py); the rise belongs to the roll strobe that
+            # follows and to the kick-free break's white riser below. The Bible ramp stays for the
+            # classifier (no plan).
+            target = BUILD_STEADY
         elif energy_bucket == EnergyBucket.BUILD:
             entry = self._build_entry_pos if self._build_entry_pos is not None else pos
             progress = max(0.0, min(1.0, (pos - entry) / BUILD_RAMP_BARS))
@@ -859,6 +996,10 @@ class ReactiveLayerEngine:
             entry = self._outro_entry_pos if self._outro_entry_pos is not None else pos
             progress = max(0.0, min(1.0, (pos - entry) / OUTRO_FADE_BARS))
             target = OUTRO_HIGH + (OUTRO_LOW - OUTRO_HIGH) * progress  # descending
+        elif snap.planned_riser and snap.planned_section_progress >= 0.0:
+            # D-35: the white riser -- a kick-free planned break rises BREAK_LOW -> BUILD_HIGH across the
+            # section (the metronome has already swapped the palette to neutral_wash).
+            target = BREAK_LOW + (BUILD_HIGH - BREAK_LOW) * snap.planned_section_progress
         else:  # BREAK
             # Normalize energy WITHIN this bucket's own range (0..BREAK_MAX)
             # before using it as the breathing target -- using the raw value

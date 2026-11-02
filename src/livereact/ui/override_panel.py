@@ -63,15 +63,69 @@ class OverridePanel(QtWidgets.QWidget):
     # ------------------------------------------------------------------ lasers
     def _build_lasers(self) -> QtWidgets.QWidget:
         box = QtWidgets.QGroupBox("Lasers")
-        h = QtWidgets.QHBoxLayout(box)
+        outer = QtWidgets.QVBoxLayout(box)
+        h = QtWidgets.QHBoxLayout()
         self.b_laser_arm = _button("ARM LASERS", "danger", checkable=True)
         self.b_laser_arm.setChecked(self.app.manual.laser_enable)
         self.l_laser_status = QtWidgets.QLabel("")
         self.l_laser_status.setObjectName("status")
         h.addWidget(self.b_laser_arm, 1)
         h.addWidget(self.l_laser_status)
+        outer.addLayout(h)
         self.b_laser_arm.toggled.connect(self._arm_toggled)
+        self._override_host = QtWidgets.QVBoxLayout()
+        outer.addLayout(self._override_host)
+        self._override_box: QtWidgets.QWidget | None = None
+        self.laser_override_buttons: dict[str, QtWidgets.QPushButton] = {}
+        self.b_laser_resume: QtWidgets.QPushButton | None = None
+        self.build_laser_overrides()
         return box
+
+    def build_laser_overrides(self) -> None:
+        """The rig's latched override looks (2026-10-31, AEPI: rig.laser_overrides, engines/
+        laser_fan.py). Turning a look on lights it and switches the automatic lasers off; turning
+        it off leaves them dark until RESUME AUTO. Rebuilt for the new rig on a live switch; a rig
+        without the key gets nothing and its overrides are cleared."""
+        m = self.app.manual
+        if self._override_box is not None:
+            self._override_host.removeWidget(self._override_box)
+            self._override_box.deleteLater()
+            self._override_box = None
+        self.laser_override_buttons = {}
+        self.b_laser_resume = None
+        looks = tuple(getattr(self.app.rig, "laser_overrides", ()))
+        if not looks:
+            m.laser_override, m.laser_auto_off = "", False
+            return
+        w = QtWidgets.QWidget()
+        g = QtWidgets.QGridLayout(w)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(8)
+        for i, name in enumerate(looks):
+            b = _button(name.upper(), "look", checkable=True)
+            b.setChecked(m.laser_override == name)
+            b.toggled.connect(lambda on, name=name: self._override_toggled(name, on))
+            self.laser_override_buttons[name] = b
+            g.addWidget(b, 0, i)
+        self.b_laser_resume = _button("RESUME AUTO LASERS", "cue")
+        self.b_laser_resume.clicked.connect(self.resume_auto_lasers)
+        g.addWidget(self.b_laser_resume, 1, 0, 1, len(looks))
+        self._override_host.addWidget(w)
+        self._override_box = w
+
+    def _override_toggled(self, name: str, on: bool) -> None:
+        m = self.app.manual
+        if on:
+            m.laser_override = name
+            m.laser_auto_off = True
+        elif m.laser_override == name:
+            m.laser_override = ""          # off: dark, and the auto lasers stay off
+        self.refresh()
+
+    def resume_auto_lasers(self) -> None:
+        m = self.app.manual
+        m.laser_override, m.laser_auto_off = "", False
+        self.refresh()
 
     def lasers_allowed(self) -> bool:
         return self.effect.lasers_allowed
@@ -239,8 +293,9 @@ class OverridePanel(QtWidgets.QWidget):
             self.app.manual.laser_enable = False        # fail safe: the event forbids lasers
         apply = getattr(self.app, "apply_preset", None)
         if callable(apply):
-            apply(self.effect)
-            self.l_preset_msg.setText("")
+            missing = apply(self.effect) or []
+            # say what did NOT take effect instead of pretending (App.apply_preset, 2026-10-30)
+            self.l_preset_msg.setText(("Applied. Not supported yet: " + ", ".join(missing) + ".") if missing else "")
         else:
             self.l_preset_msg.setText("Preset stored; it takes effect once the app supports presets.")
         self.preset_changed.emit(self.effect)
@@ -287,6 +342,14 @@ class OverridePanel(QtWidgets.QWidget):
                 b.blockSignals(False)
         self.b_laser_arm.setText("DISARM LASERS (L)" if m.laser_enable else "ARM LASERS (L)")
         self.l_laser_status.setText(self.laser_status())
+        for name, b in self.laser_override_buttons.items():
+            if b.isChecked() != (m.laser_override == name):
+                b.blockSignals(True)
+                b.setChecked(m.laser_override == name)
+                b.blockSignals(False)
+        if self.b_laser_resume is not None:
+            self.b_laser_resume.setEnabled(m.laser_auto_off)
+            self.b_laser_resume.setText("RESUME AUTO LASERS" + ("  (auto is OFF)" if m.laser_auto_off else ""))
         rb = self.laser_mode_buttons.get(m.laser_mode)
         if rb is not None and not rb.isChecked():
             rb.blockSignals(True)

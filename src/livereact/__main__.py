@@ -81,6 +81,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    help="--pdl-probe: pull export.pdb + the loaded track's phrase table over NFS and show a live countdown.")
     p.add_argument("--pdl-dump", default=None, help="--pdl-probe: save raw status packets + fetched files under DIR.")
     p.add_argument("--doctor", action="store_true", help="Write an environment/device diagnostics report and exit.")
+    p.add_argument("--preflight", action="store_true",
+                   help="Pre-show check of the real rig (DJ Link ports, 169.254 network, XDJ audio/MIDI, DMX adapter, "
+                        "rig file): PASS/WARN/FAIL per item, exit 1 on any FAIL. Run while LiveReact is NOT running.")
     p.add_argument("--bundle", nargs="?", const="__latest__", default=None,
                    help="Zip a session folder for sharing (default: the latest), then exit.")
     return p.parse_args(argv)
@@ -133,7 +136,19 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:  # noqa: BLE001
             pass
 
-    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    raw_argv = argv if argv is not None else sys.argv[1:]
+    args = _parse_args(raw_argv)
+    # The first-run setup and the Rig manager's last rig become the launch defaults when no flag says
+    # otherwise (launch.py, 2026-10-30) -- before this, a user's setup answers never reached the show.
+    launch_applied: list[str] = []
+    if not getattr(args, "demo", False):
+        try:
+            from .launch import apply_to_args, from_settings
+            from .settings import Settings
+            launch_applied = apply_to_args(args, from_settings(Settings.load()),
+                                           hardware_flag_given="--hardware" in raw_argv)
+        except Exception:  # noqa: BLE001 - a broken settings file must never stop a launch
+            launch_applied = []
     demo = not args.hardware  # demo is the default; --demo is explicit-but-redundant
 
     # Resolve a session directory if recording, and route logs into it.
@@ -147,8 +162,15 @@ def main(argv: list[str] | None = None) -> int:
     error_file = os.path.join(session_dir, "errors.log") if session_dir else None
     _configure_logging(args.log_level, log_file=log_file, error_file=error_file)
     log = logging.getLogger("livereact")
+    if launch_applied:
+        log.info("Launch defaults from your saved setup: %s", " ".join(launch_applied))
 
     # --- standalone tools (run and exit) ---
+    if args.preflight:
+        from . import preflight
+        checks = preflight.run(args.rig, args.pdl_interface)
+        print(preflight.format_checks(checks))
+        return preflight.exit_code(checks)
     if args.doctor:
         from .diagnostics import write_report
 

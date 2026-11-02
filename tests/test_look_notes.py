@@ -95,3 +95,71 @@ def test_no_drop_mood_disables_drop_strobe_and_big_moment():
     assert not any(d.big_moment for d in plan.drops) and not any(d.strobe_allowed for d in plan.sections)
     strobe_none = plan_track(_table(), track_id=1, bpm=125.0, look=from_dict(dict(TEMPLATE, strobe="none")))
     assert not any(s.strobe_allowed for s in strobe_none.sections)
+
+
+# --- laser_scene / laser_cues (2026-10-29): a track picks the fan's look per moment ---------------
+
+def test_laser_scene_and_cues_load_and_reach_the_plan():
+    d = dict(TEMPLATE, laser_scene="Blue Sweep",
+             laser_cues=[{"on": "big_moment", "scene": "Spinning Line"}, {"on": "wub", "scene": "Breathing Dots"}])
+    ln = from_dict(d)
+    assert ln.laser_scene == "Blue Sweep"
+    assert ln.laser_cues == (("big_moment", "Spinning Line"), ("wub", "Breathing Dots"))
+    plan = plan_track(_table(), track_id=1, bpm=120.0, look=ln)
+    assert plan.laser_scene == "Blue Sweep" and dict(plan.laser_cues)["wub"] == "Breathing Dots"
+    drops = [s for s in plan.sections if s.kind == "drop"]
+    assert drops
+    for s in plan.sections:
+        if s.kind != "drop":
+            assert s.laser_scene == "Blue Sweep"          # the track's scene everywhere the lasers may fire
+    assert {s.laser_scene for s in drops if s.big_moment} == {"Spinning Line"}   # the big moment's cue wins
+    assert {s.laser_scene for s in drops if not s.big_moment} <= {"Blue Sweep"}
+    # no notes at all: nothing picked, the fan keeps its default
+    plan = plan_track(_table(), track_id=1, bpm=120.0)
+    assert plan.laser_scene == "" and plan.laser_cues == () and all(s.laser_scene == "" for s in plan.sections)
+
+
+@pytest.mark.parametrize("bad", [
+    {"laser_scene": "Laser Fan Deluxe"},                          # not a library scene
+    {"laser_cues": {"on": "drop", "scene": "Rainbow"}},            # not a list
+    {"laser_cues": [{"on": "chorus", "scene": "Rainbow"}]},        # not a trigger
+    {"laser_cues": [{"on": "drop", "scene": "Nope"}]},
+    {"laser_cues": [{"on": "drop", "scene": "Rainbow", "color": "blue"}]},   # extra key
+    {"laser_cues": [{"on": "drop", "scene": "Rainbow"}, {"on": "drop", "scene": "Blue Sweep"}]},  # twice
+])
+def test_bad_laser_notes_raise(bad):
+    with pytest.raises(ValueError):
+        from_dict(dict(TEMPLATE, **bad))
+
+
+def test_timed_cues_load_validate_and_reach_the_plan():
+    """2026-10-29: Josh's ear notes ("drums cut ... straight to white out") as timed cues."""
+    from livereact.rekordbox.look_notes import Cue, from_dict
+    from livereact.rekordbox.planner import plan_track
+    from livereact.rekordbox.pssi import MOOD_HIGH, Phrase, PhraseTable
+    d = {"schema": 1, "cues": [{"look": "whiteout", "t": 10.0}, {"look": "whiteout", "beat": 40, "beats": 2}]}
+    notes = from_dict(d)
+    assert notes.cues == (Cue(look="whiteout", t=10.0, beat=None, beats=4), Cue(look="whiteout", t=None, beat=40, beats=2))
+    spec = [(1, 1, "intro", 17), (17, 2, "up", 49), (49, 5, "chorus", 81), (81, 6, "outro", 113)]
+    table = PhraseTable(mood=MOOD_HIGH, end_beat=113, bank=0,
+                        phrases=tuple(Phrase(index=i + 1, beat=b, end_beat=e, kind=k, label=l) for i, (b, k, l, e) in enumerate(spec)))
+    plan = plan_track(table, track_id=1, bpm=120.0, look=notes)   # 120 bpm, beat 1 at 0 s -> 10 s = beat 21
+    assert plan.cues == ((21, 25, "whiteout"), (40, 42, "whiteout"))
+    assert plan.cue_look(20) == "" and plan.cue_look(21) == "whiteout" and plan.cue_look(24) == "whiteout"
+    assert plan.cue_look(25) == "" and plan.cue_look(41) == "whiteout" and plan.cue_look(42) == ""
+    for bad in ({"cues": [{"look": "sparkle", "t": 1}]}, {"cues": [{"look": "whiteout"}]},
+                {"cues": [{"look": "whiteout", "t": 1, "beat": 2}]}, {"cues": [{"look": "whiteout", "t": -1}]},
+                {"cues": [{"look": "whiteout", "t": 1, "beats": 0}]}, {"cues": "whiteout"}):
+        with pytest.raises(ValueError):
+            from_dict({"schema": 1, **bad})
+
+
+def test_path_lookup_finds_notes_named_after_a_shortened_file(tmp_path):
+    """Run 6 (2026-10-30): Thriller's notes were "..._Haunted_R.look.json", the USB track
+    "..._Haunted_Remix_KLICKAUD": the live show never loaded them."""
+    (tmp_path / "Michael_Jackson_-_Thriller_BVRNOUT_Haunted_R.look.json").write_text("{}")
+    p = look_notes_path_for("Michael_Jackson_-_Thriller_BVRNOUT_Haunted_Remix_KLICKAUD", tmp_path)
+    assert p.exists()
+    assert not look_notes_path_for("Michael", tmp_path).exists()            # too short to count
+    (tmp_path / "Michael_Jackson_-_Thriller_BVRNOUT_Haunted_Re.look.json").write_text("{}")
+    assert not look_notes_path_for("Michael_Jackson_-_Thriller_BVRNOUT_Haunted_Remix_KLICKAUD", tmp_path).exists()   # ambiguous

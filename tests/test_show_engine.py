@@ -175,3 +175,54 @@ def test_calibration_pins_hold_off_the_no_music_auto_blackout():
     manual.calibration = None
     eng.clock.advance(0.025)
     assert eng.tick() == bytes(UNIVERSE_SIZE)      # pins gone: the failsafe is back
+
+
+def test_a_planned_whiteout_cue_overrides_the_wash_and_heads_to_full_white():
+    """2026-10-29: look-note cues ("drums cut ... straight to white out") reach the published frame."""
+    state = ShowState()
+    quiet = dict(energy=0.1, energy_norm=0.1, bucket="break", fader_a=1.0, beat_phase=0.0, audio_fresh=True, pdl_fresh=True)
+    state.publish(ShowSnapshot(**quiet))
+    eng, fb, _ = _engine([ReactiveLayerEngine(FakeClock())], state=state)
+    before = eng.tick()
+    state.publish(ShowSnapshot(**quiet, planned_look="whiteout", palette="blood_red", planned_flash_white=1.0))
+    frame = eng.tick()
+    rig = eng.rig
+    bar = rig.fixture("bar_l")
+    assert frame[bar.offset] == 255                       # ch1 dimmer full (a break wash sat near 15 %)
+    assert tuple(frame[bar.offset + 2:bar.offset + 6]) == (255, 255, 255, 255)   # R G B W: a bright song -> white
+    assert before[bar.offset] < 128
+    # D-36: a dark song's hold is its own colour at full, not white
+    from livereact.engines.palette import rgb as palette_rgb
+    state.publish(ShowSnapshot(**quiet, planned_look="whiteout", palette="blood_red", planned_flash_white=0.0))
+    tinted = eng.tick()
+    r, g, b = (round(v * 255) for v in palette_rgb("blood_red"))
+    assert tinted[bar.offset] == 255 and tuple(tinted[bar.offset + 2:bar.offset + 5]) == (r, g, b)
+    assert tinted[bar.offset + 5] == 0                    # no white zone on a pure colour
+    mh = rig.fixture("mh_r")
+    assert frame[mh.offset + 5] == 255                    # head dimmer (ch6) full
+    assert all(v == 0 for v in frame[rig.fixture("laser_l").offset: rig.fixture("laser_l").offset + 12])  # lasers untouched (unarmed)
+    state.publish(ShowSnapshot(**quiet))                  # the cue ends: back to the quiet break
+    after = eng.tick()
+    assert after[bar.offset] < 128
+
+
+def test_a_strobe_flash_is_painted_in_the_flash_colour_over_the_phrase_look():
+    """D-36: COLOR is LTP by priority, so the flash colour is applied after the merge."""
+    from livereact.engines.palette import rgb as palette_rgb
+    from livereact.engines.phrase import PhraseEngine
+    from livereact.scenes.catalog import SceneCatalog
+    state = ShowState()
+    roll = dict(bucket="drop", energy=0.8, audio_fresh=True, pdl_fresh=True, plan_active=True, planned_strobe_allowed=True,
+                planned_roll_progress=1.0, drop_start_bar=10, bar=10, beat_in_bar=1, bpm=135.0, palette="blood_red",
+                classifier_bucket="drop")
+    state.publish(ShowSnapshot(**roll, beat_phase=0.05, planned_flash_white=0.5))
+    react = ReactiveLayerEngine(FakeClock())
+    eng, fb, _ = _engine([PhraseEngine(SceneCatalog(full=True)), react], state=state)
+    frame = eng.tick()
+    assert react.strobe_on
+    bar = eng.rig.fixture("bar_l")
+    want = tuple(round(v * 255) for v in react.flash_rgb)
+    assert tuple(frame[bar.offset + 2:bar.offset + 5]) == want
+    assert frame[bar.offset + 5] == round(min(react.flash_rgb) * 255)
+    plain = tuple(round(v * 255) for v in palette_rgb("blood_red"))
+    assert want != plain                                   # lifted toward white, not the plain wash colour

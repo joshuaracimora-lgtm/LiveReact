@@ -75,6 +75,9 @@ log = logging.getLogger(__name__)
 # session; app.py reads it, nothing else does.
 LASER_PROFILES = ("accent", "feature", "trigger", "show", "manual", "fan")  # "fan" (2026-10-28): engines/laser_fan.py;  # "show" (2026-10-08): engines/laser_show.py; "manual" (2026-10-10): engines/laser_manual.py
 DEFAULT_LASER_PROFILE = "accent"
+# Latched override looks a rig may offer on the laser panel (2026-10-31, AEPI;
+# engines/laser_fan.py OVERRIDE_LOOKS). Only the "fan" profile drives them.
+LASER_OVERRIDE_LOOKS = ("Rainbow", "Green", "White")
 
 # Slot keys the loader models; anything else rides along in Fixture.extra.
 _KNOWN_SLOT_KEYS = frozenset({
@@ -93,13 +96,16 @@ class Rig:
     """A loaded fixture layout: ordered fixtures + a precomputed channel-kind map."""
 
     def __init__(self, name: str, fixtures: list[Fixture], venue: Venue | None = None,
-                 description: str = "", laser_profile: str = DEFAULT_LASER_PROFILE) -> None:
+                 description: str = "", laser_profile: str = DEFAULT_LASER_PROFILE,
+                 laser_overrides: tuple[str, ...] = ()) -> None:
         self.name = name
         self.description = description
         self.fixtures = fixtures
         # See LASER_PROFILES above; validated by the loader, defaulted here so
         # a Rig built in code (tests, the visualizer demo) is the home profile.
         self.laser_profile = laser_profile
+        # The laser panel's latched override buttons (LASER_OVERRIDE_LOOKS); () = none.
+        self.laser_overrides = tuple(laser_overrides)
         # The room (fixtures/geometry.py). None -> no floor plan declared;
         # everything geometry-aware falls back to pre-2026-09-18 behavior.
         self.venue = venue
@@ -397,12 +403,19 @@ def _rig_from_dict(data: dict) -> Rig:
     profile = str(data.get("laser_profile", DEFAULT_LASER_PROFILE))
     if profile not in LASER_PROFILES:
         raise RigError(f"unknown laser_profile {profile!r} (known: {list(LASER_PROFILES)})")
+    overrides = tuple(str(n) for n in data.get("laser_overrides", ()))
+    bad = [n for n in overrides if n not in LASER_OVERRIDE_LOOKS]
+    if bad:
+        raise RigError(f"unknown laser_overrides {bad} (known: {list(LASER_OVERRIDE_LOOKS)})")
+    if overrides and profile != "fan":
+        raise RigError(f"laser_overrides need laser_profile 'fan' (this rig is {profile!r})")
     return Rig(
         name=data.get("name", "rig"),
         fixtures=fixtures,
         venue=_venue_from_dict(data.get("venue")),
         description=str(data.get("description", "")),
         laser_profile=profile,
+        laser_overrides=overrides,
     )
 
 
@@ -469,6 +482,8 @@ def rig_to_dict(rig: Rig, description: str | None = None) -> dict:
         "description": description if description is not None else rig.description,
         "laser_profile": rig.laser_profile,
     }
+    if rig.laser_overrides:
+        data["laser_overrides"] = list(rig.laser_overrides)
     if rig.venue is not None:
         v = rig.venue
         data["venue"] = {

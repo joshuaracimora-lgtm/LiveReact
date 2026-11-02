@@ -9,7 +9,7 @@ show path reads this yet (roadmap item 15 does the swap).
 from __future__ import annotations
 
 from .definition import FixtureDefinition
-from .profiles import Fixture, Laser, MovingHead, Par, WashBar
+from .profiles import Fixture, Laser, MovingHead, Par, RgbwBeamHead, WashBar
 
 TRAITS = ("rgb_wash", "pan_tilt", "color_wheel", "strobe_channel", "dimmer", "laser")
 
@@ -17,6 +17,7 @@ TRAITS = ("rgb_wash", "pan_tilt", "color_wheel", "strobe_channel", "dimmer", "la
 _NATIVE: tuple[tuple[type[Fixture], frozenset[str]], ...] = (
     (Par, frozenset({"rgb_wash", "dimmer"})),
     (WashBar, frozenset({"rgb_wash", "dimmer", "strobe_channel"})),
+    (RgbwBeamHead, frozenset({"pan_tilt", "rgb_wash", "dimmer", "strobe_channel"})),  # before its base
     (MovingHead, frozenset({"pan_tilt", "color_wheel", "dimmer", "strobe_channel"})),
     (Laser, frozenset({"laser"})),
 )

@@ -40,10 +40,10 @@ Hard rules for every item, whoever does it:
    `make_laser_engine(profile, clock, ...) -> (engine, arm_at_launch)`, used by `app.py` (laser selection)
    and `sim/harness.py` (today it always builds the accent `LaserEngine`, whatever the rig says, so the
    gate never scores the profile a non-accent rig actually plays). Re-baseline once.
-3. [JOSH] **P0 wire the user data folder.** After item 9: `AppConfig` paths, `config.DEFAULT_PATH`,
+3. [JOSH] **P0 wire the user data folder.** *(2026-10-30: first-run answers + last rig now become launch defaults via `launch.py` (D-38); config.json / recordings / logs paths still open.)* After item 9: `AppConfig` paths, `config.DEFAULT_PATH`,
    `__main__.py` defaults, recordings, logs resolve through `userdata.paths()`; first run copies an
    existing `./config.json` / `./midi_map.json` across. A source checkout keeps today's paths.
-4. [JOSH] **P0 app seams.** `App.switch_rig(path)` (blackout, stop the show thread, rebuild rig + engines,
+4. [JOSH] **P0 app seams.** *(2026-10-30: `App.switch_rig` and `App.apply_preset` DONE (D-38, tests/test_app_wiring.py); still open: `PhraseEngine.set_catalog` for genre looks, see item 31.)* `App.switch_rig(path)` (blackout, stop the show thread, rebuild rig + engines,
    restart, always disarm lasers), `App.apply_preset(effect)`, `PhraseEngine.set_catalog(catalog)`
    (takes effect at the next phrase). No behaviour change.
 5. [JOSH] **P0 vendor python-prodj-link.** Check its license first. `src/livereact/_vendor/prodj/` at a

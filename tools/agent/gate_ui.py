@@ -7,7 +7,8 @@ ACCEPT needs all of:
 1. the UI test modules RUN (PySide6 present, nothing skipped) and pass, plus every test file the branch
    touched;
 2. ``venue_check.py`` passes (the grid still drives the lights);
-3. label overlap (``ui_snapshot.py``) is not worse on any rig than ``--base``, measured in this same run
+3. no user journey (``walkthrough.py``) gets worse than on ``--base`` (2026-10-30), and
+   label overlap (``ui_snapshot.py``) is not worse on any rig than ``--base``, measured in this same run
    from a temporary worktree of ``--base`` (same machine, same fonts -- a stored number would drift);
 4. no test file loses assert lines (a fix proven by deleting the check that caught it is not a fix);
 5. when anything outside ``src/livereact/ui/``, ``tests/`` and ``docs/UI_BUGS.md`` changed: the
@@ -32,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PY = sys.executable
 UI_TEST_MODULES = ("tests/test_floorplan.py", "tests/test_console.py", "tests/test_visualizer.py",
                    "tests/test_fixture_test.py")
-UI_ONLY = re.compile(r"^(src/livereact/ui/|tests/|docs/UI_BUGS\.md$)")
+UI_ONLY = re.compile(r"^(src/livereact/ui/|tests/|docs/UI_BUGS\.md$|docs/UX_BACKLOG\.md$)")
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -102,6 +103,49 @@ def overlap_vs_base(base: str) -> tuple[list[str], dict]:
     return worse, table
 
 
+RANK = {"PASS": 0, "UX": 1, "UNREACHABLE": 2, "BROKEN": 3}
+
+
+def journeys(src_root: Path | None) -> dict:
+    """{journey key: (verdict, number of findings)} from tools/agent/walkthrough.py. ``src_root`` = a worktree
+    of the base: HEAD's walkthrough.py is copied in, so base and head are measured by the same journeys."""
+    root = src_root or ROOT
+    tool = root / "tools" / "agent" / "walkthrough.py"
+    if src_root is not None:
+        tool.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / "tools" / "agent" / "walkthrough.py", tool)
+    out = Path(tempfile.mkdtemp(prefix="walk_"))
+    r = subprocess.run([PY, str(tool), "--out", str(out), "--json"], cwd=root, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=1800)
+    if r.returncode != 0:
+        raise RuntimeError(f"walkthrough failed: {r.stderr[-800:]}")
+    data = json.loads((out / "walkthrough.json").read_text(encoding="utf-8"))
+    shutil.rmtree(out, ignore_errors=True)
+    return {j["key"]: (j["verdict"], len(j["findings"])) for j in data}
+
+
+def journeys_vs_base(base: str) -> tuple[list[str], list[str], dict]:
+    """(regressions, improvements, table): a journey whose verdict ranks worse, or that gained findings,
+    is a regression -- the user is worse off. Improvements are what a night is judged on (D-37)."""
+    tmp = Path(tempfile.mkdtemp(prefix="gate_walk_"))
+    wt = tmp / "base"
+    try:
+        git("worktree", "add", "--detach", str(wt), base)
+        before, after = journeys(wt), journeys(None)
+    finally:
+        git("worktree", "remove", "--force", str(wt), check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
+    worse, better, table = [], [], {}
+    for k, (va, na) in after.items():
+        vb, nb = before.get(k, ("PASS", 0))
+        table[k] = {"base": f"{vb} ({nb})", "head": f"{va} ({na})"}
+        if RANK[va] > RANK[vb] or (RANK[va] == RANK[vb] and na > nb):
+            worse.append(f"journey {k}: {vb} ({nb} findings) -> {va} ({na})")
+        elif RANK[va] < RANK[vb] or na < nb:
+            better.append(f"journey {k}: {vb} ({nb}) -> {va} ({na})")
+    return worse, better, table
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--base", default="harness")
@@ -125,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
         worse, table = overlap_vs_base(a.base)
         report["overlap"] = table
         reasons += worse
+        jworse, jbetter, jtable = journeys_vs_base(a.base)       # 2026-10-30: the user's journeys
+        report["journeys"], report["journeys_improved"] = jtable, jbetter
+        reasons += jworse
         losses = assert_losses(a.base)
         report["assert_losses"] = losses
         reasons += losses
@@ -149,6 +196,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"venue check: {'OK' if report.get('venue_check') == 'OK' else 'FAILED'}")
     for rig, t in report.get("overlap", {}).items():
         print(f"overlap {rig:38} {t['base']} -> {t['head']}")
+    for k, t in report.get("journeys", {}).items():
+        print(f"journey {k:20} {t['base']} -> {t['head']}")
+    print(f"journeys improved: {len(report.get('journeys_improved', []))}")
     print(f"\nGATE: {verdict}")
     for r in reasons:
         print(f"  - {r}")

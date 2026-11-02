@@ -27,8 +27,47 @@ from ..scenes.base import SAFE_DEFAULT
 from .frame_buffer import DmxFrameBuffer
 from .show_state import ShowState
 from .silence import SilenceDetector
+from ..engines.reactive import flash_colour
+from ..engines.tease import TeaseLook, apply_tease
 
 log = logging.getLogger(__name__)
+
+
+def apply_strobe_colour(merged: bytearray, rig, rgb: tuple[float, float, float]) -> None:
+    """D-36: while the reactive layer's strobe is in its ON phase, every wash fixture's colour is the
+    flash colour (engines/reactive.py flash_colour: the song's palette lifted toward white by the
+    song's brightness). Applied after the merge because COLOR is LTP by priority and the Phrase look
+    would otherwise keep the flash in the plain wash colour."""
+    c = Contribution()
+    r, g, b = rgb
+    for fx in rig.by_role("wash"):
+        fx.set_color(c, r, g, b, min(r, g, b))   # the bar's centre-white zone follows the white share
+    for i in range(UNIVERSE_SIZE):
+        if c.touched[i]:
+            merged[i] = c.values[i]
+
+
+def apply_planned_look(merged: bytearray, rig, look: str, rgb: tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
+    """A look-note cue's override of the merged frame (rekordbox/look_notes.py `cues`, 2026-10-29).
+
+    Josh's Thriller ear notes: "drums cut right before the drop: straight to white out", "quiet spot
+    between the roll and the main groove: strobe -> white out". Applied AFTER the engines' merge
+    and BEFORE finalize, like the Venue-tab pins, so master brightness, the blackout switch, the
+    slew limit and every laser clamp still apply; the lasers themselves are not touched.
+    ``whiteout``: every wash and spot fixture at full intensity in ``rgb`` -- since D-36 the song's
+    flash colour (engines/reactive.py flash_colour), not pure white: Josh on the hold after Thriller's
+    roll, "it went from orange to white really quickly, which didn't really feel right". The bar's
+    centre-white zone follows the white share; the strobe's dimmer toggle is overwritten with full."""
+    if look != "whiteout":
+        return
+    c = Contribution()
+    r, g, b = rgb
+    for fx in list(rig.by_role("wash")) + list(rig.by_role("spot")):
+        fx.set_color(c, r, g, b, min(r, g, b))
+        fx.set_intensity(c, 1.0)
+    for i in range(UNIVERSE_SIZE):
+        if c.touched[i]:
+            merged[i] = c.values[i]
 
 
 class ShowEngine(threading.Thread):
@@ -73,8 +112,11 @@ class ShowEngine(threading.Thread):
         # auto_blackout renders SAFE_DEFAULT instead of total darkness.
         self.bible_failsafe_enabled = bible_failsafe_enabled
         self._last: dict[str, Contribution] = {}
+        self._swap_lock = threading.Lock()
+        self._pending_swap: tuple | None = None   # (rig, engines, laser_engine) from replace_rig
         self._last_tick_t: float | None = None  # for dt -> movement slew-limiting (LIGHTING_BIBLE.md §6.6)
         self.silence = SilenceDetector(clock)  # docs/14 §2; .active exposed for the console
+        self.tease = TeaseLook()  # P-24: the Tease's level/colour/punch state; .level exposed for the recorder
 
     def run(self) -> None:  # pragma: no cover - thin wrapper around tick()
         timer = LoopTimer(self.clock, self.hz)
@@ -85,8 +127,20 @@ class ShowEngine(threading.Thread):
         except Exception:  # noqa: BLE001
             log.exception("ShowEngine loop crashed")
 
+    def replace_rig(self, rig: Rig, engines: list, laser_engine=None) -> None:
+        """Swap the rig and the engine list at the start of the next tick (App.switch_rig, 2026-10-30).
+        Thread-safe: the console calls this while the show thread runs. Every frame is built from
+        an empty universe, so the old rig's channels go dark on the first frame of the new one."""
+        with self._swap_lock:
+            self._pending_swap = (rig, list(engines), laser_engine)
+
     def tick(self) -> bytes | None:
         """Run one frame. Returns the published universe, or None if frozen."""
+        with self._swap_lock:
+            swap, self._pending_swap = self._pending_swap, None
+        if swap is not None:
+            self.rig, self.engines, self.laser_engine = swap
+            self._last = {}
         snap = self.show_state.snapshot()
 
         contributions: list[Contribution] = []
@@ -146,6 +200,19 @@ class ShowEngine(threading.Thread):
                 except KeyError:
                     pass
             laser_on = laser_on or pins.laser_open
+        tint = flash_colour(snap.palette, snap.planned_flash_white)
+        strobe_on = False
+        for engine in self.engines:
+            if getattr(engine, "strobe_on", False) and getattr(engine, "flash_rgb", None) is not None:
+                apply_strobe_colour(merged, self.rig, engine.flash_rgb)   # D-36
+                strobe_on = True
+                break
+        tease = self.tease.update(snap)
+        if tease is not None:
+            level, rgb, hold = tease
+            apply_tease(merged, self.rig, level, rgb, strobe_on=strobe_on, hold=hold)   # P-24
+        if snap.planned_look:
+            apply_planned_look(merged, self.rig, snap.planned_look, tint)
         frame = finalize(merged, self.rig, self.manual, auto_blackout, laser_on, dt,
                          safe_default_frame, snap.drop_pending, absolute_movement=absolute,
                          pinned_movement=pinned)

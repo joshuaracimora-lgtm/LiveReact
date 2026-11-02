@@ -60,6 +60,7 @@ class PhraseEngine:
         self._last_bucket_seen: str | None = None
         self._skip_requested = False
         self._bucket_rotation_requested = False  # a bucket change that must rotate, see _maybe_rotate
+        self._planned_change_requested = False   # a planned look change: lands this tick, see _maybe_rotate
         self._hard_cut_requested = False         # ...and cut instead of crossfading (drop-family entry)
         self._was_in_transition = False
         self.rotations = 0  # for tests/telemetry
@@ -122,13 +123,17 @@ class PhraseEngine:
         # The track plan names the look for this section (TIME-20, repeat the hook):
         # a planned look that is not showing yet rotates in like a bucket change.
         if (snap.plan_active and snap.planned_scene and self._next is None
-                and self._current.name != snap.planned_scene and not self._bucket_rotation_requested
-                and self._planned_scene(snap, rig) is not None):
+                and self._current.name != snap.planned_scene and self._planned_scene(snap, rig) is not None):
             self._bucket_rotation_requested = True
+            # The plan's boundary IS the bar line: start the crossfade on this tick, not the next
+            # local bar (2026-10-29 bench run + sim: the drop look ran ~2 bars into every planned
+            # build and breakdown -- a bar waiting here plus the 1-bar fade). Also when the bucket
+            # change above asked for the rotation: in drive mode that change IS the planned boundary.
+            self._planned_change_requested = True
 
         # Only act on a *new* bar so a boundary fires once, not every tick --
-        # except a hard cut, which lands the moment it's asked for.
-        if snap.bar == self._last_bar_seen and not self._hard_cut_requested:
+        # except a hard cut or a planned look change, which land the moment they are asked for.
+        if snap.bar == self._last_bar_seen and not self._hard_cut_requested and not self._planned_change_requested:
             return
         self._last_bar_seen = snap.bar
 
@@ -200,6 +205,7 @@ class PhraseEngine:
                 crossfade = float(CROSSFADE_BARS)
             self._bucket_rotation_requested = False
             self._hard_cut_requested = False
+            self._planned_change_requested = False
             self._begin_rotation(snap, rig, crossfade_bars=crossfade)
 
     def _planned_scene(self, snap: ShowSnapshot, rig: Rig | None) -> Scene | None:

@@ -13,6 +13,9 @@
     "strobe": false
   },
   "strobe": "hard",
+  "laser_scene": null,
+  "laser_cues": [],
+  "cues": [],
   "mood": [],
   "notes": "",
   "_todo": true

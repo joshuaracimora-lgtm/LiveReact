@@ -10,8 +10,9 @@ from livereact.engines.palette import rgb as palette_rgb
 from livereact.engines.reactive import (
     BUILD_STROBE_START, DROP_HELD_HIGH, DROP_HELD_LOW, PEAK_BOOST, STROBE_FLASH_DMX, STROBE_FLASH_START_DMX,
     STROBE_MAX,
-    STROBE_TOGGLE_MAX_HZ, ReactiveLayerEngine, _StrobeClock, _drop_held_level,
+    STROBE_GAP_LEVEL, STROBE_TOGGLE_MAX_HZ, ReactiveLayerEngine, _StrobeClock, _drop_held_level,
 )
+from livereact.merge.merge import Contribution
 from livereact.fixtures.profiles import WashBar
 from livereact.fixtures.rig import load_rig
 from livereact.scenes.catalog import bucket_for_energy
@@ -170,16 +171,21 @@ def test_par_and_wash_bar_flash_on_the_same_frames_at_the_cap_byte():
     bar = rig.fixture("bar_l")
     rise = dict(drop_armed=True, rising=True, rise_index=1.6)
     eng.tick(_snap(bar=0, beat_in_bar=1, beat_phase=0.0, bucket="build", **rise), rig)
+    gc = Contribution()
+    for fx in rig.by_role("wash"):
+        fx.set_intensity(gc, STROBE_GAP_LEVEL)
+    gap = _dimmers(gc, rig)[0]   # between flashes: a dim floor, never dark (run 6, 2026-10-30)
+    assert 0 < gap < STROBE_FLASH_START_DMX
     seen_on = seen_off = False
     for _ in range(120):  # 3s at 40 Hz, 2 Hz strobe at the rise's start
         clock.advance(1 / 40)
         c = eng.tick(_snap(bar=0, beat_in_bar=1, beat_phase=0.0, bucket="build", **rise), rig)
         par_d, bar_d = _dimmers(c, rig)
         assert par_d == bar_d, "par and wash bar must toggle on the same DMX frame"
-        assert par_d in (0, STROBE_FLASH_START_DMX)  # a build's first bars flash at the start byte
+        assert par_d in (gap, STROBE_FLASH_START_DMX)  # a build's first bars flash at the start byte
         assert c.values[bar.offset + 1] == 0, "wash bar native ch2 strobe must never be written"
         seen_on |= par_d == STROBE_FLASH_START_DMX
-        seen_off |= par_d == 0
+        seen_off |= par_d == gap
     assert seen_on and seen_off
 
 
@@ -458,15 +464,19 @@ def test_a_roll_in_a_drop_is_an_accent_too():
     assert eng.strobe_flash_dmx == STROBE_ROLL_FLASH_DMX
 
 
-def test_a_roll_in_a_break_is_an_accent_too():
-    """Run 7 (2026-09-17): the build read BREAK, the roll was gated out."""
+def test_no_plan_a_roll_in_a_quiet_break_does_not_strobe():
+    """Run 6 (2026-10-30, Josh): "there was still a lot of strobing in the intro ... There should never be
+    strobing like that in the intro, especially when intensity is that low" -- no plan yet, the detector
+    strobed the intro at energy_norm 0.00. (Run 7, 2026-09-17, had made a roll in a BREAK an accent.)"""
     clock = FakeClock()
     rig = load_rig()
     eng = ReactiveLayerEngine(clock)
     _run_build(eng, rig, clock, high=0.4, seconds=3.0, bucket="break", energy_norm=0.1, audio_high_onset_rate=4.1)
     _run_build(eng, rig, clock, high=0.4, seconds=1.5, bucket="break", energy_norm=0.1, audio_high_onset_rate=8.5)
-    assert eng.snare_roll_active
-    assert eng.strobe_flash_dmx == STROBE_ROLL_FLASH_DMX
+    assert eng.snare_roll_active          # the detector still hears it ...
+    assert eng.strobe_level == 0.0        # ... it just doesn't strobe
+    _run_build(eng, rig, clock, high=0.4, seconds=0.5, bucket="build", energy_norm=0.1, audio_high_onset_rate=8.5)
+    assert eng.strobe_level == 0.0        # a quiet build: not loud enough either
 
 
 # --- bucket-driven wash/par model (LIGHTING_BIBLE.md §5/§9.1, 2026-09-08) ---
@@ -723,15 +733,122 @@ def test_outro_fades_down_from_bar_position_not_audio():
     assert abs(full - 0.15) < 1e-9  # OUTRO_LOW, after a full fade (OUTRO_FADE_BARS=16)
 
 
+# --- the PLANNED roll lead-in drives the strobe (2026-10-29 D-33, reshaped 2026-10-30 D-35) ---
+
+from livereact.engines.reactive import (BUILD_STEADY, ROLL_FLASH_START_DMX, STROBE_MAX, STROBE_ROLL_FLASH_DMX,  # noqa: E402
+                                        planned_roll_flash, planned_roll_subdivision)
+
+
+def _roll_snap(progress: float, **kw) -> ShowSnapshot:
+    base = dict(bucket="drop", energy=0.8, audio_fresh=False, plan_active=True, planned_strobe_allowed=True,
+                planned_roll_progress=progress, drop_start_bar=10, bar=10, beat_in_bar=1, beat_phase=0.0, bpm=135.0)
+    base.update(kw)
+    return _snap(**base)
+
+
+def test_a_planned_roll_flashes_on_the_beat_grid_eighths_then_sixteenths_dim_to_full():
+    """D-35 (Josh): "match the beats of the snare rolls ... increase the shutter speed where it starts
+    and where it ends" and the brightness must climb (the 160 start read as already-bright)."""
+    assert planned_roll_subdivision(0.0, 135.0) == 2 and planned_roll_subdivision(0.5, 135.0) == 4
+    assert planned_roll_subdivision(0.9, 160.0) == 2        # 16ths at 160 BPM = 10.7 Hz: the forbidden band, step back
+    on0, b0 = planned_roll_flash(0.0, 0.0, 135.0)
+    on1, b1 = planned_roll_flash(1.0, 0.0, 135.0)
+    assert on0 and on1 and b0 == ROLL_FLASH_START_DMX and b1 == STROBE_ROLL_FLASH_DMX
+    # 8ths: ON for phase 0-0.25 and 0.5-0.75 of the beat; 16ths: ON 0-0.125, 0.25-0.375, ...
+    assert [planned_roll_flash(0.0, ph, 135.0)[0] for ph in (0.1, 0.3, 0.6, 0.8)] == [True, False, True, False]
+    assert [planned_roll_flash(0.9, ph, 135.0)[0] for ph in (0.05, 0.2, 0.3, 0.45)] == [True, False, True, False]
+    rig = load_rig()
+    eng = ReactiveLayerEngine(FakeClock())
+    bar = rig.fixture("bar_l")
+    c = eng.tick(_roll_snap(0.0, beat_phase=0.1), rig)
+    assert eng.strobe_on and c.values[bar.offset] == ROLL_FLASH_START_DMX      # dim first flash
+    c = eng.tick(_roll_snap(0.0, beat_phase=0.3), rig)
+    gc = Contribution()
+    bar.set_intensity(gc, STROBE_GAP_LEVEL)
+    assert not eng.strobe_on and c.values[bar.offset] == gc.values[bar.offset] > 0   # off half: the dim floor
+    c = eng.tick(_roll_snap(1.0, beat_phase=0.05), rig)
+    assert eng.strobe_on and c.values[bar.offset] == STROBE_ROLL_FLASH_DMX     # full at the end
+    assert eng.strobe_level == pytest.approx(STROBE_MAX)
+
+
+def test_no_planned_roll_means_no_roll_strobe_and_a_forbidden_strobe_stays_quiet():
+    rig = load_rig()
+    eng = ReactiveLayerEngine(FakeClock())
+    eng.tick(_roll_snap(-1.0), rig)                        # not in a roll: the drop's own first bar, no tail
+    assert eng.strobe_level == 0.0
+    eng.tick(_roll_snap(0.8, planned_strobe_allowed=False), rig)   # look notes: no strobe in this track
+    assert eng.strobe_level == 0.0
+
+
+def test_the_planned_roll_owns_the_strobe_over_the_live_detector():
+    """Run 4 (2026-10-30): the live detector flattened roll 1 to a constant 4 Hz / 255. The plan's ramp wins."""
+    rig = load_rig()
+    eng = ReactiveLayerEngine(FakeClock())
+    eng._roll.update = lambda snap: True   # pin the detector on
+    c = eng.tick(_roll_snap(0.1, audio_fresh=True, beat_phase=0.1), rig)
+    assert eng.snare_roll_active
+    assert eng.strobe_flash_dmx < 100 and c.values[rig.fixture("bar_l").offset] == eng.strobe_flash_dmx
+
+
+def test_the_live_roll_accent_is_gated_by_the_plan():
+    """D-35: run 4 strobed through the intro, breakdown and outro on rolls the detector heard in vocals
+    and hats. With a driving plan the accent only runs where a strobe is allowed and a drop is near."""
+    rig = load_rig()
+    eng = ReactiveLayerEngine(FakeClock())
+    eng._roll.update = lambda snap: True
+    quiet = dict(energy=0.3, audio_fresh=True, plan_active=True, bar=4, beat_in_bar=1, beat_phase=0.0)
+    eng.tick(_snap(bucket="break", planned_strobe_allowed=False, **quiet), rig)      # intro / outro: never
+    assert eng.strobe_level == 0.0
+    eng.tick(_snap(bucket="break", planned_strobe_allowed=True, **quiet), rig)       # a breakdown: not a build-up
+    assert eng.strobe_level == 0.0
+    eng.tick(_snap(bucket="build", planned_strobe_allowed=True, beats_to_drop=60, **quiet), rig)   # drop far off
+    assert eng.strobe_level == 0.0
+    eng.tick(_snap(bucket="build", planned_strobe_allowed=True, beats_to_drop=12, **quiet), rig)   # heading in
+    assert eng.strobe_level == pytest.approx(STROBE_MAX)
+    eng.tick(_snap(bucket="drop", planned_strobe_allowed=True, drop_start_bar=0, **quiet), rig)   # inside a drop:
+    assert eng.strobe_level == 0.0        # only the planned strobes (run 6: "rolls" in Thriller's vocals and hats)
+    plain = ReactiveLayerEngine(FakeClock())
+    plain._roll.update = lambda snap: True
+    plain.tick(_snap(bucket="break", energy=0.3, audio_fresh=True, bar=4), rig)       # no plan, a quiet break
+    assert plain.strobe_level == 0.0
+    plain.tick(_snap(bucket="drop", energy=0.9, audio_fresh=True, bar=4, drop_start_bar=0), rig)   # no plan, loud drop
+    assert plain.strobe_level == pytest.approx(STROBE_MAX)
+
+
+def test_a_planned_build_holds_a_steady_level_and_a_kick_free_break_rises_white():
+    """D-35: the white riser moved from the build to the kick-free break."""
+    rig = load_rig()
+    eng = ReactiveLayerEngine(FakeClock())
+    for bar in (0, 4, 8, 12):
+        eng.tick(_snap(bucket="build", energy=0.5, plan_active=True, bar=bar, beat_in_bar=1, beat_phase=0.0), rig)
+        eng.clock.advance(8.0)
+    assert eng.wash_level == pytest.approx(BUILD_STEADY, abs=0.02)   # no ramp
+    eng2 = ReactiveLayerEngine(FakeClock())
+    levels = []
+    for i, prog in enumerate((0.0, 0.5, 1.0)):
+        for _ in range(60):
+            eng2.tick(_snap(bucket="break", energy=0.1, energy_norm=0.1, plan_active=True, planned_riser=True,
+                            planned_section_progress=prog, bar=i * 4, beat_in_bar=1, beat_phase=0.0), rig)
+            eng2.clock.advance(0.05)
+        levels.append(eng2.wash_level)
+    assert levels[0] < levels[1] < levels[2] and levels[2] == pytest.approx(0.95, abs=0.02)
+    plain = ReactiveLayerEngine(FakeClock())
+    for bar in (0, 4):
+        plain.tick(_snap(bucket="build", energy=0.5, bar=bar, beat_in_bar=1, beat_phase=0.0), rig)   # no plan: ramp
+    assert plain.wash_level != pytest.approx(BUILD_STEADY, abs=0.02)
+
+
 # --- Synth Sync (Josh, 2026-09-15): wash follows the mid band; strobes override it (2026-09-19) ---
 # See engines/reactive.py's SYNTH_* block.
 
-from livereact.engines.reactive import SYNTH_CEILING, SYNTH_FLOOR  # noqa: E402
+from livereact.engines.reactive import SYNTH_CEILING, SYNTH_FLOOR, synth_wash_level  # noqa: E402
 from livereact.merge.merge import ManualParams  # noqa: E402
 
 
-def _synth_engine(on: bool = True):
-    manual = ManualParams(synth_sync=on)
+def _synth_engine(on: bool = True, threshold: float = 0.0):
+    # threshold 0.0 = the original continuous follower the tests below were
+    # written against (2026-09-15); the threshold tests set their own.
+    manual = ManualParams(synth_sync=on, synth_threshold=threshold)
     return ReactiveLayerEngine(FakeClock(), manual=manual), manual
 
 
@@ -835,6 +952,70 @@ def test_synth_sync_can_be_toggled_mid_set():
     assert not eng.synth_sync_active
 
 
+# --- Synth Sync threshold (Josh, 2026-10-29, first hardware run of the fan rig):
+# "only hit on sounds that are enough to trigger that threshold" -- below the
+# line the wash holds the section's level, a stab above it lifts the bar.
+
+
+def test_the_default_synth_threshold_is_on():
+    assert ManualParams().synth_threshold > 0.0
+
+
+def test_synth_threshold_holds_the_section_level_below_the_line():
+    rig = load_rig()
+    eng, _ = _synth_engine(threshold=0.6)
+    plain = ReactiveLayerEngine(FakeClock())
+    _settle_mid(eng, rig, level=1.0)
+    _settle_mid(plain, rig, level=1.0)
+    # a steady mid band and a small wobble (a vocal chop, a clap body) stay under the line
+    for mid in (1.0, 1.3, 1.0, 1.4):
+        eng.tick(_mid_snap(mid), rig)
+        plain.tick(_mid_snap(mid), rig)
+        assert eng.synth_sync_active
+        assert eng.synth_level < 0.6
+        assert eng.wash_level == pytest.approx(plain.wash_level)  # the DROP's held level, not the synth floor
+
+
+def test_synth_threshold_a_real_stab_lifts_the_wash_above_the_section_level():
+    rig = load_rig()
+    eng, _ = _synth_engine(threshold=0.6)
+    plain = ReactiveLayerEngine(FakeClock())
+    _settle_mid(eng, rig, level=1.0)
+    _settle_mid(plain, rig, level=1.0)
+    eng.tick(_mid_snap(6.0), rig)   # a chord stab: 6x the mids' baseline, normalizes to ~1
+    plain.tick(_mid_snap(6.0), rig)
+    assert eng.synth_level > 0.6
+    assert plain.wash_level < eng.wash_level <= SYNTH_CEILING
+
+
+def test_synth_wash_level_shape():
+    # below the line: the section level, untouched
+    assert synth_wash_level(0.5, 0.59, 0.6) == 0.5
+    # on the line: still the section level; the lift grows with the excess
+    assert synth_wash_level(0.5, 0.6, 0.6) == pytest.approx(0.5)
+    assert synth_wash_level(0.5, 0.8, 0.6) == pytest.approx(0.5 + (SYNTH_CEILING - 0.5) * 0.5)
+    assert synth_wash_level(0.5, 1.0, 0.6) == pytest.approx(SYNTH_CEILING)
+    # a section already above the ceiling is never pulled DOWN by a hit
+    assert synth_wash_level(1.0, 1.0, 0.6) == 1.0
+    # threshold 0 = the original follower, floor..ceiling
+    assert synth_wash_level(0.5, 0.0, 0.0) == pytest.approx(SYNTH_FLOOR)
+    assert synth_wash_level(0.5, 1.0, 0.0) == pytest.approx(SYNTH_CEILING)
+    # a threshold at/above 1 can never be cleared: the section level
+    assert synth_wash_level(0.5, 1.0, 1.0) == 0.5
+
+
+def test_synth_threshold_can_be_trimmed_mid_set():
+    rig = load_rig()
+    eng, manual = _synth_engine(threshold=0.6)
+    _settle_mid(eng, rig, level=1.0)
+    eng.tick(_mid_snap(1.3), rig)
+    held = eng.wash_level
+    manual.synth_threshold = 0.0        # the operator slides it to "follow everything"
+    eng.tick(_mid_snap(1.3), rig)
+    assert eng.wash_level != held       # now on the envelope (near the floor)
+    assert eng.wash_level < held
+
+
 # --- break breath (Josh, 2026-09-16): a low-depth synth envelope on the break wash
 
 from livereact.engines.reactive import BREAK_SYNTH_DEPTH  # noqa: E402
@@ -882,3 +1063,56 @@ def test_the_strobe_stops_the_instant_the_roll_ends_and_stays_off_until_the_hit(
     assert eng.strobe_level == 0 and not eng.strobe_on  # the breath: nothing, though still armed + rising
     eng.tick(_snap(bucket="drop", drop_armed=False), rig)
     assert eng.strobe_level == 0                        # the hit: the drop look owns it
+
+
+def test_no_count_in_strobe_when_the_next_drop_is_a_planned_roll():
+    """2026-10-29: the count-in ran into the roll and the roll restarted at 2 Hz -- "build up into a drop
+    into a build up". With a roll ahead the build stays quiet; the roll is the count-in."""
+    rig = load_rig()
+    eng = ReactiveLayerEngine(FakeClock())
+    base = dict(bucket="build", energy=0.5, audio_fresh=False, plan_active=True, planned_strobe_allowed=True,
+                drop_armed=True, beats_to_drop=4, bar=20, beat_in_bar=1, beat_phase=0.0)
+    eng.tick(_snap(**base), rig)
+    assert eng.strobe_level > 0                       # the count-in, as before
+    eng.tick(_snap(**dict(base, planned_roll_ahead=True)), rig)
+    assert eng.strobe_level == 0.0
+
+
+def test_flash_colour_is_the_song_colour_lifted_toward_white_by_the_songs_brightness():
+    """D-36: dark songs flash in their colour, bright songs near white; never off the gradient."""
+    from livereact.engines.palette import rgb as palette_rgb
+    from livereact.engines.reactive import flash_colour
+    r, g, b = palette_rgb("blood_red")
+    assert flash_colour("blood_red", 0.0) == (r, g, b)
+    assert flash_colour("blood_red", 1.0) == (1.0, 1.0, 1.0)
+    mid = flash_colour("blood_red", 0.5)
+    assert all(lo <= m <= 1.0 for lo, m in zip((r, g, b), mid)) and mid != (r, g, b) and mid != (1.0, 1.0, 1.0)
+    rig = load_rig()
+    eng = ReactiveLayerEngine(FakeClock())
+    eng.tick(_roll_snap(0.5, beat_phase=0.05, palette="blood_red", planned_flash_white=0.5), rig)
+    assert eng.strobe_on and eng.flash_rgb == mid
+
+
+def test_synth_sync_leaves_a_planned_build_to_the_build():
+    """Run 6 (2026-10-30, Josh): the riser "just wasn't really in sync with the music" -- under Synth Sync
+    the mid-band spikes landed off the beat over the planned build's held level."""
+    from livereact.engines.reactive import BUILD_STEADY
+    rig = load_rig()
+    eng, _ = _synth_engine()
+    build = dict(bucket="build", plan_active=True, energy=0.5)
+    _settle_mid(eng, rig, level=1.0, **build)
+    eng.tick(_mid_snap(6.0, **build), rig)               # a stab in the build
+    assert eng.synth_sync_active
+    assert eng.wash_level == pytest.approx(BUILD_STEADY, abs=0.05)
+    eng.tick(_mid_snap(6.0, bucket="build", energy=0.5), rig)   # no plan: Synth Sync as before
+    assert eng.wash_level != pytest.approx(BUILD_STEADY, abs=0.05)
+
+
+def test_no_drop_tail_strobe_inside_a_tease():
+    """Run 6: six phrase-tail flashes landed inside Thriller's 1:04 Tease (a Tease inside a drop)."""
+    from livereact.engines.reactive import STROBE_PHRASE_BARS
+    tail = dict(bucket="drop", plan_active=True, energy=0.9, drop_start_bar=0, bar=STROBE_PHRASE_BARS - 1,
+                beat_in_bar=4, planned_strobe_style="tail")
+    eng = ReactiveLayerEngine(FakeClock())
+    assert eng._strobe_rate(_snap(**tail)) > 0                                   # the tail burst as before
+    assert eng._strobe_rate(_snap(**tail, planned_tease_progress=0.3)) == 0.0

@@ -320,6 +320,7 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
         if hasattr(laser_engine, "trigger"):   # trigger/fan profiles only, so the accent schema is unchanged
             row["laser_trigger"] = laser_engine.trigger
             row["laser_color"] = getattr(laser_engine, "color_name", laser_engine.color)
+            row["laser_scene"] = getattr(laser_engine, "scene_name", "")
         if phrases is not None:   # only when asked, so signals.csv's schema is unchanged otherwise
             row["section"] = snap.section_kind
             row["phrase"] = snap.phrase_label
@@ -330,6 +331,11 @@ def _run_sim(track, timeline, rig_path, gestures, duration, gain, manual, audio,
             row["laser_allowed"] = snap.planned_laser_allowed
             row["strobe_allowed"] = snap.planned_strobe_allowed
             row["beats_to_drop"] = snap.beats_to_drop
+            row["tease"] = round(snap.planned_tease_progress, 3)
+            row["tease_hold"] = snap.planned_tease_hold
+            row["tease_bright"] = snap.planned_tease_bright
+            row["tease_level"] = round(show_engine.tease.level, 3)
+            row["strobe_on"] = reactive.strobe_on
         for slot, fx in zip(slots, rig.fixtures):
             vs = fx.visual_state(frame)
             row[f"{slot}_brightness"] = round(vs.brightness, 3)

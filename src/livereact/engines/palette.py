@@ -104,7 +104,12 @@ def song_pair(bucket: str, song: str, wash: str, spot: str) -> tuple[str, str]:
     if fam == "break":
         c = COMPANION.get(song, wash)
         return c, c
-    return wash, song                      # build: white wash, the song's colour on the heads
+    # build: the companion on the wash, the song's colour on the heads (D-35, 2026-10-30). Until then the
+    # build wash was white (D-28) and rose across the build -- Josh, watching Thriller's build between two
+    # intense parts: "a weird, random, solid white light ... started dim and slowly increased ... misplaced,
+    # it feels more like a riser before the strobe". The white riser now belongs to kick-free breaks only
+    # (core/metronome.py riser / ShowSnapshot.planned_riser), where the metronome swaps in neutral_wash.
+    return COMPANION.get(song, wash), song
 
 
 def family(bucket: str) -> str:

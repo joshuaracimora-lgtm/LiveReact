@@ -4,6 +4,8 @@ palette pinning, and the fallback to the classifier when the plan loses authorit
 from __future__ import annotations
 
 import queue
+
+import pytest
 import threading
 
 from livereact.clock import FakeClock
@@ -351,3 +353,44 @@ def test_live_roll_detector_does_not_pull_a_planned_roll_earlier():
     assert snap.bucket == "build"                          # the file already placed this drop on its roll
     snap = sim.run_to(65, level=0.1)
     assert snap.bucket == "drop"
+
+
+def test_without_audio_the_energy_follows_the_planned_section_not_the_midi_proxy():
+    """2026-10-29 bench run with no XDJ audio: energy sat at the MIDI proxy's flat 0.20 and the heads with
+    it. With a driving plan the planned bucket's nominal energy is used (PLAN_ENERGY), the big moment full."""
+    import dataclasses
+    from livereact.core.metronome import PLAN_ENERGY
+    sim = Sim()
+    m = sim.m
+    m._last_audio_time = None                       # no audio ever
+    now = sim.clock.monotonic()
+    m._section = dataclasses.replace(m._section, plan_active=True, planned_bucket="drop", big_moment=False)
+    for _ in range(400):
+        m._derive_energy(now)
+    assert m._energy == pytest.approx(PLAN_ENERGY["drop"], abs=0.01)
+    m._section = dataclasses.replace(m._section, planned_bucket="break")
+    for _ in range(400):
+        m._derive_energy(now)
+    assert m._energy == pytest.approx(PLAN_ENERGY["break"], abs=0.01)
+    m._section = dataclasses.replace(m._section, planned_bucket="drop", big_moment=True)
+    for _ in range(400):
+        m._derive_energy(now)
+    assert m._energy == pytest.approx(1.0, abs=0.01)
+    m._section = dataclasses.replace(m._section, plan_active=False)   # no plan: the old proxy path
+    for _ in range(400):
+        m._derive_energy(now)
+    assert m._energy < 0.3
+
+
+def test_the_white_riser_needs_a_planned_break_and_quiet_bass():
+    """D-35/D-36: plan says break AND the low band is quiet -> riser (in the break's own colour); kicks back -> no riser."""
+    sim = Sim()
+    snap = sim.run_to(8, level=0.05)             # intro, quiet bass (band_low_abs = level)
+    assert snap.plan_active and snap.bucket == "break"
+    assert snap.planned_riser and snap.palette != "neutral_wash" and 0.0 <= snap.planned_section_progress <= 1.0
+    snap = sim.run_to(14, level=0.9)             # the kicks come back inside the break
+    assert not snap.planned_riser
+    assert snap.planned_flash_white == sim.plan.flash_white
+    quiet = Sim()
+    snap = quiet.run_to(30, level=0.05)          # a planned build: steady companion colour, never the riser
+    assert snap.bucket == "build" and not snap.planned_riser

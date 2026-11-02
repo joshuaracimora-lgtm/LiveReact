@@ -2,7 +2,7 @@
 
 You are a Claude Code session running unattended on Josh's Windows desktop, in the LiveReact repo.
 Three agents run each night, one after another, each on its own branch cut from `harness`:
-**Bugs & UI** (`docs/AGENT_BRIEF_UI.md`), then **you**, then the **Track Classifier**
+the **User-Tester** (`docs/AGENT_BRIEF_UI.md`), then **you**, then the **Preference Verifier**
 (`docs/AGENT_BRIEF.md`). The orchestrator (`tools/windows/nightly_agent.ps1`) has pulled `harness`,
 installed the dependencies (including the `app` extra: platformdirs, pypdf, anthropic, keyring), run
 the tests and the sweep, and created your branch. Josh is asleep: nobody can answer a question tonight,
@@ -10,6 +10,59 @@ so anything you cannot decide goes in the report, not in a guess.
 
 **Your mission: make LiveReact a publishable app, and never change the show.** Work
 `docs/APP_ROADMAP.md`. Read its intro and hard rules: they are part of this brief.
+
+Josh, 2026-10-30: "The end goal is to get LiveReact as a publishable app. It needs to be able to be
+integrated with a lot of different setups and needs to be easy to navigate by a bunch of different people."
+Two consequences for you: (1) read the **User-Tester agent's** `docs/UX_BACKLOG.md` every night -- its
+*Integration* proposals (device re-detection, audio and network selection in the UI, rig import/export,
+fixture formats, DMX outputs) are roadmap candidates; add the ones you can build within your list as new
+Open items with a `[from UX_BACKLOG]` note, and never duplicate a `[JOSH]` item; (2) "professional" means
+the screens you build need no manual: a new user must see what to do next, get a plain error when something
+is missing, and never lose work. The User-Tester will walk whatever you ship the next night.
+
+**What counts (2026-10-30).** The App nights of 10-27/28 built fixture definitions, a wizard, a rig manager,
+presets and first-run -- and none of them reached the running app until Josh wired the seams on 10-30. So:
+an item is **Done only when a user can reach it from launch and it changes the running app**. Read
+`results/agent/<date>/walkthrough/WALKTHROUGH.md` first: an UNREACHABLE journey that your item addresses comes
+before any new feature. `gate_app.py` runs the user journeys (`tools/agent/walkthrough.py`) on `harness` and on
+your branch; a journey that gets worse is a REJECT; improved journeys are your night's recorded impact, and a
+night with none (3-night trial, `status.py --role app`) stops this agent. If your item is real but no journey
+covers it yet, write the journey you would add (one paragraph: steps and the observable effect) in your report.
+
+## FIRST PRIORITY (2026-11-02): show-night resilience -- find the failures nobody has hit yet
+
+Josh's live show on 2026-10-31 failed for reasons the roadmap never covered. From the recordings:
+rekordbox on the Mac held the Pro DJ Link UDP ports all night (only an ERROR line in a log -> no tempo
+lock, no automatic lasers); the XDJ's audio stream died at 22:45 while the XDJ stayed connected and
+LiveReact ran **deaf for 44 minutes** (the analysis thread waited on an empty queue; the bar sat on a dim
+BREAK look); the Enttec and the XDJ audio dropped off USB together at 23:36 (the DMX writer reopened in
+3 s, audio again never did). Josh: "every time things cut out, such as DMX or power, LiveReact bugs out ...
+I'd rather have a better all-around agent that can figure out these bugs." Fixed on 11-02: audio
+dead-stream reopen (`inputs/audio.py`, `tests/test_audio_recovery.py`), the red health banner
+(`ui/health.py`), `--preflight` (`preflight.py`), the unplugged-Enttec writer test.
+
+**Your job, before any roadmap item:** hunt the NEXT failure of this kind. Work it like this:
+1. **Map the outside world.** Every thing LiveReact depends on that can vanish, come back changed, or
+   arrive garbled: audio device, Enttec/serial, Pro DJ Link sockets and the NIC (re-enumeration, a second
+   169.254 route, a port held by another program), MIDI port, the NFS fetch from the XDJ, the clock
+   (laptop sleep / wall-clock jump), CPU stalls, the recordings disk filling, a corrupt `config.json` or
+   rig file. Keep the map in `results/agent/<date>/app/RESILIENCE.md` with one row per dependency:
+   failure mode, what LiveReact does today, evidence (the test or code line), verdict.
+2. **Prove each gap with a failing test first** -- fake the device in the test the way
+   `tests/test_audio_recovery.py` fakes sounddevice and `tests/test_writer.py` fakes the Enttec. No fix
+   without a test that fails before it (root cause first, no guess-fixes). Saturday's failure types come
+   first: anything else that waits forever on a dead input, anything that never re-detects a device.
+3. **Fix inside your paths** (`inputs/`, `output/`, `preflight.py`, `diagnostics.py`, `network.py`,
+   `ui/`), keeping the behaviour of a HEALTHY rig byte-identical (the show-unchanged check still applies).
+   If the fix belongs in `app.py`, `core/` or an engine, do not edit it: write the failing test, mark it
+   `xfail(strict=True, reason="needs <file> change -- see REPORT")`, and put the exact change in the report.
+4. **Make the operator see it.** Every new failure mode gets a plain-language line in `ui/health.py`'s
+   `health_warnings` (what broke, what to do) and, where it can be checked before a set, a `--preflight`
+   check.
+5. **Never claim a fix you have not seen pass.** Run the new test and the full suite before writing it up.
+
+Resilience work counts as tonight's impact even when no walkthrough journey covers it: list each gap with
+its test name under "Items done". Roadmap items come after, if time is left.
 
 The runtime header above this brief gives tonight's date, branch, start time, deadline and the sweep's head.
 
@@ -79,13 +132,15 @@ leave the rest as a new Open item right after.
    - `src/livereact/fixtures/{definition,generic,library,traits,ofl,rig}.py`
    - `src/livereact/fixtures/builtin/`, `src/livereact/fixtures/manual_reader/`
    - `src/livereact/{userdata,settings}.py`, `src/livereact/presets/`, `src/livereact/ui/`
+   - resilience (2026-11-02): `src/livereact/inputs/`, `src/livereact/output/`,
+     `src/livereact/{preflight,diagnostics,network}.py`
    - `packaging/`, `.github/workflows/release.yml`
    - `docs/APP_ROADMAP.md`, and tests under `tests/` (including `tests/data/`)
 2. `.venv/Scripts/python.exe -m pytest -o addopts= -q` must stay green except the 3 known failures in
    `tests/test_spec_conformance_gaps.py`.
 3. Never push. Never change branch. Never merge or rebase. Never touch `main` or `harness`.
 4. Never edit `app.py`, `__main__.py`, `config.py`, `profiles.py`, `geometry.py`, `scenes/`, `engines/`,
-   `merge/`, `core/`, `sim/`, `loop/`, `rekordbox/`, `inputs/`, `output/`, `spec/`, `tools/`, `rigs/`,
+   `merge/`, `core/`, `sim/`, `loop/`, `rekordbox/`, `spec/`, `tools/`, `rigs/`,
    `tracks/`, `results/` (except your night folder), `params.json`, `section_classes.json`,
    `pyproject.toml`, `.claude/`, `tests/conftest.py`, or the pytest configuration. Never delete a test
    file or weaken an assert.
@@ -101,7 +156,8 @@ Write `results/agent/<date>/app/REPORT.md` with exactly these sections:
 
 ```
 # App night <date> — <branch>
-## Items done (one line each: roadmap number, what a user can now do, test names)
+## Resilience (dependency -> failure mode -> before / after -> test name; gaps left open and why)
+## Items done (one line each: roadmap number, what a user can now do FROM LAUNCH, the journey that shows it, test names)
 ## Gate result (app tests, UI checks if run, show-unchanged check if run)
 ## Items blocked or split (what, and what it needs)
 ## Could not decide without Josh (one bullet each)
@@ -112,8 +168,8 @@ Then update the state file for the next night:
 
 ```
 .venv/Scripts/python.exe tools/agent/record_night.py --role app --date <date> --branch <branch> --commits <n> \
-    --gate <ACCEPT|REJECT|NO-CHANGE> --tests ok --subgoal "<tomorrow>" --note "<one line>" \
-    [--question "<for Josh>"]...
+    --gate <ACCEPT|REJECT|NO-CHANGE> --tests ok --journeys-improved <n from your last gate> --out-of-scope 0 \
+    --subgoal "<tomorrow>" --note "<one line>" [--question "<for Josh>"]...
 ```
 
 Finish by printing the report's "Items done" and "Gate result" sections to stdout. Be exact and plain.

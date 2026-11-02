@@ -115,6 +115,11 @@ def main(argv: list[str] | None = None) -> int:
             worse, table = gate_ui.overlap_vs_base(a.base)
             report["overlap"] = table
             reasons += worse
+        # 2026-10-30: every App-agent change is judged by the user's journeys -- none may get worse, and the
+        # report shows which got better (an item a user cannot reach is not Done; docs/AGENT_BRIEF_APP.md)
+        jworse, jbetter, jtable = gate_ui.journeys_vs_base(a.base)
+        report["journeys"], report["journeys_improved"] = jtable, jbetter
+        reasons += jworse
         show_files = [f for f in files if touches_show_code(f)]
         report["show_path_files"] = show_files
         if show_files:
@@ -135,6 +140,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"venue check: {'OK' if report.get('venue_check') == 'OK' else 'FAILED'}")
         for rig, t in report.get("overlap", {}).items():
             print(f"overlap {rig:38} {t['base']} -> {t['head']}")
+    for k, t in report.get("journeys", {}).items():
+        print(f"journey {k:20} {t['base']} -> {t['head']}")
+    print(f"journeys improved: {len(report.get('journeys_improved', []))}")
     if "show_check" in report:
         print(f"show unchanged ({report['show_check']['check']}): {'yes' if report['show_check']['ok'] else 'NO'}")
     print(f"\nGATE: {verdict}")

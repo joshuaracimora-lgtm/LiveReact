@@ -82,32 +82,38 @@ def test_auto_triggers_respect_the_gap_and_a_refused_trigger_consumes_nothing():
     assert eng.active and eng.trigger == lt.TRIGGER_DROP
 
 
-def test_peak_fires_once_per_eight_bar_block():
+def test_peak_fires_two_bars_on_four_bars_off_while_it_holds():
+    """2026-10-29 (Josh): "if it fires for 2 bars, it should fire again in another 4 bars, while the
+    energy is still high" -- 6-bar blocks from the drop's origin, a 4-bar gap from the moment's end."""
     eng, clock, rig = _engine()
     fired = []
     was_active = False
-    for bar in range(40, 60):
+    for bar in range(40, 64):
         for beat in (1, 2, 3, 4):
             clock.advance(BEAT_S)
             eng.tick(_snap(bucket="peak", bar=bar, beat_in_bar=beat, drop_start_bar=40), rig)
             if eng.active and not was_active and eng.trigger == lt.TRIGGER_PEAK:
                 fired.append(bar)
             was_active = eng.active
-    # blocks start at 40, 48, 56 -- but the gap rule (8 bars from the END of a 2-bar moment) refuses 48
-    assert fired == [40, 56]
+    assert fired == [40, 46, 52, 58]
 
 
 def test_duty_cap_refuses_auto_triggers_but_not_the_manual_hit():
     manual = ManualParams()
     eng, clock, rig = _engine(manual)
-    # saturate the window: moments are 2 bars (4 s) and the gap is 8 bars (16 s) -> 20 % duty if fired back to back,
-    # so after two moments the 120 s window is over its 10 % cap
-    for bar in (10, 30):
+    # saturate the window: moments of MOMENT_BARS back to back at the MIN_GAP spacing -> a duty of
+    # MOMENT / (MOMENT + GAP) (33 % at 2 on / 4 off), over the cap once the window has filled
+    bar = 10
+    for _ in range(12):
         _run(eng, clock, rig, _snap(bucket="break", bar=bar), lt.MIN_GAP_BARS * BAR_S + 0.1)
-        clock.advance(0.05); eng.tick(_snap(bucket="drop", bar=bar + 1, drop_start_bar=bar + 1), rig)
+        bar += int(lt.MIN_GAP_BARS) + 1
+        clock.advance(0.05); eng.tick(_snap(bucket="drop", bar=bar, drop_start_bar=bar), rig)
+        if eng.budget >= lt.DUTY_MAX:
+            break
         assert eng.active
-        _run(eng, clock, rig, _snap(bucket="drop", bar=bar + 1, drop_start_bar=bar + 1), lt.MOMENT_BARS * BAR_S + 0.2)
-    _run(eng, clock, rig, _snap(bucket="break", bar=50), lt.MIN_GAP_BARS * BAR_S + 0.1)
+        _run(eng, clock, rig, _snap(bucket="drop", bar=bar, drop_start_bar=bar), lt.MOMENT_BARS * BAR_S + 0.2)
+        bar += int(lt.MOMENT_BARS)
+    _run(eng, clock, rig, _snap(bucket="break", bar=bar + 1), lt.MIN_GAP_BARS * BAR_S + 0.1)
     assert eng.budget >= lt.DUTY_MAX * 0.6
     eng.budget_before = eng.budget
     clock.advance(0.05); eng.tick(_snap(bucket="drop", bar=60, drop_start_bar=60), rig)

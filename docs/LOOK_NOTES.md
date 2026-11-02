@@ -16,6 +16,9 @@ Start from `tracks/LOOK_NOTES_TEMPLATE.look.json` (or `tools/agent/propose_marke
 | `big_moment` | `"auto"` (loudest drop by the waveform) · `"none"` · `{"drop": 2}` (second drop section) · `{"beat": 417}` · `{"t": 172.8}` (seconds) | which drop gets the full hit: laser fan, PEAK |
 | `intro` / `outro` | `{"laser": true/false/null, "strobe": true/false/null}` | `null` = planner default (quiet edges: no laser, no strobe) |
 | `strobe` | `"hard"` (count-in strobe in the last 2 bars of a build, strobe in drops) · `"soft"` (strobe only inside drops) · `"none"` | still clamped by the safety knobs either way |
+| `laser_scene` | a scene name from `scenes/laser_scenes.json` (`Rainbow`, `Blue Sweep`, `Spinning Line`, ...) or `null` | the look the laser fan shows on every moment of this track (`null` = Rainbow in the palette's colour). `python -m livereact.engines.laser_scenes` prints the catalogue |
+| `laser_cues` | a list of `{"on": trigger, "scene": name}`; `on` is `big_moment` (the one big drop), `drop`, `peak`, `wub` (the bass trigger), `hit` (J) or `cue` (K held) | a different look for one kind of moment, over `laser_scene`. Describe the scene you want in words and it gets composed from the laser's channel table (engines/laser_scenes.py) |
+| `cues` | a list of `{"look": "whiteout", "t": seconds}` or `{"look": "whiteout", "beat": n}`, optional `"beats"` (default 4) | a timed look that overrides the frame for those beats: `whiteout` = every wash and head full white (the lasers are untouched). `t` is the file's own clock as rekordbox's grid counts it, the same clock as the harness timeline notes |
 | `mood` | free words; the tools understand `no-drop` / `tool-track` (no big moment, no strobe) and `clap-driven` | anything else is for the agent's report |
 | `notes` | free text | what you heard, what the lights should follow |
 

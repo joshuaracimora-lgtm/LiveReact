@@ -18,6 +18,38 @@ CH7 0-127 = a still line at a position? CH4 0-127 = a rotated line? CH8
 plane)? CH12 64-127 = colours drifting on their own, 128-191 = a rainbow
 along the line? CH10 = "painting" speed?
 
+## The manufacturer's manual (found 2026-10-29)
+
+The unit is the SHEHDS "3000mW RGB Laser" (SKU SHE-La3WRGB-BPUS, the 2023 listing; menu
+Setting > Channel = 12CH / 25CH, firmware "lasersystem 2.8"). SHEHDS has since reused the SKU
+and the product page for a different board (Constellaser, 16/20CH, CUE groups) and removed the
+old manual from its Drive; a copy survives at temposhop.es (`Laser_3W.pdf`) and is saved as
+`manuals/shehds_3w_laser/SHEHDS_3000mW_RGB_Laser_12-25CH_manual.pdf` (gitignored; sha256
+ad88af4c...). Its 12CH table (page 4) matches the QLC+ `Shehds-3000mW-RGB-Laser.qxf` value for
+value and matches every hardware row below. The same OEM board ships as the Levenly M3000
+(`OEM_sibling_Levenly_M3000_12-25CH_manual.pdf`, clearer English) and the Newfeel F8.
+`fixtures/builtin/shehds_3w_laser.json` now carries every range with `confidence` 1.0 (seen
+here) or 0.9 (printed in the manual, not yet seen).
+
+What the manual settles that the rows below could not:
+
+- **CH9 scale**: 0-63 is a STATIC size (0 = full), 64-127 shrink speed, 128-191 grow speed,
+  192-255 in-and-out speed. Every nonzero value probed on 2026-09-06 (64, 96, 128) sat in the
+  speed bands, so "any nonzero value animates" was an artefact of which values were tried.
+  1-63 is still unseen; `Laser.SCALE_STATIC = 0` stays the safe choice until it is.
+- **CH11 scan**: 0-127 = scan speed with a solid outline, 128-255 = dots ("Pattern Lattice").
+- **CH10 painting**: 1-127 / 128-255 = two styles of the pattern drawing itself in gradually.
+- **CH12 colour**: 0-7 the pattern's own colours; 8-63 the seven fixed bands; 64-127 colours
+  auto-change; 128-191 "line rainbow" / "flowing water" along the line; 192-255 colour follows
+  the painting.
+- **CH4/5/6**: 1-127 a static angle (Z rotation, X tilt, Y tilt), 128+ a speed.
+- **CH7/8**: 0-127 a static position, 128-255 a sweep speed (CH7 128+ confirmed below).
+- **CH2 groups / CH3 patterns**: 8 groups of 32 x 16 patterns of 16. The manual does NOT name
+  the shapes; the QLC+ file's names were a guess and were wrong. Mapping which shape sits at
+  which value is the only thing still needing the bench.
+
+Rows marked SEEN below remain the authority where they and the manual disagree.
+
 | when | CH1..CH12 | note |
 |---|---|---|
 | 2026-09-06 | `60,118,0,0,0,0,128,0,0,0,190,35` | the verified dotted line, slowest sweep, green -- "success... this looks really good" |

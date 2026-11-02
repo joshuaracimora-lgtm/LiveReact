@@ -496,6 +496,67 @@ class MovingHead(Fixture):
         return VisualState(self.label, self.role, self.side, r, g, b, dim, pan, tilt, dim > 0)
 
 
+class RgbwBeamHead(MovingHead):
+    """XFALIGHTS 90W LED Beam Moving Head (RGBW 4-in-1, 2 deg beam) -- 15CH.
+
+    1 Pan · 2 Pan-fine · 3 Tilt · 4 Tilt-fine · 5 Speed · 6 Dimmer · 7 Strobe ·
+    8 Red · 9 Green · 10 Blue · 11 White · 12 Colour macro(keep 0) ·
+    13 Macro speed · 14 Auto/sound(keep 0) · 15 Reset(keep 0).
+
+    INFERRED, NOT FROM THE UNIT'S MANUAL (2026-10-31, AEPI rig): no 13/15CH
+    chart was reachable online. The map is the 14CH chart of the same OEM's
+    9/14CH "LED Mini Moving head" (CH6 dimmer+strobe combined, CH7-10 RGBW,
+    CH11 colour macro, CH12 macro speed, CH13 auto/sound, CH14 reset) with
+    dimmer and strobe split onto their own channels -- the only way that
+    family reaches 15, and the same 1-7 layout as the SHEHDS 180W above.
+    Amazon listing B0CP14BBB2: 540 pan / 180 tilt, 10 flashes/s strobe.
+    Set the unit to its 15CH mode. Verify on the rig before trusting it.
+    """
+
+    type_name = "xfalights_90w_beam"
+
+    TILT_RANGE_DEG = 180.0
+
+    def channel_kinds(self) -> list[ChannelKind]:
+        K = ChannelKind
+        return [
+            K.MOVEMENT, K.MOVEMENT, K.MOVEMENT, K.MOVEMENT,  # 1-4 pan/pan-fine/tilt/tilt-fine
+            K.OTHER,                                          # 5 speed
+            K.DIMMER, K.STROBE,                               # 6-7 dimmer/strobe
+            K.COLOR, K.COLOR, K.COLOR, K.COLOR,               # 8-11 R/G/B/W
+            K.OTHER, K.OTHER, K.OTHER, K.OTHER,               # 12-15 macro/macro-speed/auto/reset
+        ]
+
+    def capabilities(self) -> set[str]:
+        return {"pan_tilt", "native_strobe_channel", "rgb"}
+
+    def boot_defaults(self, buf: Buffer) -> None:
+        super().boot_defaults(buf)
+        self._set(buf, 3, 128)   # tilt mid: straight up on an upright (stand-mounted) unit
+        for ch in (12, 14, 15):  # colour macro / auto-sound / reset: never let the unit run itself
+            self._set(buf, ch, 0)
+
+    def set_color(self, buf: Buffer, r: float, g: float, b: float, w: float = 0.0) -> None:
+        self._set(buf, 8, _to8(r))
+        self._set(buf, 9, _to8(g))
+        self._set(buf, 10, _to8(b))
+        self._set(buf, 11, _to8(w))
+
+    def apply_color_bias(self, uni: bytearray, bias: float) -> None:
+        if bias == 0.0:
+            return
+        rf, bf = _bias_factors(bias)
+        uni[self.offset + 7] = _clamp8(uni[self.offset + 7] * rf)  # R ch8
+        uni[self.offset + 9] = _clamp8(uni[self.offset + 9] * bf)  # B ch10
+
+    def visual_state(self, uni: bytes) -> VisualState:
+        dim = uni[self.offset + 5] / 255
+        r, g, b, w = (uni[self.offset + k] for k in range(7, 11))
+        rr, gg, bb = min(255, r + w), min(255, g + w), min(255, b + w)
+        pan = _read16(uni, self.offset + 0)
+        tilt = _read16(uni, self.offset + 2)
+        return VisualState(self.label, self.role, self.side, rr, gg, bb, dim, pan, tilt, dim > 0)
+
 class Laser(Fixture):
     """SHEHDS 3W Laser — 12CH, SAFETY-CRITICAL (docs/04 §3.2).
 
@@ -542,7 +603,11 @@ class Laser(Fixture):
     (0-127 static angle), CH5/CH6 horizontal/vertical flip, CH8 vertical
     move (0-127 position), CH10 "painting" speed, and CH12's upper bands
     (64-127 colour auto-change speed, 128-191 line rainbow). All UNVERIFIED
-    -- see PROBE_CANDIDATES below and docs/laser_findings.md.
+    -- see PROBE_CANDIDATES below and docs/laser_findings.md. 2026-10-29: the
+    manufacturer's own 12CH table was found (docs/laser_findings.md, "The
+    manufacturer's manual"; every range is in fixtures/builtin/shehds_3w_laser.json
+    with a confidence per range). It agrees with every SEEN row and says CH9 0-63
+    is a static size (64/96/128 were all in the speed bands) -- still unseen.
 
     Two engines drive this fixture, picked by the rig file's `laser_profile`
     (fixtures/rig.py): engines/laser.py (accent, the home rig: one sweep per
@@ -840,5 +905,5 @@ class WashBar(Fixture):
 
 # Registry mapping rig-file ``fixture_type`` -> profile class.
 FIXTURE_TYPES: dict[str, type[Fixture]] = {
-    cls.type_name: cls for cls in (MovingHead, Laser, Par, WashBar)
+    cls.type_name: cls for cls in (MovingHead, RgbwBeamHead, Laser, Par, WashBar)
 }

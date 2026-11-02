@@ -1,0 +1,87 @@
+{
+ "schema": "livereact-laser-scenes/1",
+ "fixture": "shehds_3w_laser",
+ "_about": "Named 12-channel looks for the SHEHDS 3W laser. values = CH1..CH12 bytes written verbatim by Laser.set_scene. color: 'palette' = the fan engine replaces CH12 with the show palette's colour band; 'fixed' = CH12 is sent as written. status: 'seen' = every byte was watched on Josh's unit; 'manual' = composed from the manufacturer's channel table (fixtures/builtin/shehds_3w_laser.json), not yet seen. engines/laser_scenes.py loads, checks and describes these; it can also compose new ones from named choices.",
+ "scenes": [
+  {
+   "name": "Rainbow",
+   "values": [80, 119, 0, 0, 0, 0, 255, 71, 255, 255, 127, 255],
+   "color": "palette",
+   "status": "seen",
+   "description": "The Junior Crib fan: the line group, fastest horizontal sweep, held a little above centre, size cycling in and out at full speed, painting style 2 at full speed, outline at the top of its solid range, colour following the painting (the fan engine puts the show palette's colour here instead).",
+   "source": "Josh's QLC+ RAINBOW scene, 2026-10-08"
+  },
+  {
+   "name": "Slow Rainbow",
+   "values": [80, 119, 0, 0, 0, 0, 170, 71, 255, 128, 64, 255],
+   "color": "palette",
+   "status": "seen",
+   "description": "Rainbow with everything slowed down: a third of the sweep speed, painting style 2 at its slowest, outline scan at half speed.",
+   "source": "laser_show.py, 2026-10-08"
+  },
+  {
+   "name": "Rainbow Dots",
+   "values": [60, 118, 0, 0, 0, 0, 200, 71, 0, 0, 190, 255],
+   "color": "palette",
+   "status": "seen",
+   "description": "The hardware-verified dotted line: dots outline, medium sweep, size held, no painting, colour following the painting.",
+   "source": "set_dotted_line_sweep's bytes, 2026-09-06"
+  },
+  {
+   "name": "Blue Sweep",
+   "values": [60, 118, 0, 0, 0, 0, 240, 71, 0, 0, 190, 51],
+   "color": "fixed",
+   "status": "seen",
+   "description": "The dotted line in blue, the fastest sweep. Blue stays blue whatever the palette.",
+   "source": "laser_show.py, 2026-10-08"
+  },
+  {
+   "name": "Solid Line Sweep",
+   "values": [60, 118, 0, 0, 0, 0, 200, 71, 0, 0, 40, 11],
+   "color": "palette",
+   "status": "manual",
+   "description": "The line as one unbroken stroke (solid outline, slow scan) sweeping side to side at a medium speed, in the palette's colour.",
+   "source": "composed from the manual's table, 2026-10-29"
+  },
+  {
+   "name": "Spinning Line",
+   "values": [60, 118, 0, 160, 0, 0, 71, 71, 0, 0, 190, 11],
+   "color": "palette",
+   "status": "manual",
+   "description": "The dotted line held still in the middle of the frame and turning clockwise at a medium speed, like a slow propeller, in the palette's colour.",
+   "source": "composed from the manual's table, 2026-10-29"
+  },
+  {
+   "name": "Painted Line",
+   "values": [60, 118, 0, 0, 0, 0, 150, 71, 0, 64, 190, 11],
+   "color": "palette",
+   "status": "manual",
+   "description": "The dotted line drawing itself in from one end (painting style 1, medium speed) while sweeping slowly, in the palette's colour.",
+   "source": "composed from the manual's table, 2026-10-29"
+  },
+  {
+   "name": "Rainbow Line",
+   "values": [60, 118, 0, 0, 0, 0, 180, 71, 0, 0, 190, 160],
+   "color": "fixed",
+   "status": "manual",
+   "description": "The dotted line sweeping at a brisk speed with a rainbow running along its length ('flowing water', medium speed). Its own colours, whatever the palette.",
+   "source": "composed from the manual's table, 2026-10-29"
+  },
+  {
+   "name": "Breathing Dots",
+   "values": [60, 118, 0, 0, 0, 0, 160, 71, 220, 0, 190, 11],
+   "color": "palette",
+   "status": "manual",
+   "description": "The dotted line sweeping at a medium speed while its size pulses in and out, in the palette's colour.",
+   "source": "composed from the manual's table, 2026-10-29"
+  },
+  {
+   "name": "Tumbling Line",
+   "values": [60, 118, 0, 0, 0, 170, 71, 71, 0, 0, 190, 11],
+   "color": "palette",
+   "status": "manual",
+   "description": "The dotted line held centred and tumbling end over end (vertical flip spinning at a medium speed), in the palette's colour.",
+   "source": "composed from the manual's table, 2026-10-29"
+  }
+ ]
+}

@@ -210,3 +210,34 @@ def test_offline_mode_blocks_the_internet_and_hides_the_api_key(tmp_path):
     r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-o", "addopts=",
                         str(probe)], cwd=str(tmp_path), env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout[-1500:]
+
+
+# --- 2026-10-30 (D-37): the user walk-through and the 3-night trial verdict ---
+
+def test_walkthrough_journeys_measure_the_running_app(tmp_path, monkeypatch):
+    """Each journey ends in a verdict about the RUNNING app; first-run and rig switching reach it now."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("walkthrough", ROOT / "tools" / "agent" / "walkthrough.py")
+    wt = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(wt)
+    res = {r["key"]: r for r in wt.run(tmp_path, only=["first_run", "rig_switch", "presets"])}
+    assert res["first_run"]["verdict"] == "PASS"
+    assert any("switches the running show" in p for p in res["rig_switch"]["passed"])
+    assert res["presets"]["verdict"] in ("PASS", "UNREACHABLE")          # palette/genre: roadmap item 31
+    assert any(f.endswith(".png") for r in res.values() for f in r["shots"])
+    assert "Journeys:" in wt.render(list(res.values()))
+
+
+def test_trial_verdict_stops_an_agent_after_a_night_with_no_user_visible_change():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("record_night", ROOT / "tools" / "agent" / "record_night.py")
+    rn = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rn)
+    good = {"date": "d", "role": "ui", "journeys_improved": 1}
+    assert rn.trial_verdict({"nights": []}, "ui")[0] == "TRIAL"
+    assert rn.trial_verdict({"nights": [good, dict(good, date="e"), dict(good, date="f")]}, "ui")[0] == "KEEP"
+    assert rn.trial_verdict({"nights": [good, {"date": "e", "role": "ui", "journeys_improved": 0, "bugs_closed": 0}]}, "ui")[0] == "STOP"
+    assert rn.trial_verdict({"nights": [dict(good, out_of_scope=1)]}, "ui")[0] == "STOP"
+    st = rn.record({"nights": []}, date="d", branch="b", role="app", commits=1, gate="ACCEPT", tests="ok",
+                   journeys_improved=2)
+    assert st["nights"][0]["journeys_improved"] == 2

@@ -1,8 +1,10 @@
 <# The nightly AGENTS (three since 2026-10-27): pull harness, run the sweep, then three headless Claude Code
    sessions one after the other, each on its own branch cut from harness and verified independently:
-     1. Bugs & UI (docs\AGENT_BRIEF_UI.md)       -> branch agent/<date>-ui,  results\agent\<date>\ui\
+     1. User-Tester (docs\AGENT_BRIEF_UI.md)     -> branch agent/<date>-ui,  results\agent\<date>\ui\
      2. App (docs\AGENT_BRIEF_APP.md)            -> branch agent/<date>-app, results\agent\<date>\app\
-     3. Track Classifier (docs\AGENT_BRIEF.md)    -> branch agent/<date>,     results\agent\<date>\tracks\
+     3. Preference Verifier (docs\AGENT_BRIEF.md) -> branch agent/<date>,     results\agent\<date>\tracks\
+   (2026-10-30: the roles were re-aimed at Josh's goals -- a user walking the app, and the show checked against
+   docs\LIGHTING_PREFERENCES.md instead of the Bible scorer; the knob search is off by default.)
    then tune knobs around whatever the Track Classifier landed. -HardStop (default 23:30) caps every agent's
    deadline and the search so the night is over before the PC goes off at midnight. Everything it prints goes to
    results\nightly\<date>-agent.log, every step timestamped; the night's artefacts go to results\agent\<date>\
@@ -11,11 +13,11 @@
    work failed verification. Requires Claude Code on PATH and signed in, and a git identity
    (docs\HANDOFF_windows_agent_setup.md). #>
 param(
-  [double]$Hours = 3,            # Track Classifier wall-clock budget
+  [double]$Hours = 3,            # Preference Verifier wall-clock budget
   [double]$UiHours = 1.5,        # Bugs & UI agent budget (0 = skip that agent)
   [double]$AppHours = 2.5,       # App agent budget: docs\APP_ROADMAP.md (0 = skip that agent)
   [string]$HardStop = "23:30",   # nothing runs past this clock time today (agents, search); "" = no cap
-  [double]$SearchHours = 1.5,    # knob search after the Track Classifier (0 = skip)
+  [double]$SearchHours = 0,      # knob search after the Preference Verifier (0 = skip; off since 2026-10-30: it optimises the old Bible scorer, see docs/LIGHTING_PREFERENCES.md)
   [double]$SweepMinutes = 40,    # bug/invariant sweep over the USB export before the agents (0 = skip)
   [double]$LaserMinutes = 30,    # laser report (fan profile) over the USB export after the sweep (0 = skip)
   [int]$Patience = 300,
@@ -63,10 +65,11 @@ function Step($msg) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $msg" }
 # commits fails it before tests, gate or search run: the gate runs the BRANCH's scorer and track set, so a
 # branch that edited them could pass a check it rewrote. Deleting a test file counts too.
 $AllowTracks = '^(src/livereact/rekordbox/(planner|mapping|sections)\.py$|src/livereact/core/metronome\.py$|params\.json$|rekordbox_map\.json$|section_classes\.json$|tests/.+)'
-$AllowUi = '^(src/livereact/ui/.+|src/livereact/fixtures/(geometry|rig)\.py$|docs/UI_BUGS\.md$|tests/.+)'
+$AllowUi = '^(src/livereact/ui/.+|src/livereact/(app|launch|settings|userdata)\.py$|src/livereact/presets/.+|src/livereact/fixtures/(geometry|rig)\.py$|docs/UI_BUGS\.md$|docs/UX_BACKLOG\.md$|tests/.+)'
 $UiFamily0 = '^src/livereact/(rekordbox|core)/[^/]+\.py$'   # the ONE file a sweep traceback names (family 0)
 # the App agent builds around the show, never in it: no app.py, engines, scenes, merge, sim, profiles.py
-$AllowApp = '^(src/livereact/(userdata|settings)\.py$|src/livereact/fixtures/(definition|generic|library|traits|ofl|rig)\.py$|src/livereact/fixtures/(builtin|manual_reader)/.+|src/livereact/presets/.+|src/livereact/ui/.+|packaging/.+|\.github/workflows/release\.yml$|docs/APP_ROADMAP\.md$|tests/(?!conftest\.py$).+)'
+# 2026-11-02 (AEPI post-mortem): + inputs/, output/, preflight/diagnostics/network.py -- the resilience priority
+$AllowApp = '^(src/livereact/(userdata|settings|preflight|diagnostics|network)\.py$|src/livereact/(inputs|output)/.+|src/livereact/fixtures/(definition|generic|library|traits|ofl|rig)\.py$|src/livereact/fixtures/(builtin|manual_reader)/.+|src/livereact/presets/.+|src/livereact/ui/.+|packaging/.+|\.github/workflows/release\.yml$|docs/APP_ROADMAP\.md$|tests/(?!conftest\.py$).+)'
 
 # -HardStop as a clock time today; agents and the search are clamped to it (2026-10-27: the PC goes off at
 # midnight). A task started after the stop time gets no agents rather than one that runs into the night.
@@ -180,6 +183,7 @@ function Invoke-NightAgent([string]$Role, [string]$Brief, [double]$AgentHours, [
 - start: $($start.ToString('yyyy-MM-dd HH:mm'))   deadline: $($deadline.ToString('yyyy-MM-dd HH:mm'))  (hard kill at the deadline)
 - your night folder (report, gate outputs, study scripts): results/agent/$nightTag/$Role/
 - tonight's sweep: results/agent/$nightTag/SWEEP.md; tonight's starting baseline: results/agent/$nightTag/baseline_before.json
+- tonight's user walk-through on harness: results/agent/$nightTag/walkthrough/WALKTHROUGH.md (+ PNGs)
 - the knob search runs after the agents, by the orchestrator; do not run it yourself
 - usb export: usb_export/ (the tools find it on their own)
 - sweep: exit $SweepExit (0 clean, 1 findings, 2 tool error). SWEEP.md head:
@@ -313,7 +317,16 @@ $SweepNote
     Copy-Item $BaselineBefore "results\baseline\evaluation.json" -Force
     Write-Host "$Role agent had rewritten results\baseline\evaluation.json; restored tonight's starting baseline"
   }
-  & $py tools\agent\record_night.py --role $Role --date $date --branch $branch --commits $r.Commits --gate $r.Gate --tests $r.Tests --note "orchestrator: $($r.Status)" | Out-Null
+  # D-37 (2026-10-30): the night is judged by the user journeys the gate saw improve, not by the agent's report
+  $impact = @()
+  $verifyPath = Join-Path $dir "gate_verify.json"
+  if (($Role -eq "ui" -or $Role -eq "app") -and (Test-Path $verifyPath)) {
+    try {
+      $vj = Get-Content $verifyPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $impact = @("--journeys-improved", @($vj.journeys_improved).Count)
+    } catch { }
+  }
+  & $py tools\agent\record_night.py --role $Role --date $date --branch $branch --commits $r.Commits --gate $r.Gate --tests $r.Tests @impact --note "orchestrator: $($r.Status)" | Out-Null
   git checkout harness 2>&1 | Out-Null
   return [pscustomobject]$r
 }
@@ -352,6 +365,10 @@ try {
   & $py -c "import PySide6" 2>&1 | Out-Null
   if ($LASTEXITCODE -ne 0) { $uiReady = $false; Write-Host "PySide6 not importable: the Bugs & UI and App agents are skipped tonight" }
   if ($hardStopAt) { Write-Host "hard stop: $($hardStopAt.ToString('yyyy-MM-dd HH:mm')) (agents and search are cut to it)" }
+
+  # ---- walk-through (2026-10-30): drive the app as a new user; every journey must change the running app ----
+  Step "walkthrough: user journeys on harness -> $night\walkthrough\WALKTHROUGH.md"
+  & $py tools\agent\walkthrough.py --out (Join-Path $night "walkthrough") 2>&1 | Select-Object -First 6 | Out-Host
 
   # ---- sweep (bugs, invariants, plan sanity over every USB track; exit 1 = findings, not a failed night) --
   $sweepNote = "skipped"

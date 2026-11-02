@@ -23,7 +23,7 @@ DEFAULT_PATH = "config.json"
 # those apart (see engines/laser.py) -- so arming is a per-run, per-track
 # operator act (console checkbox / L), never carried over. A stale key in
 # an old config.json is simply ignored.
-_PERSIST = ("master_brightness", "strobe_cap", "warm_cool_bias")
+_PERSIST = ("master_brightness", "strobe_cap", "warm_cool_bias", "synth_threshold")
 
 
 def load_into(manual, path: str = DEFAULT_PATH) -> bool:

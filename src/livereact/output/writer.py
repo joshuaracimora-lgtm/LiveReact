@@ -20,6 +20,9 @@ from .base import OutputBackend
 log = logging.getLogger(__name__)
 
 
+
+LOG_EVERY_ERRORS = 100   # while an output stays down, log one failure in this many (~every 3 min)
+
 class DmxWriter(threading.Thread):
     """Pulls published frames and writes them to a backend at a fixed rate."""
 
@@ -70,11 +73,19 @@ class DmxWriter(threading.Thread):
                 frame = self.frame_buffer.latest()
                 self.backend.send(frame)
                 self._frames_sent += 1
+                if self._consecutive_errors:
+                    log.warning("Output backend %r is back after %d failed sends",
+                                self.backend.name, self._consecutive_errors)
                 self._consecutive_errors = 0
             except Exception:  # noqa: BLE001 - writer survives all backend faults
                 self._handle_send_error()
             timer.wait()
         self._safe_close()
+
+    def _loud(self) -> bool:
+        """Log this failure? The first few and then one in LOG_EVERY_ERRORS: an adapter that is
+        unplugged for the whole set retries every ~2 s (2026-11-02 stress test)."""
+        return self._consecutive_errors <= 3 or self._consecutive_errors % LOG_EVERY_ERRORS == 0
 
     def _safe_open(self) -> None:
         try:
@@ -82,7 +93,8 @@ class DmxWriter(threading.Thread):
             self._is_open = True
         except Exception:  # noqa: BLE001
             self._is_open = False
-            log.exception("Failed to open output backend %r", self.backend.name)
+            if self._loud():
+                log.exception("Failed to open output backend %r", self.backend.name)
 
     def _safe_close(self) -> None:
         if not self._is_open:
@@ -96,12 +108,13 @@ class DmxWriter(threading.Thread):
 
     def _handle_send_error(self) -> None:
         self._consecutive_errors += 1
-        log.warning(
-            "Output send failed (%d in a row) on backend %r; attempting reopen",
-            self._consecutive_errors,
-            self.backend.name,
-            exc_info=True,
-        )
+        if self._loud():
+            log.warning(
+                "Output send failed (%d in a row) on backend %r; attempting reopen",
+                self._consecutive_errors,
+                self.backend.name,
+                exc_info=True,
+            )
         # Close + reopen, then back off (capped) so a dead device doesn't spin hot.
         self._safe_close()
         self._safe_open()
