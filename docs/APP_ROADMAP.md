@@ -88,9 +88,10 @@ Hard rules for every item, whoever does it:
     everything, and the details pane / buttons keep following the (filtered) selection. Matters once a
     library holds more than a screenful of imported fixtures. Tests first.
 
-53. **P6 the console remembers its window.** Size/position and the selected tab saved through
-    `settings.py` when the console closes and restored at the next start (positions clamped to a
-    visible screen). Tests first.
+55. **P2 the patch view marks duplicate slot IDs.** `ui/rig_config.py`: two rows with the same
+    Slot ID silently collide in `_collect()` (the later row wins the saved slot's geometry overlay)
+    — mark them inline like address overlaps and refuse to save, with the duplicated id on the
+    status line. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -324,3 +325,17 @@ Hard rules for every item, whoever does it:
   channel's 1-based number, function, fine pairing and capability ranges with labels, plus source /
   ofl key / license / attribution and the confirmed date (or "not confirmed"). Cleared when nothing
   is selected. Tests: `tests/test_app_fixture_details.py`.
+- **53. P6 the console remembers its window** (2026-11-01). `ConsoleWindow(app, settings=...)` saves
+  size/position and the selected tab (by name) into `settings.extra["console_window"]` on close and
+  restores them at the next start; a position off every screen (a monitor unplugged since last run)
+  comes back clamped onto the primary screen; an unknown tab name or corrupt entry reads as the
+  default. Only the shipped console persists: `run_console` builds the window through the new
+  `make_console(app)` (which passes `Settings.load()`), so a bare `ConsoleWindow(app)` — every older
+  test, the UI gate checks — never reads or writes the user's file.
+  Tests: `tests/test_app_console_window.py`.
+- **54. P2 the patch view's type picker is searchable** (2026-11-01). Every row's type combo in
+  `ui/rig_config.py` is editable (insert policy NoInsert, so free text can never become a type) with
+  a case-insensitive contains-match completer over the combo's own model: a few letters of the id,
+  manufacturer or model jump to the definition, picking a completion selects that item, junk text
+  leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
+  searchable at once. Tests: `tests/test_app_type_picker.py`.
