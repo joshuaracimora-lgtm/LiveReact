@@ -599,12 +599,26 @@ class VenueTab(QtWidgets.QWidget):
             return
         name, target = tp
         pan01, tilt01 = self._pan_tilt01()
-        fx.calibration = calibrate_from_capture(
-            fx.position, fx.facing_deg, target, pan01, tilt01, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG,
+        # a re-capture only re-fixes the offsets: the pan/tilt travel a
+        # two-point capture solved is a property of the unit as hung, so it
+        # is kept (and used to solve the new offsets) instead of silently
+        # falling back to the profile's placeholder ranges
+        old = fx.calibration
+        pan_range, tilt_range = old.ranges(fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
+        cal = calibrate_from_capture(
+            fx.position, fx.facing_deg, target, pan01, tilt01, pan_range, tilt_range,
             invert_pan=self.cb_invert_pan.isChecked(), invert_tilt=self.cb_invert_tilt.isChecked(),
             target_name=name)
+        solved = old.pan_range_deg is not None or old.tilt_range_deg is not None
+        if solved:
+            cal = dataclasses.replace(cal, pan_range_deg=old.pan_range_deg,
+                                      tilt_range_deg=old.tilt_range_deg, target2=old.target2,
+                                      pan01_2=old.pan01_2, tilt01_2=old.tilt01_2)
+        fx.calibration = cal
         self._update_cal_label()
-        self._mark_dirty(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
+        self._mark_dirty(f"Captured {fx.label} on {name}."
+                         + ("  (Kept the 2-point solved travel.)" if solved else "")
+                         + " Now 'Aim at target' with another target to verify.")
 
     def _set_aim_second(self) -> None:
         """Second capture: the head is now on a DIFFERENT target. Together
@@ -652,19 +666,33 @@ class VenueTab(QtWidgets.QWidget):
     def _aim_at_target(self) -> None:
         fx = self._fx()
         tp = self._target_point()
-        if not isinstance(fx, MovingHead) or tp is None or fx.position is None:
+        if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if fx.position is None:
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
         self.s_pan.setValue(int(round(pan01 * 65535)))
         self.s_tilt.setValue(int(round(tilt01 * 65535)))
+        # say when only the sliders moved: an operator verifying a capture
+        # against a beam that never moves concludes the capture is wrong
+        if not self.cb_jog.isChecked():
+            note = "  — only the sliders moved: tick Jog live to move the real head"
+        elif self.is_frozen():
+            note = "  — Freeze is on: unfreeze (F) to see the real head move"
+        else:
+            note = ""
         self.status.setText(f"Aimed at {name}: pan {pan01:.3f} tilt {tilt01:.3f}"
-                            + ("" if ok else "  — OUT OF RANGE, clamped"))
+                            + ("" if ok else "  — OUT OF RANGE, clamped") + note)
 
     def _set_home(self) -> None:
         fx = self._fx()
         tp = self._target_point()
-        if not isinstance(fx, MovingHead) or tp is None or fx.position is None:
+        if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if fx.position is None:
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
