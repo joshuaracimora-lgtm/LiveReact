@@ -16,7 +16,11 @@ from livereact.rekordbox.planner import plan_track
 from livereact.scenes import movement as mv
 from livereact.scenes.catalog import show_catalog
 
-from test_planner import HIGH, _wave
+from test_planner import HIGH, _table, _wave
+
+# like HIGH but with 12-bar builds, long enough to hold their own look (PLAN_BUILD_LOOK_MIN_BEATS)
+LONG = _table([(1, 1, "intro"), (17, 2, "up"), (65, 5, "chorus"), (129, 3, "down"), (161, 2, "up"),
+               (209, 5, "chorus"), (257, 6, "outro")], end=289)
 
 
 def _f(**kw) -> ss.SongFeatures:
@@ -49,17 +53,23 @@ def test_no_waveform_keeps_the_old_show():
 
 
 def test_the_plan_carries_the_style_and_its_build_and_break_looks():
-    plan = plan_track(HIGH, track_id=7, bpm=120.0, waveform=_wave())
-    assert {s.scene for s in plan.sections if s.bucket == "build"} == {plan.style.build}
+    # LONG's first build is 12 bars; HIGH's are 8 bars, under PLAN_BUILD_LOOK_MIN_BEATS, so they
+    # keep the preceding break-family look (TIME-02 look continuity, 2026-11-01)
+    plan = plan_track(LONG, track_id=7, bpm=120.0, waveform=_wave(n_beats=289))
+    long_build = next(s for s in plan.sections if s.bucket == "build" and s.length >= 48)
+    assert long_build.scene == plan.style.build
     assert {s.scene for s in plan.sections if s.bucket == "break"} == {plan.style.brk}
-    again = plan_track(HIGH, track_id=7, bpm=120.0, waveform=_wave(), previous_style=plan.style)
-    assert again.style.differences(plan.style) >= ss.MIN_DIFFERENCES
-    assert "style[" in plan.summary()
+    short = plan_track(HIGH, track_id=7, bpm=120.0, waveform=_wave())
+    assert {s.scene for s in short.sections if s.bucket == "build"} == {short.style.brk}
+    again = plan_track(HIGH, track_id=7, bpm=120.0, waveform=_wave(), previous_style=short.style)
+    assert again.style.differences(short.style) >= ss.MIN_DIFFERENCES
+    assert "style[" in short.summary()
 
 
 def test_without_a_waveform_the_plan_keeps_the_pool_looks():
-    plan = plan_track(HIGH, track_id=7, bpm=120.0)
-    assert plan.style == ss.DEFAULT_STYLE and plan.sections[1].scene == "Rising Tide"
+    plan = plan_track(LONG, track_id=7, bpm=120.0)
+    assert plan.style == ss.DEFAULT_STYLE
+    assert next(s for s in plan.sections if s.bucket == "build" and s.length >= 48).scene == "Rising Tide"
 
 
 def test_the_show_catalog_holds_every_style_look():

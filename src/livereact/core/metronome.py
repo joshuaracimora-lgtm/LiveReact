@@ -702,6 +702,7 @@ class Metronome(threading.Thread):
         self._manual_bucket_override: EnergyBucket | None = None  # see request_manual_bucket() / cue_build()
         self._build_cue_until: float | None = None  # while set, a cued BUILD can't fall to BREAK -- see cue_build()
         self._build_cue_source = ""                  # "dj" (C key) or "auto" (core/build_rule.py) while held
+        self._plan_build_quiet = False               # current planned build shows the break look (PLAN_BUILD_LOOK_MIN_BEATS)
         # automatic build cue (core/build_rule.py): per-bar means fed on each bar change
         self._build_rule = KickLevelBuildRule()
         self._rule_bar: int | None = None
@@ -2055,9 +2056,21 @@ class Metronome(threading.Thread):
             elif bucket == "build":
                 self._base_committed = EnergyBucket.BUILD
                 self._base_committed_since = now
-                beats_left = max(4, sec.beats_to_next if sec.beats_to_next > 0 else 16)
-                self._build_cue_until = now + beats_left * (60.0 / (self._bpm if self._bpm > 0 else NOMINAL_BPM))
-                self._build_cue_source = "rekordbox"
+                # PLAN_BUILD_LOOK_MIN_BEATS (2026-11-01): a planned build too short to hold its own
+                # look (TIME-02's 8-bar hold plus the phrase engine's ~2-bar look change lag) stays
+                # an UNCONFIRMED build -- look_bucket keeps showing the break-family look it came
+                # from (one long look run instead of a break -> build -> drop flap), while the base
+                # commit, count-in and drop arming run unchanged. Never after a drop-family section:
+                # there the exposed BREAK run would sit under TIME-11's 8-bar floor, and the look
+                # change is what strips the drop look off the stage (D-23).
+                ps = plan.sections[sec.section_index]
+                prev_ps = plan.sections[sec.section_index - 1] if sec.section_index > 0 else None
+                self._plan_build_quiet = (0 < ps.length < rules.build_look_min_beats
+                                          and prev_ps is not None and prev_ps.bucket not in ("drop", "peak"))
+                if not self._plan_build_quiet:
+                    beats_left = max(4, sec.beats_to_next if sec.beats_to_next > 0 else 16)
+                    self._build_cue_until = now + beats_left * (60.0 / (self._bpm if self._bpm > 0 else NOMINAL_BPM))
+                    self._build_cue_source = "rekordbox"
                 self._apply_bucket_overlay(now, peak_allowed=False, outro_allowed=False)
             elif bucket == "outro" and self._bucket_committed == EnergyBucket.BUILD:
                 # BUILD -> OUTRO is not a legal move (TIME-13; OUTRO is a version of BREAK, D-22):
@@ -2076,8 +2089,10 @@ class Metronome(threading.Thread):
                 peak_ok = plan.at_beat(sec.track_beat + sec.beats_to_drop)[0].big_moment
             self._apply_bucket_overlay(now, peak_allowed=peak_ok, outro_allowed=outro_ok)
 
-        # keep a build cue alive for the whole planned build (look_bucket shows BUILD)
-        if sec.planned_bucket == "build" and self._build_cue_source == "rekordbox":
+        # keep a build cue alive for the whole planned build (look_bucket shows BUILD) -- unless
+        # the build is a quiet one (PLAN_BUILD_LOOK_MIN_BEATS above: the break look holds)
+        if (sec.planned_bucket == "build" and self._build_cue_source == "rekordbox"
+                and not self._plan_build_quiet):
             self._build_cue_until = max(self._build_cue_until or 0.0, now + self._bar_s())
 
         # count-in to the next planned drop
