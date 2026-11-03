@@ -214,6 +214,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         tabs.addTab(self.venue_tab, "Venue")
         self.rig_config = RigConfigTab(app.rig, rig_path)
         self.rig_config_tab = self.rig_config   # the UI agent's name for it (side sync on open)
+        self.rig_config.use_now.connect(self._use_saved_rig)
         tabs.addTab(self.rig_config, "Rig Config")
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
@@ -603,6 +604,14 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         s.save()
         self._rig_chosen(path)
 
+    def _use_saved_rig(self, path: str) -> None:
+        """Rig Config's "Save and use now…": the file it just wrote and validated becomes the
+        running rig (the Rig manager's switch path) and joins the recent rigs."""
+        s = Settings.load()
+        s.add_recent_rig(path)
+        s.save()
+        self._rig_chosen(path)
+
     def open_rig_manager(self):
         from .rig_manager import RigManagerDialog
         self.rig_manager = RigManagerDialog(self)
@@ -717,6 +726,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.venue_tab, "Venue")
         self.rig_config = RigConfigTab(app.rig, rig_path)
         self.rig_config_tab = self.rig_config
+        self.rig_config.use_now.connect(self._use_saved_rig)
         self.tabs.addTab(self.rig_config, "Rig Config")
         self.tabs.setCurrentIndex(min(current, self.tabs.count() - 1) if current == 0 else 0)
 

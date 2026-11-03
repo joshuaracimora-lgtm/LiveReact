@@ -12,10 +12,12 @@ status line carries the loader's own RigError), and an "Address set" column
 is the "did I dial this address into the fixture" checklist (saved on the slot
 as ``address_set``).
 
-Deliberately does NOT apply changes to the live show — swapping ``App.rig`` out
-from under the engine threads mid-tick is a real race the show pipeline isn't
-built to survive. Save, then restart with the new file (same pattern as
-plugging in hardware tonight: the app picks up devices at startup, not live).
+"Save and use now…" (2026-11-03): saving can also switch the running show to
+the saved file. The tab stays file-based — it emits ``use_now(path)`` after a
+successful save and the console routes it through the same ``App.switch_rig``
+path as the Rig manager's "Use selected" (D-38): the show plays the new rig on
+the next tick, lasers disarmed, Venue / Rig Config tabs rebuilt. (Before that
+seam existed this tab deliberately saved only, with a restart note.)
 """
 
 from __future__ import annotations
@@ -49,6 +51,10 @@ def _user_definitions() -> list[FixtureDefinition]:
 
 
 class RigConfigTab(QtWidgets.QWidget):
+    # Emitted with the saved file's path after "Save and use now…"; the console
+    # switches the running show to it (ConsoleWindow._use_saved_rig).
+    use_now = QtCore.Signal(str)
+
     def __init__(self, rig: Rig, rig_path: str | None) -> None:
         super().__init__()
         self.rig = rig
@@ -66,8 +72,8 @@ class RigConfigTab(QtWidgets.QWidget):
 
         note = QtWidgets.QLabel(
             "Edit fixture type / DMX address / role / side below, then Save. "
-            "Changes do NOT apply to the running show — restart LiveReact with "
-            "--rig <saved file> to pick them up (same as plugging in new hardware)."
+            "\"Save to file…\" only writes the rig file (play it later via the Rig menu or --rig). "
+            "\"Save and use now…\" also switches the running show to it — lasers disarm, press L to re-arm."
         )
         note.setWordWrap(True)
         v.addWidget(note)
@@ -88,11 +94,15 @@ class RigConfigTab(QtWidgets.QWidget):
         remove_btn = QtWidgets.QPushButton("Remove selected")
         remove_btn.clicked.connect(self._remove_selected)
         save_btn = QtWidgets.QPushButton("Save to file…")
-        save_btn.clicked.connect(self._save)
+        save_btn.clicked.connect(lambda: self._save())
+        use_btn = QtWidgets.QPushButton("Save and use now…")
+        use_btn.setToolTip("Save the rig file and switch the running show to it (lasers disarm)")
+        use_btn.clicked.connect(lambda: self._save(apply=True))
         btns.addWidget(add_btn)
         btns.addWidget(remove_btn)
         btns.addStretch(1)
         btns.addWidget(save_btn)
+        btns.addWidget(use_btn)
         v.addLayout(btns)
 
         v.addWidget(QtWidgets.QLabel("Channel reference for the selected fixture type:"))
@@ -376,7 +386,7 @@ class RigConfigTab(QtWidgets.QWidget):
             data.pop("definitions", None)
         return data
 
-    def _save(self) -> None:
+    def _save(self, apply: bool = False) -> None:
         data = self._collect()
         try:
             _rig_from_dict(data)  # same overlap/overflow/unknown-type validation the loader uses
@@ -400,5 +410,11 @@ class RigConfigTab(QtWidgets.QWidget):
             json.dump(data, fh, indent=2)
         log.info("Saved rig config to %s", path)
         self.rig_path = path
-        self.status.setText(f"Saved to {path} — restart with --rig \"{path}\" to apply.")
+        if apply:
+            self.status.setText(f"Saved to {path} — switching the running show to it…")
+            self.status.setStyleSheet("color:#3c6;")
+            # Last statement on purpose: the console's switch rebuilds this tab.
+            self.use_now.emit(path)
+            return
+        self.status.setText(f"Saved to {path} — use it now from the Rig menu, or restart with --rig \"{path}\".")
         self.status.setStyleSheet("color:#3c6;")

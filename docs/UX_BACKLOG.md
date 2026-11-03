@@ -64,4 +64,11 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
-(none yet)
+- **Rig Config edits could not reach the running show** (walk-through UNREACHABLE, 2026-11-03): the tab
+  said every edit needs a restart — written before `App.switch_rig` (D-38) existed, while the Rig manager
+  already switched live. "Save and use now…" saves with the same validation, then the console switches the
+  show to the file through the Rig manager's own path (`RigConfigTab.use_now` →
+  `ConsoleWindow._use_saved_rig` → `_rig_chosen`): lasers disarm, Venue / Rig Config rebuild, the file
+  joins the recent rigs. An invalid table still refuses before any dialog. Tests:
+  `tests/test_console.py::test_rig_config_save_and_use_now_plays_the_saved_rig_without_a_restart`,
+  `::test_rig_config_save_and_use_now_refuses_an_invalid_rig_and_changes_nothing` (2026-11-03).
