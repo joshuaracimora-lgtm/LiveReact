@@ -121,7 +121,7 @@ def test_writer_runs_as_a_real_thread_and_joins():
 
 
 class UnpluggedBackend(CountingBackend):
-    """2026-10-31 23:36 (AEPI): the Enttec dropped off USB -- sends fail and reopening fails
+    """2026-10-31 23:36 (2026-10-31 show): the Enttec dropped off USB -- sends fail and reopening fails
     ("no FTDI device on the bus") until it is plugged back in, ``gone_for`` open attempts later."""
 
     def __init__(self, stop_event, stop_after, fail_at, gone_for) -> None:

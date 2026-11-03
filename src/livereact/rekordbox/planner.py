@@ -105,6 +105,14 @@ TEASE_MAX_BEATS = 64       # a Tease is the last 16 bars at most before its drop
 # least TEASE_SPLIT_MIN_FREE_BEATS kick-free ones inside a build, loud enough for a Tease, is a drop.
 TEASE_SPLIT_MIN_BEATS = 16
 TEASE_SPLIT_MIN_FREE_BEATS = 8
+# A build too short to hold its own look for TIME-02's 8-bar minimum plus the phrase engine's
+# ~2-bar look lag (an 8-bar build shows 'Rising Tide' for ~6 bars on the sweep) keeps the preceding
+# section's look instead: the bucket still commits BUILD (count-in, strobe ramp, TIME-11's 4-bar
+# build floor) -- only the look no longer flaps break -> build -> drop inside the hold. Never taken
+# from a drop-family section: a drop's look must not carry past the drop (D-23; Josh 2026-10-26).
+# Library 2026-11-01: 119 interior planned builds under 8 bars across 90 tracks, 65 after a
+# break-family section.
+PLAN_BUILD_LOOK_MIN_BEATS = 40    # params.json knob (tunable); 0 = off
 
 # default section energies when no waveform is available (ranking then falls back to length)
 _KIND_ENERGY = {"drop": 0.8, "build": 0.5, "verse": 0.4, "breakdown": 0.2, "intro": 0.15, "outro": 0.2}
@@ -125,6 +133,7 @@ class PlanRules:
     roll_min_build_beats: int = field(default_factory=lambda: PLAN_ROLL_MIN_BUILD_BEATS)
     roll_rise: float = field(default_factory=lambda: PLAN_ROLL_RISE)
     roll_min_share: float = field(default_factory=lambda: ROLL_STROBE_MIN_SHARE)
+    build_look_min_beats: int = field(default_factory=lambda: PLAN_BUILD_LOOK_MIN_BEATS)  # 0 = off
 
 
 @dataclass(frozen=True)
@@ -498,7 +507,13 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
                 and rules.roll_beats > 0):
             blen = build["end_beat"] - build["beat"]
             rb = rules.roll_beats // 2 if crescendo(m["beat"], rules.roll_beats // 2) else rules.roll_beats
-            if rb > 0 and blen - rb >= rules.roll_min_build_beats:
+            # One floor for both roll sizes (reconciled 2026-11-02, Josh: D-33 wins over the desktop's
+            # 2026-11-01 per-size floor, which assumed the old 40-beat guard): a short build gives up
+            # build beats, not its roll -- the 8-bar roll lands on Josh's ear-noted snare roll (Thriller's
+            # 36-beat builds), and a 4-bar crescendo roll is never held to a stricter floor than an 8-bar
+            # one. The leftover build's look hold is covered by PLAN_BUILD_LOOK_MIN_BEATS look continuity below.
+            floor = rules.roll_min_build_beats
+            if rb > 0 and blen - rb >= floor:
                 start = build["end_beat"] - rb
                 roll = dict(build, beat=start, kind="drop", bucket="drop", roll=True, phrases=1, lead_in=True,
                             energy=energy_of(start, build["end_beat"], _KIND_ENERGY["drop"]),
@@ -634,6 +649,14 @@ def plan_track(table: PhraseTable, *, track_id: int, title: str = "", bpm: float
     if features is not None:
         looks = {"build": style.build, "break": style.brk}
         sections = [replace(s, scene=looks[s.bucket]) if s.bucket in looks else s for s in sections]
+    # --- look continuity (PLAN_BUILD_LOOK_MIN_BEATS, 2026-11-01): an interior build too short to
+    # hold its own look keeps the preceding section's look; see the constant's note. An approved
+    # section class still overrides below (_apply_classes runs after this) -- Josh's call wins.
+    for i in range(1, len(sections) - 1):
+        s = sections[i]
+        if (s.kind == "build" and s.length < rules.build_look_min_beats
+                and sections[i - 1].bucket not in ("drop", "peak")):
+            sections[i] = replace(s, scene=sections[i - 1].scene)
     palette = (look.hook_palette or "") if look is not None else ""
     if not palette and classes is not None:
         palette = classes.palette_for(track_profile(waveform), seed, profile_position(waveform))

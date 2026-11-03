@@ -199,8 +199,15 @@ def test_save_without_a_name_reports(qapp):
     assert p.cmb_events.count() == 0
 
 
-def _aepi_panel():
-    app = App(AppConfig(demo=True, config_path=None, rig_path="rigs/aepi.json"))
+def _override_panel():
+    import json
+    import pathlib
+    import tempfile
+    rig = pathlib.Path(tempfile.gettempdir()) / "livereact_test_override_panel_rig.json"
+    data = json.load(open("rigs/junior_crib_fan.json"))
+    data["laser_overrides"] = ["Rainbow", "Green", "White"]
+    rig.write_text(json.dumps(data))
+    app = App(AppConfig(demo=True, config_path=None, rig_path=str(rig)))
     app.manual.laser_enable = False
     return _panel(app)
 
@@ -208,13 +215,13 @@ def _aepi_panel():
 def test_override_looks_only_on_a_rig_that_lists_them(qapp):
     _, p = _panel()
     assert p.laser_override_buttons == {} and p.b_laser_resume is None
-    _, p = _aepi_panel()
+    _, p = _override_panel()
     assert list(p.laser_override_buttons) == ["Rainbow", "Green", "White"]
     assert p.b_laser_resume is not None and not p.b_laser_resume.isEnabled()
 
 
 def test_override_latches_auto_off_until_resume(qapp):
-    app, p = _aepi_panel()
+    app, p = _override_panel()
     m = app.manual
     p.laser_override_buttons["Green"].click()
     assert (m.laser_override, m.laser_auto_off) == ("Green", True)
@@ -229,7 +236,7 @@ def test_override_latches_auto_off_until_resume(qapp):
 
 
 def test_switching_to_a_rig_without_overrides_clears_them(qapp):
-    app, p = _aepi_panel()
+    app, p = _override_panel()
     p.laser_override_buttons["Rainbow"].click()
     app.rig.laser_overrides = ()
     p.build_laser_overrides()

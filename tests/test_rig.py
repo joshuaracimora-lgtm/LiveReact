@@ -144,11 +144,17 @@ def test_side_is_derived_from_real_x_when_a_venue_is_declared(caplog):
     assert rig.fixture("a").side == "left" and rig.fixture("a").x_norm == pytest.approx(-7 / 9)
     assert rig.fixture("b").side == "right" and rig.fixture("b").x_norm == pytest.approx(7 / 9)
 
-    # both on the same side of centre -> can't mirror -> MOVE-03 warning
+    # both on the same side of centre -> can't mirror -> MOVE-03 warning,
+    # recorded on the rig so the Venue tab can show it on its status line
     base["slots"][1]["position"]["x_m"] = 2.0
     with caplog.at_level(logging.WARNING, logger="livereact.fixtures.rig"):
-        _rig_from_dict(base)
+        same_side = _rig_from_dict(base)
     assert any("MOVE-03" in r.message for r in caplog.records)
+    assert any("MOVE-03" in w and "unison" in w for w in same_side.mirror_warnings)
+    from livereact.fixtures.geometry import Point3
+    same_side.fixture("b").position = Point3(8.0, 0.5, 0.3)
+    same_side.refresh_geometry()
+    assert same_side.mirror_warnings == []        # mirrorable again: the record clears
 
     # no venue: side stays exactly as declared, x_norm undefined
     legacy = {"name": "legacy", "slots": [dict(s) for s in base["slots"]]}
@@ -315,3 +321,42 @@ def test_dj_pan_tilt_is_optional_round_trips_and_is_never_guessed():
     data["slots"][2]["calibration"] = {"target": "dj_booth", "pan01": 0.5, "tilt01": 0.5}
     pose = _rig_from_dict(data).dj_pose(_rig_from_dict(data).fixture("mh"))
     assert pose is not None and all(0.0 <= v <= 1.0 for v in pose)
+
+
+def test_calibration_remembers_where_capture_a_was_taken_and_old_files_load():
+    """ADD 2ND POINT staleness (2026-10-31): the rig file round-trips the
+    head position/facing and target point SET AIM was taken at, so the Venue
+    tab can refuse a two-point solve across a move even after a reload. A file
+    from before the record loads with the fields unset."""
+    from livereact.fixtures.geometry import Point3, calibrate_from_capture
+    from livereact.fixtures.rig import rig_to_dict
+
+    data = {
+        "name": "geo",
+        "venue": {"width_m": 9.0, "length_m": 12.0,
+                  "targets": {"dj_booth": {"x_m": 4.5, "y_m": 0.9, "z_m": 1.2}}},
+        "slots": [
+            {"slot_id": "mh", "fixture_type": "shehds_180w_mh", "dmx_address": 1,
+             "role": "spot", "side": "left",
+             "position": {"x_m": 1.5, "y_m": 0.6, "z_m": 0.3}, "facing_deg": 15.0,
+             "calibration": {"target": "dj_booth", "pan01": 0.41, "tilt01": 0.63}},
+        ],
+    }
+    rig = _rig_from_dict(data)
+    mh = rig.fixture("mh")
+    # pre-record file: captured, but nowhere-taken is unknown
+    assert mh.calibration.captured and mh.calibration.captured_origin is None
+    assert mh.calibration.captured_facing_deg is None and mh.calibration.captured_target_point is None
+
+    mh.calibration = calibrate_from_capture(
+        mh.position, mh.facing_deg, rig.venue.targets["dj_booth"], 0.41, 0.63,
+        mh.PAN_RANGE_DEG, mh.TILT_RANGE_DEG, target_name="dj_booth")
+    assert mh.calibration.captured_origin == Point3(1.5, 0.6, 0.3)
+    assert mh.calibration.captured_facing_deg == 15.0
+    assert mh.calibration.captured_target_point == Point3(4.5, 0.9, 1.2)
+
+    again = _rig_from_dict(rig_to_dict(rig))
+    c2 = again.fixture("mh").calibration
+    assert c2.captured_origin == Point3(1.5, 0.6, 0.3)
+    assert c2.captured_facing_deg == 15.0
+    assert c2.captured_target_point == Point3(4.5, 0.9, 1.2)

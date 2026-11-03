@@ -1,4 +1,4 @@
-"""--preflight (src/livereact/preflight.py), with the hardware faked (2026-11-02, AEPI post-mortem)."""
+"""--preflight (src/livereact/preflight.py), with the hardware faked (2026-11-02, 2026-10-31 show post-mortem)."""
 from __future__ import annotations
 
 import errno
@@ -12,7 +12,7 @@ def _run(**kw):
     base = dict(running=False, bind=lambda p: None, holder=lambda p: "", addresses=ADDRS,
                 audio=lambda: ("XDJ-XZ", 43, 0.05), midi=["XDJ-XZ (2)"], dmx=lambda: "/dev/cu.usbserial-EN489520")
     base.update(kw)
-    return pf.run("rigs/aepi.json", "en8", **base)
+    return pf.run("rigs/junior_crib_fan.json", "en8", **base)
 
 
 def _by(checks, name):
@@ -55,7 +55,7 @@ def test_a_running_app_stops_the_hardware_checks():
 
 def test_rig_lists_every_unit_address_to_check():
     lines = pf.format_checks(_run())
-    for addr in ("150", "120", "075", "001", "069"):
+    for addr in ("051", "036", "075", "001", "069"):
         assert f"display reads {addr}" in lines
 
 

@@ -104,11 +104,16 @@ def test_plan_drives_sections_on_the_beat_counter():
     snap = sim.run_to(10, level=0.1)
     assert snap.plan_active and snap.bucket == "break" and snap.section_kind == "intro"
     assert snap.planned_scene == "Deep Wash Breathe" and not snap.planned_laser_allowed and not snap.planned_strobe_allowed
-    snap = sim.run_to(20, level=0.1)                   # 'up' -> BUILD shown even with quiet audio
-    assert snap.bucket == "build" and snap.classifier_bucket == "build" and snap.build_cue_source == "rekordbox"
-    assert snap.planned_scene == "Rising Tide" and snap.planned_strobe_allowed
+    snap = sim.run_to(20, level=0.1)                   # 'up': the plan commits BUILD on the beat counter
+    # the 8-bar 'up' is under PLAN_BUILD_LOOK_MIN_BEATS (2026-11-01): the base commits BUILD
+    # (classifier_bucket) but the look stays the break-family look it came from -- an unconfirmed
+    # build, so no break -> build -> drop look flap; count-in and arming run unchanged. A build
+    # long enough to hold its look still shows BUILD: see
+    # test_a_long_planned_build_still_shows_build.
+    assert snap.bucket == "break" and snap.classifier_bucket == "build" and snap.build_cue_source == ""
+    assert snap.planned_scene == "Deep Wash Breathe" and snap.planned_strobe_allowed
     snap = sim.run_to(48, level=0.1)
-    assert snap.bucket == "build" and snap.drop_armed and snap.drop_arm_source == "rekordbox"
+    assert snap.bucket == "break" and snap.drop_armed and snap.drop_arm_source == "rekordbox"
     assert snap.beats_to_drop == 1 and snap.drop_pending            # the pre-drop blackout bridge
     snap = sim.run_to(49, level=0.1)                   # the chorus downbeat: DROP, whatever the audio says
     assert snap.bucket == "drop" and snap.classifier_bucket == "drop" and not snap.drop_pending
@@ -183,7 +188,8 @@ def test_shadow_mode_ignores_the_plan():
     sim = Sim(drive=False)
     snap = sim.run_to(20, level=0.1)
     assert not snap.plan_active and snap.bucket == "break"   # quiet audio stays BREAK; plan not applied
-    assert snap.planned_scene == "Rising Tide"               # ...but the plan is still visible
+    assert snap.planned_scene == "Deep Wash Breathe"         # ...but the plan is still visible (the
+    # 8-bar build keeps the intro's look: PLAN_BUILD_LOOK_MIN_BEATS look continuity, 2026-11-01)
     snap = sim.run_to(49, level=0.1)
     assert snap.bucket == "break" and snap.classifier_bucket == "break"
 
@@ -241,7 +247,7 @@ def test_early_roll_drop_survives_an_intermediate_build_section():
     # the chorus) lands the drop; the build boundary must not take it away
     sim = Sim()
     sim.run_to(118, level=0.1)
-    assert sim.snaps[-1].bucket == "build"
+    assert sim.snaps[-1].bucket == "break"   # the 8-bar build is quiet (PLAN_BUILD_LOOK_MIN_BEATS)
     n0 = len(sim.snaps)                       # the first chorus (beat 49) already happened; count from here
     sim.m._roll_start_pending = True          # what core/roll_period.py's detector raises
     snap = sim.run_to(121, level=0.1)
@@ -269,7 +275,7 @@ def test_loop_inside_a_section_holds_it_and_the_countdown():
     sim = Sim()
     sim.run_to(28, level=0.1)                           # in 'up' (build), 21 beats before the drop
     snap = sim.loop(25, 28, 24, level=0.1)              # a 4-beat loop, six passes
-    assert snap.loop_active and snap.plan_active and snap.bucket == "build"
+    assert snap.loop_active and snap.plan_active and snap.bucket == "break"   # quiet 8-bar build
     held = sim.snaps[-24 * 5:]
     assert all(s.loop_active and s.section_kind == "build" for s in held)
     assert len({s.beats_to_drop for s in held}) == 1 and not any(s.drop_pending for s in held)
@@ -285,7 +291,7 @@ def test_loop_across_the_drop_boundary_does_not_retrigger_the_drop():
     sim.run_to(46, level=0.1)                           # armed count-in, drop at 49
     snap = sim.loop(45, 52, 32, level=0.1)              # an 8-beat loop straddling the chorus downbeat
     held = sim.snaps[-32 * 5:]
-    assert all(s.bucket == "build" and s.beats_to_drop == held[0].beats_to_drop for s in held)
+    assert all(s.bucket == "break" and s.beats_to_drop == held[0].beats_to_drop for s in held)
     assert not any(s.drop_pending for s in held)
     assert snap.loop_active and snap.drop_armed and snap.drop_arm_source == "rekordbox"
     snap = sim.run_to(53, level=0.1)                    # release lands inside the chorus: DROP now
@@ -298,7 +304,7 @@ def test_loop_on_the_last_beat_does_not_hold_the_blackout_bridge():
     snap = sim.run_to(48, level=0.1)
     assert snap.drop_pending and snap.beats_to_drop == 1
     snap = sim.loop(48, 48, 8, level=0.1)               # a 1-beat loop on the bridge beat
-    assert snap.loop_active and snap.bucket == "build" and not snap.drop_pending
+    assert snap.loop_active and snap.bucket == "break" and not snap.drop_pending
     assert all(not s.drop_pending for s in sim.snaps[-8 * 5:])
     snap = sim.run_to(49, level=0.1)
     assert snap.bucket == "drop"
@@ -393,4 +399,23 @@ def test_the_white_riser_needs_a_planned_break_and_quiet_bass():
     assert snap.planned_flash_white == sim.plan.flash_white
     quiet = Sim()
     snap = quiet.run_to(30, level=0.05)          # a planned build: steady companion colour, never the riser
-    assert snap.bucket == "build" and not snap.planned_riser
+    # (after D-33's roll lead-in it is a short build, which keeps the break's look -- 2026-11-01 look
+    # continuity -- but the plan still says build, and the riser belongs to planned breaks only)
+    assert snap.section_kind == "build" and not snap.planned_riser
+
+
+def test_a_long_planned_build_still_shows_build():
+    # PLAN_BUILD_LOOK_MIN_BEATS (2026-11-01): only a build too short to hold its own look stays
+    # unconfirmed. A 12-bar 'up' confirms BUILD on the beat counter even with quiet audio, and a
+    # short build AFTER A DROP confirms too (showing BREAK there would sit under TIME-11's 8-bar
+    # floor, and the look change is what strips the drop look, D-23).
+    # (18-bar 'up': the 8-bar roll lead-in, D-33, leaves 10 bars of build -- still long enough)
+    table = _table([(1, 1, "intro"), (17, 2, "up"), (89, 5, "chorus"), (153, 2, "up"), (169, 5, "chorus"),
+                    (233, 6, "outro")], end=265)
+    sim = Sim(table=table)
+    snap = sim.run_to(24, level=0.1)                   # 10-bar build: long enough to hold its look
+    assert snap.bucket == "build" and snap.build_cue_source == "rekordbox"
+    snap = sim.run_to(94, level=0.1)
+    assert snap.bucket == "drop"
+    snap = sim.run_to(156, level=0.1)                  # 4-bar build after the chorus: after a drop
+    assert snap.bucket == "build" and snap.classifier_bucket == "build"

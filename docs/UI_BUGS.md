@@ -17,15 +17,10 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
      capture was taken on now warns too (fixed below); same open question for it.
 2. **Overlapping labels** (`ui_snapshot.py` counts them; the gate compares against harness). Causes in
    `FloorPlanView._layout_labels`:
-   - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots;
-   - leader lines, beams and wedges are not obstacles. 2026-10-28 (night 2): leaders cross other captions
-     on testing_setup (Laser R's runs between Wash Bar's title and sub-line) and junior_crib(_fan) (Laser L
-     through Moving Head L, Moving Head R through booth_edge_right). Tried three ways in `_layout_labels`
-     (strict near slots, then the old rules; plus a captions-only tier; a single distance + crossing cost):
-     each fixed testing_setup but not junior_crib, where seven bodies share ~8 ft of booth and Moving Head
-     L's caption sits over every short leader -- the greedy one-pass layout cannot clear it, and widening the
-     search parks captions 15 ft up the room. Needs a repair pass (re-place a caption whose leader got cut)
-     or the caption-size decision; reverted, not committed;
+   - captions are fixed 8/7 pt in scene pixels while the room is 40 px/m: small rooms run out of slots
+     (junior_crib@small still has 5 leader crossings after the 2026-10-29 repair pass -- see Fixed --
+     bounded by the caption-size decision that is Josh's call);
+   - beams and wedges are still not obstacles (leader-vs-caption crossings fixed 2026-10-29, below);
 3. **Show-tab mini-map is stale** until you leave and re-enter the Show tab (`ConsoleWindow._tab_changed`
    is the only refresh of body positions there). 2026-10-26: could not reproduce -- a Venue-tab move and a
    room resize both showed on returning to Show (`_tab_changed` rebuilds it on index 0). Needs the exact
@@ -46,6 +41,58 @@ Line numbers are as of 2026-10-26 and drift; the function names don't.
   and sliders take the wheel only while focused, as the Venue panel's do) and clamps the startup size to
   the screen (`_fits_the_screen`). Window minimum 1387 -> 580 px. Test:
   `tests/test_console.py::test_show_tab_fits_a_laptop_screen` (2026-10-29).
+- **Dragging every fixture of a role onto one side of centre killed mirroring silently** (MOVE-03): the
+  rig logged the warning, but the operator doing the dragging is on the Venue tab, not reading the log.
+  `Rig.refresh_geometry` now also records its MOVE-03 warnings in `rig.mirror_warnings` and the Venue
+  status line shows them after every edit until the layout mirrors again. Detection only, exactly the
+  rule spec/conformance.md marks PARTIAL; nothing is disabled or re-rendered. Tests:
+  `tests/test_console.py::test_every_spot_on_one_side_puts_move_03_on_the_status_line`,
+  `tests/test_rig.py::test_side_is_derived_from_real_x_when_a_venue_is_declared` (extended) (2026-10-29).
+
+- **A caption placed early sat across the leader lines of captions placed later** (junior_crib's booth:
+  Moving Head L's caption over every short leader; testing_setup: Laser R's leader through Wash Bar's
+  caption). The greedy one-pass layout cannot clear it, so `_layout_labels` now runs a repair pass
+  (`_repair_cut_leaders`): re-place the most-crossed caption into the nearest slot that is free of every
+  body, caption and reserved band and lowers its crossing count, until clean or no move helps. Crossings
+  (harness -> now): junior_crib(_fan) 4 -> 0, testing_setup 1 -> 0, junior_crib@small 14 -> 5 (its booth
+  really is smaller than its labels), the six others stay 0; text/text and text/body overlaps stay 0 on
+  all ten rigs. Test: `tests/test_floorplan.py::test_no_leader_line_cuts_through_another_caption`
+  (2026-10-29).
+
+- **SET AIM after a two-point capture silently un-solved the head**: the touch-up the move/target
+  warnings tell the operator to make ("SET AIM again if the beam misses") rebuilt the calibration
+  from the profile's placeholder pan/tilt ranges, discarding the travel ADD 2ND POINT solved for
+  this unit as hung — verify aims went back to landing short/long with no word of it. SET AIM now
+  re-fixes only the offsets: it solves them against the kept travel, keeps the 2-point record (the
+  cal readout still says "2-point"), and the status line says the solved travel was kept. Test:
+  `tests/test_console.py::test_re_set_aim_keeps_the_two_point_solved_travel` (2026-10-30).
+
+- **"Aim at target (verify)" and "Set home = target" were silent on an unplaced head** (SET AIM
+  explains itself there), and with Jog live off (or Freeze on) the verify said "Aimed at …" although
+  only the sliders moved — an operator watching a beam that never moves concludes the capture is
+  wrong. Both buttons now refuse with the "not placed yet" message, and the verify appends "only the
+  sliders moved: tick Jog live …" / "Freeze is on …" while the real head is not following. Test:
+  `tests/test_console.py::test_aim_and_home_speak_when_the_head_is_unplaced_or_not_live` (2026-10-30).
+
+- **ADD 2ND POINT solved across a move** (found 2026-10-31 in the calibrate-flow audit): the two-point
+  solve took capture A's raw sliders (stored at SET AIM, against the head's position/facing and the
+  target's spot AT THAT MOMENT) and solved them against the CURRENT geometry, so moving or re-facing
+  the head — or moving the first target — between SET AIM and ADD 2ND POINT produced a silently wrong
+  direction/travel (the status even said "Solved ..."). `HeadCalibration` now records where capture A
+  was taken (`captured_origin`/`captured_facing_deg`/`captured_target_point`, round-tripped in the rig
+  file), and ADD 2ND POINT refuses with "SET AIM again on <target> first" when any of them changed.
+  Files from before the record have no capture geometry and are let through as before. Nothing is
+  re-solved. Tests: `tests/test_console.py::test_add_2nd_point_refuses_after_the_head_moved`,
+  `::test_add_2nd_point_refuses_after_the_first_target_moved`,
+  `tests/test_rig.py::test_calibration_remembers_where_capture_a_was_taken_and_old_files_load`
+  (2026-10-31).
+
+- **Moving a head with only a motion box was silent**: the move/re-face warning fired only for a SET AIM
+  capture (`VenueTab._captured_warning`), but a motion box is captured the same way — the beam jogged onto
+  the venue's edges from the OLD spot — and keeps clamping every scene to the old edges after a move. The
+  warning now also names the motion box (re-add its bound points if the beam hits the wrong edges, or
+  Clear box); the box is kept, nothing is re-solved. Test:
+  `tests/test_console.py::test_moving_a_head_with_only_a_motion_box_warns_the_box_is_stale` (2026-11-01).
 
 - **Dragging several heads at once moved a captured one silently**: Ctrl+click selects several bodies and
   one drag moves them all, but the "aim was captured at its old position" warning only checked the head

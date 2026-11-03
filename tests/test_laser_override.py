@@ -1,4 +1,4 @@
-"""AEPI rig's latched laser override looks (2026-10-31): engines/laser_fan.py + rig.laser_overrides."""
+"""A rig's latched laser override looks (2026-10-31): engines/laser_fan.py + rig.laser_overrides."""
 from __future__ import annotations
 
 import json
@@ -13,6 +13,20 @@ from livereact.fixtures.profiles import Laser
 from livereact.fixtures.rig import RigError, load_rig, rig_to_dict
 from livereact.merge.merge import ManualParams
 
+def _override_rig_path() -> str:
+    """The Junior Crib fan rig plus the three latched looks -- written once per session, so the test does not
+    depend on a personal rig file being in the repo."""
+    import pathlib
+    import tempfile
+    path = pathlib.Path(tempfile.gettempdir()) / "livereact_test_override_rig.json"
+    data = json.load(open("rigs/junior_crib_fan.json"))
+    data["laser_overrides"] = ["Rainbow", "Green", "White"]
+    path.write_text(json.dumps(data))
+    return str(path)
+
+
+OVERRIDE_RIG = _override_rig_path()
+
 BPM = 120.0
 BAR_S = 4 * 60.0 / BPM
 
@@ -25,7 +39,7 @@ def _snap(**kw) -> ShowSnapshot:
     return ShowSnapshot(**base)
 
 
-def _engine(rig_path: str = "rigs/aepi.json"):
+def _engine(rig_path: str = OVERRIDE_RIG):
     clock, manual = FakeClock(), ManualParams()
     return LaserFanEngine(clock, manual=manual), clock, load_rig(rig_path), manual
 
@@ -44,8 +58,8 @@ def _drop(eng, clock, rig, bar: int = 12):
     return eng.tick(_snap(bucket="drop", bar=bar, drop_start_bar=bar), rig)
 
 
-def test_only_the_aepi_rig_offers_the_overrides():
-    assert load_rig("rigs/aepi.json").laser_overrides == ("Rainbow", "Green", "White")
+def test_only_a_rig_listing_them_offers_the_overrides():
+    assert load_rig(OVERRIDE_RIG).laser_overrides == ("Rainbow", "Green", "White")
     assert load_rig("rigs/junior_crib_fan.json").laser_overrides == ()
 
 
@@ -100,8 +114,8 @@ def test_a_rig_without_the_key_ignores_stale_override_state():
 
 
 def test_rig_validation_and_round_trip(tmp_path):
-    data = json.load(open("rigs/aepi.json"))
-    assert rig_to_dict(load_rig("rigs/aepi.json"))["laser_overrides"] == ["Rainbow", "Green", "White"]
+    data = json.load(open(OVERRIDE_RIG))
+    assert rig_to_dict(load_rig(OVERRIDE_RIG))["laser_overrides"] == ["Rainbow", "Green", "White"]
     for bad in ({"laser_overrides": ["Purple"]}, {"laser_profile": "show"}):
         p = tmp_path / "r.json"
         p.write_text(json.dumps({**data, **bad}))

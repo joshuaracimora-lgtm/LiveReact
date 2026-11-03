@@ -102,6 +102,14 @@ class HeadCalibration:
     target2: str | None = None     # the second capture, kept so a re-solve can show it
     pan01_2: float | None = None
     tilt01_2: float | None = None
+    # Where capture A (SET AIM) was taken (2026-10-31): the head's position
+    # and facing, and the target's point at that moment. ADD 2ND POINT refuses
+    # when any of them has since changed -- two captures taken against
+    # different geometries solve a nonsense direction/travel. None = a file
+    # from before this was recorded; nothing can be checked then.
+    captured_origin: Point3 | None = None
+    captured_facing_deg: float | None = None
+    captured_target_point: Point3 | None = None
 
     def ranges(self, pan_range_deg: float, tilt_range_deg: float) -> tuple[float, float]:
         """The travel to use: the solved values when a two-point capture
@@ -164,6 +172,9 @@ def calibrate_from_capture(origin: Point3, facing_deg: float, target: Point3,
         target=target_name or "captured",
         pan01=pan01,
         tilt01=tilt01,
+        captured_origin=origin,
+        captured_facing_deg=facing_deg,
+        captured_target_point=target,
     )
 
 
@@ -213,6 +224,9 @@ def calibrate_from_two_captures(origin: Point3, facing_deg: float,
         pan_range_deg=pan_range, tilt_range_deg=tilt_range,
         target2=target_b_name or "captured-2",
         pan01_2=pan_b, tilt01_2=tilt_b,
+        captured_origin=origin,
+        captured_facing_deg=facing_deg,
+        captured_target_point=target_a,
     )
 
 

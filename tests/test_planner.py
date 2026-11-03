@@ -23,9 +23,9 @@ HIGH = _table([(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (81, 3, "down"
                (145, 5, "chorus"), (177, 5, "chorus"), (209, 6, "outro")], end=241)
 
 
-def _wave(bpm=120.0, loud_beats=(145, 209), quiet_level=4, loud_level=28):
+def _wave(bpm=120.0, loud_beats=(145, 209), quiet_level=4, loud_level=28, n_beats=241):
     # 120 bpm -> 0.5 s/beat -> 75 entries per beat; beat 1 at t=0
-    n = int(241 * 0.5 * 150)
+    n = int(n_beats * 0.5 * 150)
     heights = []
     for i in range(n):
         beat = 1 + i / 75.0
@@ -45,7 +45,10 @@ def test_one_scheme_and_repeated_hook():
     assert len(drops) == 2 and all(d.scene == plan.hook_scene for d in drops) and all(d.is_hook for d in drops)
     assert plan.hook_scene == "Drop Strobe Stab" and plan.palette_seed == 7
     assert {s.scene for s in plan.sections if s.bucket == "break"} == {"Deep Wash Breathe"}
-    assert plan.sections[1].scene == "Rising Tide" and plan.sections[-1].scene == "Outro Fade Wash"
+    # HIGH's builds are 8 bars: under PLAN_BUILD_LOOK_MIN_BEATS they keep the preceding look
+    # (TIME-02 look continuity, 2026-11-01); a longer build shows the pool's build look --
+    # see test_a_short_build_keeps_the_preceding_look_but_never_a_drops.
+    assert plan.sections[1].scene == "Deep Wash Breathe" and plan.sections[-1].scene == "Outro Fade Wash"
 
 
 def test_loudest_drop_run_is_the_only_big_moment():
@@ -260,3 +263,79 @@ def test_only_drops_near_the_loudest_get_a_roll_lead_in_or_a_strobe_before_them(
     rolls = [s.beat for s in plan2.sections if s.roll]
     assert len(rolls) == 2 and rolls[0] in (33, 49) and rolls[1] == 177   # 49 = the crescendo half-roll (the loud level starts at 65)
     assert ROLL_STROBE_MIN_SHARE == 0.9
+
+
+def test_no_roll_lead_in_when_the_build_would_get_too_short_or_rolls_are_off():
+    # D-33 (reconciled 2026-11-02): a short build gives up build beats, not its roll -- a 12-bar build keeps
+    # 4 bars of build and an 8-bar roll; only a build no longer than the roll itself stays whole.
+    short = [(1, 1, "intro"), (17, 2, "up"), (65, 5, "chorus"), (129, 6, "outro")]
+    plan = plan_track(_table(short, end=161), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat, s.roll) for s in plan.sections] == [
+        ("intro", 1, False), ("build", 17, False), ("drop", 33, True), ("drop", 65, False), ("outro", 129, False)]
+    whole = [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (113, 6, "outro")]       # an 8-bar build
+    plan = plan_track(_table(whole, end=145), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat) for s in plan.sections] == [("intro", 1), ("build", 17), ("drop", 49), ("outro", 113)]
+    off = plan_track(_table(ROLL, end=193), track_id=1, bpm=120.0, rules=PlanRules(roll_beats=0))
+    assert [(s.kind, s.beat) for s in off.sections] == [("intro", 1), ("build", 17), ("drop", 97), ("outro", 161)]
+    assert not any(s.roll for s in off.sections)
+
+
+def test_a_short_build_with_a_crescendo_still_gets_its_4_bar_roll():
+    # Ear evidence (night report 2026-10-29): snare rolls sit 4 bars into 8-bar builds, which the
+    # 8-bar-roll floor (PLAN_ROLL_MIN_BUILD_BEATS, a TIME-02 guard sized for 8-bar rolls) blocked.
+    # A 4-bar crescendo roll only needs the planner's own MIN_BUILD_BEATS of build left.
+    short = [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus"), (113, 6, "outro")]
+    n = int(145 * 0.5 * 150)
+    heights = []
+    for i in range(n):
+        beat = 1 + i / 75.0
+        if 49 <= beat < 113:
+            h = 28                      # the chorus
+        elif 33 <= beat < 45:
+            h = 24                      # the roll crescendos over the last 4 bars (window beats 33-45)
+        else:
+            h = 8
+        heights.append(h)
+    z = tuple(0 for _ in heights)
+    wave = ColorWaveform(heights=tuple(heights), reds=z, greens=z, blues=z)
+    plan = plan_track(_table(short, end=145), track_id=1, bpm=120.0, waveform=wave)
+    assert [(s.kind, s.beat, s.end_beat, s.roll) for s in plan.sections] == [
+        ("intro", 1, 17, False), ("build", 17, 33, False), ("drop", 33, 49, True),
+        ("drop", 49, 113, False), ("outro", 113, 145, False)]
+    # the 4-bar leftover build cannot hold its own look for TIME-02's 8 bars: it keeps the intro's
+    assert plan.sections[1].scene == plan.sections[0].scene
+    # without the crescendo the floor still blocks the split (an 8-bar roll would leave 0 bars)
+    flat = plan_track(_table(short, end=145), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat) for s in flat.sections] == [
+        ("intro", 1), ("build", 17), ("drop", 49), ("outro", 113)]
+
+
+def test_a_short_build_keeps_the_preceding_look_but_never_a_drops():
+    # PLAN_BUILD_LOOK_MIN_BEATS (2026-11-01): a build under 10 bars shows its look under TIME-02's
+    # 8-bar hold (the phrase engine's look change lags ~2 bars; the pre-drop end is a snap), so it
+    # keeps the preceding section's look. The bucket still commits BUILD (count-in, strobe).
+    spec = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (129, 2, "up"), (145, 5, "chorus"),
+            (209, 6, "outro")]
+    plan = plan_track(_table(spec, end=241), track_id=1, bpm=120.0)
+    kinds = [(s.kind, s.beat, s.end_beat) for s in plan.sections]
+    assert kinds == [("intro", 1, 33), ("drop", 33, 97), ("breakdown", 97, 129), ("build", 129, 145),
+                     ("drop", 145, 209), ("outro", 209, 241)]
+    build = plan.sections[3]
+    assert build.scene == plan.sections[2].scene == "Deep Wash Breathe"   # the breakdown's look
+    assert build.bucket == "build" and build.strobe_allowed                # only the look is held
+    # after a drop the build keeps its own look: a drop's look never carries past the drop (D-23)
+    spec2 = [(1, 1, "intro"), (33, 5, "chorus"), (97, 2, "up"), (113, 5, "chorus"), (177, 6, "outro")]
+    plan2 = plan_track(_table(spec2, end=209), track_id=1, bpm=120.0)
+    assert [(s.kind, s.beat) for s in plan2.sections] == [
+        ("intro", 1), ("drop", 33), ("build", 97), ("drop", 113), ("outro", 177)]
+    assert plan2.sections[2].scene == "Rising Tide"
+    # a build with room for the look hold keeps its own look too
+    # (18 bars: the 8-bar roll lead-in leaves a 10-bar build, D-33)
+    spec3 = [(1, 1, "intro"), (33, 5, "chorus"), (97, 3, "down"), (129, 2, "up"), (201, 5, "chorus"),
+             (265, 6, "outro")]
+    plan3 = plan_track(_table(spec3, end=297), track_id=1, bpm=120.0)
+    build3 = next(s for s in plan3.sections if s.kind == "build")
+    assert build3.length == 40 and build3.scene == "Rising Tide"
+    # 0 turns it off
+    off = plan_track(_table(spec, end=241), track_id=1, bpm=120.0, rules=PlanRules(build_look_min_beats=0))
+    assert next(s for s in off.sections if s.kind == "build").scene == "Rising Tide"

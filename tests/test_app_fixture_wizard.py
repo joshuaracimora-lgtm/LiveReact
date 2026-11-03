@@ -159,7 +159,10 @@ def test_library_browser_lists_builtin_and_user(qapp):
             for r in range(b.table.rowCount())}
     assert rows["Par 3"][4] == "yours" and rows["Par 3"][5] == "no"
     assert rows["RGB Par 4ch"][4] == "built-in"
-    assert len(rows) == 5
+    from livereact.fixtures import definition
+    from pathlib import Path
+    builtins = len(list((Path(definition.__file__).parent / "builtin").glob("*.json")))
+    assert len(rows) == builtins + 1          # every builtin + the one user fixture
 
 
 def test_browser_opens_the_wizard_and_reloads_after_add(qapp):

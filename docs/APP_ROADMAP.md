@@ -83,9 +83,15 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-45. **P2 delete a fixture from the library.** "Delete…" in `ui/fixture_library.py` for user and imported
-    definitions (built-ins cannot be deleted), behind a confirm box that names the rigs in the user
-    folder that still use it; `fixtures/library.py` gets the delete function. Tests first.
+49. **P3 library filter box.** A search field above `ui/fixture_library.py`'s table that filters rows as
+    the user types, matching manufacturer, model, id or category case-insensitively; clearing it shows
+    everything, and the details pane / buttons keep following the (filtered) selection. Matters once a
+    library holds more than a screenful of imported fixtures. Tests first.
+
+55. **P2 the patch view marks duplicate slot IDs.** `ui/rig_config.py`: two rows with the same
+    Slot ID silently collide in `_collect()` (the later row wins the saved slot's geometry overlay)
+    — mark them inline like address overlaps and refuse to save, with the duplicated id on the
+    status line. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -276,7 +282,60 @@ Hard rules for every item, whoever does it:
   does) is the one table: `_install_shortcuts()` binds exactly these (same keys and targets as before) and
   Help -> "Keyboard shortcuts…" lists them. Tests: `tests/test_app_shortcuts_help.py` (installed keys equal
   the table, B and L still drive blackout and the arm switch, the dialog lists every key).
+- **52. P2 Rig menu lists recent rigs** (2026-10-30). The console's Rig menu shows the recent rigs
+  (missing files hidden, the demo rig marked) above "Rig manager…", rebuilt on `aboutToShow`; choosing
+  one validates the file, bumps it in the recent list and goes through the manager's `_rig_chosen` path
+  (switch live when the app can, else "restart to apply"). Tests: `tests/test_app_rig_menu.py`.
+- **51. P2 delete a saved event** (2026-10-30). `presets.delete_event(name)` (slug lookup, True only when
+  a file was removed) and a "Delete event" button beside Load in `ui/override_panel.py`, behind a confirm
+  box (`confirm` injectable for tests); the events combo reloads and both buttons grey out when nothing is
+  saved. Tests: `tests/test_app_event_delete.py`.
+- **50. P2 rename or delete a user rig** (2026-10-30). `ui/rig_manager.py`: "Rename…" / "Delete…" under
+  the recent list, enabled only for files inside the user's rigs folder (`in_user_rigs_folder`; the demo
+  rig and files elsewhere, e.g. a source checkout's `rigs/`, are refused). `rename_rig_file` renames the
+  file, sets the JSON `name` and refuses bad names / existing targets; the recent entry keeps its place.
+  `delete_rig_file` behind a confirm box, the recent entry forgotten. Dialogs (`ask_text`, `confirm`) are
+  injectable for tests. Tests: `tests/test_app_rig_rename_delete.py`.
 - **44. P6 Help -> Open my LiveReact folder** (2026-10-28). Help -> "Open my LiveReact folder…" opens
   `userdata.paths().root` in Explorer / Finder (`ConsoleWindow.open_url`, `QDesktopServices.openUrl` by
   default, a fake in tests); when that fails the status bar says where the folder is.
   Tests: `tests/test_app_data_folder.py`; `test_app_help_menu.py` now expects the fourth Help entry.
+- **45. P2 delete a fixture from the library** (2026-10-29). "Delete…" in `ui/fixture_library.py` removes
+  the selected user/imported definition behind a confirm box (injectable, a QMessageBox by default) that
+  names the user-folder rigs still referencing the id and warns which keep loading (own snapshot) and
+  which will not; the button is disabled for built-ins and empty selections. `fixtures/library.py` gets
+  `delete_user_definition()` (ValueError for a built-in id, KeyError when no user file) and `rigs_using()`
+  (unreadable rig files skipped). Tests: `tests/test_app_fixture_delete.py`.
+- **46. P2 duplicate a fixture definition** (2026-10-29). "Duplicate…" in `ui/fixture_library.py` copies
+  the selected definition — built-ins too, that is how a user adapts a model they cannot edit or delete —
+  to a new user id (prompt pre-filled `<id>_copy`, injectable; refusals go to an injectable error box).
+  `fixtures/library.py` `copy_definition()`: always saved **unconfirmed** (so the copy goes through the
+  channel-test screen before a laser built from it may output); a builtin's copy becomes `kind="user"`,
+  an import keeps its provenance (`ofl_key`, attribution); taken or invalid target ids are ValueError.
+  Tests: `tests/test_app_fixture_duplicate.py`.
+- **47. P2 export / import a fixture definition file** (2026-10-29). "Export…" writes the selected
+  definition's JSON wherever the user picks; "Import file…" validates a picked `.json` through
+  `fixtures/definition.py` and saves it to the user folder always **unconfirmed** (any confirmation
+  happened on someone else's hardware; a built-in id is refused), asking before replacing an existing
+  user definition. File dialogs are injectable like the other prompts. `fixtures/library.py` gains
+  `export_definition()` / `import_definition_file()`, which round-trip.
+  Tests: `tests/test_app_fixture_export.py`.
+- **48. P3 fixture details pane** (2026-10-29). Selecting a row in the library browser shows the
+  definition read-only beside the table (a splitter): `definition_summary()` lists per mode each
+  channel's 1-based number, function, fine pairing and capability ranges with labels, plus source /
+  ofl key / license / attribution and the confirmed date (or "not confirmed"). Cleared when nothing
+  is selected. Tests: `tests/test_app_fixture_details.py`.
+- **53. P6 the console remembers its window** (2026-11-01). `ConsoleWindow(app, settings=...)` saves
+  size/position and the selected tab (by name) into `settings.extra["console_window"]` on close and
+  restores them at the next start; a position off every screen (a monitor unplugged since last run)
+  comes back clamped onto the primary screen; an unknown tab name or corrupt entry reads as the
+  default. Only the shipped console persists: `run_console` builds the window through the new
+  `make_console(app)` (which passes `Settings.load()`), so a bare `ConsoleWindow(app)` — every older
+  test, the UI gate checks — never reads or writes the user's file.
+  Tests: `tests/test_app_console_window.py`.
+- **54. P2 the patch view's type picker is searchable** (2026-11-01). Every row's type combo in
+  `ui/rig_config.py` is editable (insert policy NoInsert, so free text can never become a type) with
+  a case-insensitive contains-match completer over the combo's own model: a few letters of the id,
+  manufacturer or model jump to the definition, picking a completion selects that item, junk text
+  leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
+  searchable at once. Tests: `tests/test_app_type_picker.py`.

@@ -722,9 +722,6 @@ def test_an_unplaced_head_says_so_in_the_panel(qapp):
     tab.b_set_aim.click()
     assert not mh.calibration.captured
     assert "not placed" in tab.status.text() and "drawn" in tab.status.text()
-    tab.sb_z.setValue(9.0)                      # typing a value places it
-    assert mh.position is not None
-    assert "not placed" not in tab.grp_place.title()
 
 
 def test_reset_positions_restores_each_fixtures_side(qapp):
@@ -974,3 +971,194 @@ def test_show_tab_fits_a_laptop_screen(qapp):
             if isinstance(child, QtWidgets.QScrollBar):
                 continue
             assert child.focusPolicy() == QtCore.Qt.FocusPolicy.StrongFocus, child
+
+
+def test_re_set_aim_keeps_the_two_point_solved_travel(qapp):
+    """UI_BUGS: SET AIM after a two-point capture rebuilt the calibration from
+    the profile's placeholder ranges, silently throwing away the solved
+    pan/tilt travel -- the touch-up the move/target warnings tell the operator
+    to do ("SET AIM again if the beam misses") un-solved the head."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(12.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    solved = (mh.calibration.pan_range_deg, mh.calibration.tilt_range_deg)
+    assert solved[0] is not None and solved[1] is not None
+    # dj_booth moved a little; the operator re-captures point 1, as the
+    # target-moved warning says to
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.s_pan.setValue(int(0.40 * 65535)); tab.s_tilt.setValue(int(0.62 * 65535))
+    tab.b_set_aim.click()
+    c = mh.calibration
+    assert c.target == "dj_booth" and c.pan01 == pytest.approx(0.40, abs=1e-3)
+    assert (c.pan_range_deg, c.tilt_range_deg) == pytest.approx(solved)
+    assert c.target2 == "back_wall"          # the cal label keeps saying 2-point
+    assert "2-point" in tab.l_cal.text()
+
+
+def test_aim_and_home_speak_when_the_head_is_unplaced_or_not_live(qapp):
+    """UI_BUGS: 'Aim at target (verify)' and 'Set home = target' did nothing
+    silently on an unplaced head, and with Jog live off 'Aimed at ...' moved
+    only the sliders -- the operator watching a stale beam concludes the
+    capture is wrong."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    mh = app.rig.fixture("mh_l")
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    assert mh.position is None
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.status.setText("")
+    tab.b_aim.click()
+    assert "not placed" in tab.status.text()
+    tab.status.setText("")
+    tab.b_home.click()
+    assert "not placed" in tab.status.text()
+    # place + capture, then verify with Jog live off: say the head didn't move
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(12.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.b_set_aim.click()
+    tab.cb_jog.setChecked(False)
+    tab.cb_target.setCurrentText("dancefloor_centre")
+    tab.b_aim.click()
+    assert "Aimed at dancefloor_centre" in tab.status.text()
+    assert "Jog live" in tab.status.text()
+    tab.cb_jog.setChecked(True)
+    tab.b_aim.click()
+    assert "Aimed at dancefloor_centre" in tab.status.text()
+    assert "Jog live" not in tab.status.text()
+    tab.sb_z.setValue(9.0)                      # typing a value places it
+    assert mh.position is not None
+    assert "not placed" not in tab.grp_place.title()
+
+
+def test_every_spot_on_one_side_puts_move_03_on_the_status_line(qapp):
+    """MOVE-03 (LIGHTING_BIBLE §6.2): with every placed fixture of a role on one
+    side of centre a mirrored effect runs in unison. The rig logged it; the
+    operator dragging heads on the Venue tab never saw it."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_r"))
+    tab.sb_x.setValue(25.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    assert "MOVE-03" not in tab.status.text()     # one spot placed: nothing to mirror yet
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    tab.sb_x.setValue(20.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    assert "MOVE-03" in tab.status.text() and "unison" in tab.status.text()
+    tab.sb_y.setValue(3.0)                        # an unrelated edit keeps the standing warning
+    assert "MOVE-03" in tab.status.text()
+    tab.sb_x.setValue(5.0)                        # back across the centre line: it clears
+    assert "MOVE-03" not in tab.status.text()
+
+
+def test_moving_a_head_with_only_a_motion_box_warns_the_box_is_stale(qapp):
+    """UI_BUGS (calibration): the move warning only fired for a SET AIM
+    capture. A head with just a motion box -- captured by jogging the beam
+    onto the venue's edges from the OLD spot -- moved silently, yet the box
+    still clamps every scene to the old edges."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(9.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.3 * 65535)); tab.b_bound_add.click()
+    tab.s_pan.setValue(int(0.7 * 65535)); tab.b_bound_add.click()
+    assert mh.bounds is not None and not mh.calibration.captured
+    tab.sb_x.setValue(7.0)
+    assert "motion box" in tab.status.text() and mh.label in tab.status.text()
+    # the remedy for a stale box is re-jogging its bound points, not SET AIM
+    assert "SET AIM" not in tab.status.text()
+    tab.sb_facing.setValue(20.0)             # re-facing moves the box's edges too
+    assert "motion box" in tab.status.text()
+    tab.b_bound_clear.click()
+    tab.sb_x.setValue(9.0)                   # no box any more: nothing to warn about
+    assert "motion box" not in tab.status.text()
+
+
+def test_add_2nd_point_refuses_after_the_head_moved(qapp):
+    """UI_BUGS: ADD 2ND POINT after a move solved capture A's raw sliders
+    (taken at the OLD position/facing) against the NEW geometry: direction and
+    travel came out silently wrong. It must refuse until SET AIM is redone."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    assert mh.calibration.captured
+    tab.sb_x.setValue(9.0)                       # the head moves after SET AIM
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None        # refused: nothing was solved
+    assert mh.calibration.pan_range_deg is None and mh.calibration.tilt_range_deg is None
+    assert "SET AIM" in tab.status.text() and "moved" in tab.status.text()
+    # a facing edit alone is also a move of the geometry the capture used
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.b_set_aim.click()                        # re-capture at the new spot
+    tab.sb_facing.setValue(20.0)
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None and "moved" in tab.status.text()
+    # SET AIM again at the current geometry unblocks the two-point solve
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.b_set_aim.click()
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 == "back_wall"
+
+
+def test_add_2nd_point_refuses_after_the_first_target_moved(qapp):
+    """Same staleness the other way round: capture A's raw sliders point at
+    where its target WAS; a two-point solve against the target's new spot is
+    just as wrong as one after the head moved."""
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    tab = win.venue_tab
+    tab.cb_fixture.setCurrentIndex(tab.cb_fixture.findData("mh_l"))
+    mh = app.rig.fixture("mh_l")
+    tab.sb_x.setValue(5.0); tab.sb_y.setValue(2.0); tab.sb_z.setValue(1.0)
+    tab.cb_jog.setChecked(True)
+    tab.s_pan.setValue(int(0.41 * 65535)); tab.s_tilt.setValue(int(0.63 * 65535))
+    tab.cb_target.setCurrentText("dj_booth")
+    tab.b_set_aim.click()
+    assert mh.calibration.captured
+    bx, _by, _bz = tab._target_boxes["dj_booth"]
+    bx.setValue(bx.value() + 4.0)                # dj_booth moves after SET AIM
+    tab.cb_target.setCurrentText("back_wall")
+    tab.s_pan.setValue(int(0.55 * 65535)); tab.s_tilt.setValue(int(0.45 * 65535))
+    tab.b_set_aim2.click()
+    assert mh.calibration.target2 is None        # refused: nothing was solved
+    assert "dj_booth" in tab.status.text() and "SET AIM" in tab.status.text()

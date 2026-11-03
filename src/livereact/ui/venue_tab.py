@@ -47,6 +47,7 @@ from ..fixtures.geometry import (
     calibrate_from_two_captures,
     ft_to_m,
     m_to_ft,
+    wrap_deg,
 )
 from ..fixtures.profiles import Laser, MotionBounds, MovingHead, _to16
 from ..fixtures.rig import Rig, RigError, save_rig
@@ -469,11 +470,20 @@ class VenueTab(QtWidgets.QWidget):
         """A SET AIM capture is solved against the position/facing it was
         taken at (geometry.calibrate_from_capture); after a move it is kept
         as is -- right if the head was re-hung the same way, wrong if the old
-        numbers were a typo. Say so; don't guess."""
-        if not isinstance(fx, MovingHead) or not fx.calibration.captured:
+        numbers were a typo. Say so; don't guess. Same for a motion box: its
+        bound points were jogged onto the venue's edges from the old spot and
+        it still clamps every scene."""
+        if not isinstance(fx, MovingHead):
             return ""
-        return (f"{fx.label}'s aim was captured at its old position/facing: check it with "
-                "Aim at target, and SET AIM again if the beam misses.")
+        parts = []
+        if fx.calibration.captured:
+            parts.append(f"{fx.label}'s aim was captured at its old position/facing: check it with "
+                         "Aim at target, and SET AIM again if the beam misses.")
+        if fx.bounds is not None:
+            parts.append(f"{fx.label}'s motion box was jogged onto the edges from its old "
+                         "position/facing and still clamps every scene: re-add its bound points "
+                         "if the beam hits the wrong edges, or Clear box.")
+        return " ".join(parts)
 
     def _update_place_title(self) -> None:
         fx = self._fx()
@@ -599,12 +609,42 @@ class VenueTab(QtWidgets.QWidget):
             return
         name, target = tp
         pan01, tilt01 = self._pan_tilt01()
-        fx.calibration = calibrate_from_capture(
-            fx.position, fx.facing_deg, target, pan01, tilt01, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG,
+        # a re-capture only re-fixes the offsets: the pan/tilt travel a
+        # two-point capture solved is a property of the unit as hung, so it
+        # is kept (and used to solve the new offsets) instead of silently
+        # falling back to the profile's placeholder ranges
+        old = fx.calibration
+        pan_range, tilt_range = old.ranges(fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
+        cal = calibrate_from_capture(
+            fx.position, fx.facing_deg, target, pan01, tilt01, pan_range, tilt_range,
             invert_pan=self.cb_invert_pan.isChecked(), invert_tilt=self.cb_invert_tilt.isChecked(),
             target_name=name)
+        solved = old.pan_range_deg is not None or old.tilt_range_deg is not None
+        if solved:
+            cal = dataclasses.replace(cal, pan_range_deg=old.pan_range_deg,
+                                      tilt_range_deg=old.tilt_range_deg, target2=old.target2,
+                                      pan01_2=old.pan01_2, tilt01_2=old.tilt01_2)
+        fx.calibration = cal
         self._update_cal_label()
-        self._mark_dirty(f"Captured {fx.label} on {name}. Now 'Aim at target' with another target to verify.")
+        self._mark_dirty(f"Captured {fx.label} on {name}."
+                         + ("  (Kept the 2-point solved travel.)" if solved else "")
+                         + " Now 'Aim at target' with another target to verify.")
+
+    def _capture_a_moved(self, fx, c: HeadCalibration) -> str:
+        """What moved since capture A was taken, or "". A capture from a file
+        that predates the record (captured_origin is None) can't be checked
+        and is allowed through, as before."""
+        def differ(a: Point3 | None, b: Point3 | None) -> bool:
+            return (a is not None and b is not None
+                    and max(abs(a.x - b.x), abs(a.y - b.y), abs(a.z - b.z)) > 1e-3)
+        if differ(c.captured_origin, fx.position):
+            return fx.label
+        if (c.captured_facing_deg is not None
+                and abs(wrap_deg(fx.facing_deg - c.captured_facing_deg)) > 0.05):
+            return f"{fx.label} (re-faced)"
+        if differ(c.captured_target_point, self.rig.venue.targets.get(c.target)):
+            return f"Target {c.target}"
+        return ""
 
     def _set_aim_second(self) -> None:
         """Second capture: the head is now on a DIFFERENT target. Together
@@ -623,6 +663,12 @@ class VenueTab(QtWidgets.QWidget):
         c: HeadCalibration = fx.calibration
         if not c.captured or c.pan01 is None or c.tilt01 is None or c.target not in self.rig.venue.targets:
             self.status.setText("SET AIM on the first target before adding a second point.")
+            return
+        stale = self._capture_a_moved(fx, c)
+        if stale:
+            self.status.setText(
+                f"{stale} moved since SET AIM: two captures from different geometries solve the "
+                f"wrong direction/travel. SET AIM again on {c.target}, then ADD 2ND POINT.")
             return
         name_b, target_b = tp
         if name_b == c.target:
@@ -652,19 +698,33 @@ class VenueTab(QtWidgets.QWidget):
     def _aim_at_target(self) -> None:
         fx = self._fx()
         tp = self._target_point()
-        if not isinstance(fx, MovingHead) or tp is None or fx.position is None:
+        if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if fx.position is None:
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
         self.s_pan.setValue(int(round(pan01 * 65535)))
         self.s_tilt.setValue(int(round(tilt01 * 65535)))
+        # say when only the sliders moved: an operator verifying a capture
+        # against a beam that never moves concludes the capture is wrong
+        if not self.cb_jog.isChecked():
+            note = "  — only the sliders moved: tick Jog live to move the real head"
+        elif self.is_frozen():
+            note = "  — Freeze is on: unfreeze (F) to see the real head move"
+        else:
+            note = ""
         self.status.setText(f"Aimed at {name}: pan {pan01:.3f} tilt {tilt01:.3f}"
-                            + ("" if ok else "  — OUT OF RANGE, clamped"))
+                            + ("" if ok else "  — OUT OF RANGE, clamped") + note)
 
     def _set_home(self) -> None:
         fx = self._fx()
         tp = self._target_point()
-        if not isinstance(fx, MovingHead) or tp is None or fx.position is None:
+        if not isinstance(fx, MovingHead) or tp is None:
+            return
+        if fx.position is None:
+            self.status.setText(_NOT_PLACED.format(fx.label))
             return
         name, target = tp
         pan01, tilt01, ok = aim(fx.position, fx.facing_deg, target, fx.calibration, fx.PAN_RANGE_DEG, fx.TILT_RANGE_DEG)
@@ -770,9 +830,13 @@ class VenueTab(QtWidgets.QWidget):
     # ------------------------------------------------------------------ save
     def _mark_dirty(self, note: str = "") -> None:
         """Flag unsaved edits; ``note`` is the action's own message, kept in
-        front (it used to be overwritten the moment it was set)."""
-        self.status.setText((note + "  ·  " if note else "")
-                            + "Unsaved changes — Save rig… writes them to the rig file.")
+        front (it used to be overwritten the moment it was set). The rig's
+        standing MOVE-03 warnings (every placed fixture of a role on one side
+        of centre -> mirrored effects run in unison) follow it: the operator
+        who dragged the heads there is on this tab, not reading the log."""
+        parts = [note, *getattr(self.rig, "mirror_warnings", ()),
+                 "Unsaved changes — Save rig… writes them to the rig file."]
+        self.status.setText("  ·  ".join(p for p in parts if p))
         self.status.setStyleSheet(f"color:{MUTED};")
 
     def _save(self) -> None:

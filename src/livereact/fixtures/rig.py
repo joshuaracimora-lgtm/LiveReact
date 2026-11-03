@@ -156,8 +156,12 @@ class Rig:
         side back. Called at load and by the Venue tab after every edit.
 
         MOVE-03: if two or more fixtures of one role sit on the same side of
-        centre, a mirrored effect can't mirror -- warn, don't guess."""
+        centre, a mirrored effect can't mirror -- warn, don't guess. Each
+        warning is also kept in ``mirror_warnings`` so the Venue tab can put
+        it on its status line (spec/conformance.md MOVE-03: detection only,
+        nothing is disabled)."""
         declared = getattr(self, "_declared_sides", {})
+        self.mirror_warnings: list[str] = []
         if self.venue is None or self.venue.width_m <= 0:
             for fx in self.fixtures:
                 fx.x_norm = None
@@ -184,11 +188,11 @@ class Rig:
                 continue
             signs = {(fx.x_norm > 0) - (fx.x_norm < 0) for fx in fxs}  # type: ignore[operator]
             if len(signs) == 1 and 0 not in signs:
-                log.warning(
-                    "MOVE-03: all %d '%s' fixtures sit on the same side of centre (%s); "
-                    "mirrored effects will run in unison",
-                    len(fxs), role, ", ".join(fx.label for fx in fxs),
-                )
+                msg = (f"MOVE-03: all {len(fxs)} '{role}' fixtures sit on the same side "
+                       f"of centre ({', '.join(fx.label for fx in fxs)}); "
+                       "mirrored effects will run in unison")
+                log.warning("%s", msg)
+                self.mirror_warnings.append(msg)
 
     # --- lookups ---
     def fixture(self, slot_id: str) -> Fixture:
@@ -378,6 +382,7 @@ def _rig_from_dict(data: dict) -> Rig:
             fx.dj_pan_tilt = _dj_pan_tilt(slot["dj_pan_tilt"], fx.label)  # type: ignore[attr-defined]
         if isinstance(fx, MovingHead) and isinstance(slot.get("calibration"), dict):
             c = slot["calibration"]
+            cap = c["captured_at"] if isinstance(c.get("captured_at"), dict) else {}
             fx.calibration = HeadCalibration(
                 pan_offset_deg=float(c.get("pan_offset_deg", 0.0)),
                 tilt_offset_deg=float(c.get("tilt_offset_deg", 0.0)),
@@ -391,6 +396,10 @@ def _rig_from_dict(data: dict) -> Rig:
                 target2=c.get("target2"),
                 pan01_2=float(c["pan01_2"]) if c.get("pan01_2") is not None else None,
                 tilt01_2=float(c["tilt01_2"]) if c.get("tilt01_2") is not None else None,
+                # where capture A was taken (2026-10-31); absent in older files
+                captured_origin=_point(cap["origin"]) if isinstance(cap.get("origin"), dict) else None,
+                captured_facing_deg=float(cap["facing_deg"]) if cap.get("facing_deg") is not None else None,
+                captured_target_point=_point(cap["target"]) if isinstance(cap.get("target"), dict) else None,
             )
         if isinstance(fx, Laser):
             if isinstance(slot.get("beam"), dict):
@@ -465,6 +474,12 @@ def slot_to_dict(fx: Fixture) -> dict:
                 "tilt_range_deg": round(c.tilt_range_deg, 2) if c.tilt_range_deg else None,
                 "target2": c.target2, "pan01_2": c.pan01_2, "tilt01_2": c.tilt01_2,
             })
+        if c.captured_origin is not None:   # where capture A was taken (2026-10-31)
+            slot["calibration"]["captured_at"] = {
+                "origin": _point_dict(c.captured_origin),
+                "facing_deg": round(c.captured_facing_deg, 2) if c.captured_facing_deg is not None else None,
+                "target": _point_dict(c.captured_target_point) if c.captured_target_point is not None else None,
+            }
     if isinstance(fx, Laser):
         slot["beam"] = {
             "tilt_deg": fx.beam_tilt_deg,

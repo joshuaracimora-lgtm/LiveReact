@@ -1,4 +1,4 @@
-"""inputs/audio.py dead-stream recovery (2026-11-02, AEPI post-mortem: the XDJ's capture stream died
+"""inputs/audio.py dead-stream recovery (2026-11-02, 2026-10-31 show post-mortem: the XDJ's capture stream died
 at 22:45 and the show ran deaf for 44 minutes)."""
 from __future__ import annotations
 

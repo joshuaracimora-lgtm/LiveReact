@@ -1,4 +1,4 @@
-"""``--preflight``: a pass/fail check of the real rig before a set (2026-11-02, AEPI post-mortem).
+"""``--preflight``: a pass/fail check of the real rig before a set (2026-11-02, 2026-10-31 show post-mortem).
 
 On 2026-10-31 the set went live with rekordbox holding the Pro DJ Link ports, which only showed up as
 an ERROR line in the log. This runs every check the show depends on, on THIS machine, and says in

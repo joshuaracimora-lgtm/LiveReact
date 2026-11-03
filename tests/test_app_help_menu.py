@@ -76,7 +76,7 @@ def test_first_run_again_shows_the_saved_choices_and_saves_only(qapp):
     from livereact.settings import Settings
     from livereact.ui.first_run import SETUP_KEY, FirstRunDialog
     s = Settings.load()
-    s.extra[SETUP_KEY] = {"output": "artnet", "audio_device": "Mic", "pdl_interface": "none",
+    s.extra[SETUP_KEY] = {"output": "enttec", "audio_device": "Mic", "pdl_interface": "none",
                           "start_with": "demo_rig"}
     s.onboarding_done = True
     s.save()
@@ -85,9 +85,9 @@ def test_first_run_again_shows_the_saved_choices_and_saves_only(qapp):
     dlg = win.open_first_run(audio_provider=lambda: ["Mic"], interface_provider=lambda: ["Ethernet"])
     _OPEN.append(dlg)
     assert isinstance(dlg, FirstRunDialog)
-    assert dlg.choices()["output"] == "artnet" and dlg.choices()["audio_device"] == "Mic"
+    assert dlg.choices()["output"] == "enttec" and dlg.choices()["audio_device"] == "Mic"
     dlg.output_buttons["sacn"].setChecked(True)
     dlg.finish()
     assert Settings.load().extra[SETUP_KEY]["output"] == "sacn"
     assert app.config is before                      # nothing applied live (item 40)
-    assert "next start" in win.statusBar().currentMessage().lower()
+    assert "next time" in win.statusBar().currentMessage().lower()

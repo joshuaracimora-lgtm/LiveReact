@@ -24,6 +24,7 @@ import logging
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core.messages import BeatMessage
+from ..settings import Settings
 from ..engines.color import band_levels
 from ..engines.laser_feature import MOOD_OFF, laser_color_name
 from ..engines.laser_show import MODE_FOLLOW, MODE_HOLD, MODE_ROTATE, look_names
@@ -162,9 +163,12 @@ def _fits_the_screen(wanted: QtCore.QSize, margin: int = 48) -> QtCore.QSize:
 
 
 class ConsoleWindow(QtWidgets.QMainWindow):
-    def __init__(self, app) -> None:
+    def __init__(self, app, settings: Settings | None = None) -> None:
         super().__init__()
         self.app = app
+        # Window memory (item 53): only the shipped console (make_console) passes a
+        # Settings, so a bare ConsoleWindow(app) never reads or writes the user's file.
+        self.settings = settings
         self.tap = TapTempo()
         self._tap_beat = 0
         self.setWindowTitle("LiveReact — Operator Console")
@@ -213,7 +217,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         tabs.addTab(self.rig_config, "Rig Config")
         tabs.currentChanged.connect(self._tab_changed)
         self.tabs = tabs
-        # Health banner (ui/health.py, 2026-11-02 AEPI post-mortem): what is broken, in words, above
+        # Health banner (ui/health.py, 2026-11-02 show post-mortem): what is broken, in words, above
         # everything -- hidden while all is well.
         self.l_health_banner = QtWidgets.QLabel("")
         self.l_health_banner.setWordWrap(True)
@@ -228,9 +232,11 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         cv.addWidget(tabs, 1)
         self.setCentralWidget(central)
         # Rig menu (2026-10-28, ui/rig_manager.py): pick the rig instead of --rig <path>.
+        # Recent rigs sit above "Rig manager…" (item 52), rebuilt each time the menu opens.
         self.rig_manager = None
-        rig_menu = self.menuBar().addMenu("&Rig")
-        rig_menu.addAction("Rig manager…", self.open_rig_manager)
+        self.rig_menu = self.menuBar().addMenu("&Rig")
+        self.rig_menu.aboutToShow.connect(self._rebuild_rig_menu)
+        self._rebuild_rig_menu()
         self.fixture_library = None
         fx_menu = self.menuBar().addMenu("&Fixtures")
         fx_menu.addAction("Fixture library…", self.open_fixture_library)
@@ -247,8 +253,47 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.open_url = QtGui.QDesktopServices.openUrl
         help_menu.addAction("Open my LiveReact folder…", lambda: self.open_data_folder())
         self.resize(_fits_the_screen(QtCore.QSize(1280, 800)))
+        self._restore_window()
 
         self._install_shortcuts()
+
+    # ------------------------------------------------------------- window memory (item 53)
+    def _restore_window(self) -> None:
+        """Apply the saved size/position/tab; a position off every screen (a monitor
+        unplugged since the last run) comes back on the primary screen instead."""
+        data = self.settings.extra.get("console_window") if self.settings else None
+        if not isinstance(data, dict):
+            return
+        try:
+            x, y, w, h = (int(data[k]) for k in ("x", "y", "w", "h"))
+        except (KeyError, TypeError, ValueError):
+            return
+        rect = QtCore.QRect(x, y, w, h)
+        screens = QtGui.QGuiApplication.screens()
+        if not any(s.availableGeometry().intersects(rect) for s in screens):
+            avail = QtGui.QGuiApplication.primaryScreen().availableGeometry()
+            w, h = min(w, avail.width()), min(h, avail.height())
+            x = max(avail.left(), min(x, avail.right() - w + 1))
+            y = max(avail.top(), min(y, avail.bottom() - h + 1))
+        self.move(x, y)
+        self.resize(w, h)
+        tab = data.get("tab")
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == tab:
+                self.tabs.setCurrentIndex(i)
+                break
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        if self.settings is not None:
+            g = self.geometry()
+            self.settings.extra["console_window"] = {
+                "x": g.x(), "y": g.y(), "w": g.width(), "h": g.height(),
+                "tab": self.tabs.tabText(self.tabs.currentIndex())}
+            try:
+                self.settings.save()
+            except OSError:
+                pass   # never block closing on a failed write
+        super().closeEvent(event)
 
     def _tab_changed(self, idx: int) -> None:
         if self.tabs.widget(idx) is self.venue_tab:
@@ -526,6 +571,38 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             QtGui.QShortcut(QtGui.QKeySequence(key), self, activated=fn)
 
     # ------------------------------------------------------------------ actions
+    def _rebuild_rig_menu(self) -> None:
+        from pathlib import Path
+
+        from ..settings import Settings
+        from .rig_manager import is_read_only
+        self.rig_menu.clear()
+        for r in Settings.load().recent_rigs:
+            if Path(r).is_file():
+                label = Path(r).stem + (" (demo, read-only)" if is_read_only(r) else "")
+                act = self.rig_menu.addAction(label, lambda checked=False, p=r: self._use_recent_rig(p))
+                act.setToolTip(r)
+        if self.rig_menu.actions():
+            self.rig_menu.addSeparator()
+        self.rig_menu.addAction("Rig manager…", self.open_rig_manager)
+
+    def _use_recent_rig(self, path: str) -> None:
+        """A recent rig straight from the menu: the same validate-remember-choose path as
+        the rig manager."""
+        from pathlib import Path
+
+        from ..fixtures.rig import RigError, load_rig
+        from ..settings import Settings
+        try:
+            load_rig(path)
+        except (OSError, ValueError, KeyError, RigError) as exc:
+            self.statusBar().showMessage(f"Cannot use {Path(path).name}: {exc}")
+            return
+        s = Settings.load()
+        s.add_recent_rig(path)
+        s.save()
+        self._rig_chosen(path)
+
     def open_rig_manager(self):
         from .rig_manager import RigManagerDialog
         self.rig_manager = RigManagerDialog(self)
@@ -621,7 +698,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         if parent_layout is not None:
             parent_layout.replaceWidget(old_view, self.rig_view)
         old_view.deleteLater()
-        self.override_panel.build_laser_overrides()   # AEPI's latched looks: only on rigs that list them
+        self.override_panel.build_laser_overrides()   # a rig's latched override looks: only on rigs that list them
         current = self.tabs.currentIndex()
         for w in (self.laser_show_tab, self.venue_tab, self.rig_config):
             if w is not None:
@@ -861,11 +938,16 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             self.l_synth.setText("")
 
 
+def make_console(app) -> ConsoleWindow:
+    """The shipped console: remembers its window through the user settings file (item 53)."""
+    return ConsoleWindow(app, settings=Settings.load())
+
+
 def run_console(app, fps: int = 30) -> int:
     """Open the console and refresh it at ``fps`` (blocks until the window closes)."""
     qt = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     apply_theme(qt)
-    win = ConsoleWindow(app)
+    win = make_console(app)
     win.show()
     # First launch: the setup opens by itself (2026-10-30; before, a new user had to find it in Help).
     try:

@@ -10,6 +10,7 @@ unconfirmed builtin laser confirmed).
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -93,6 +94,75 @@ def list_definitions() -> list[LibraryEntry]:
         if d.id == p.stem and d.id not in builtin and not validate(d):
             out.append(LibraryEntry(d, "user", p))
     return out
+
+
+def rigs_using(fid: str) -> list[str]:
+    """Names of the rigs in the user rigs folder whose slots reference definition ``fid``
+    (the delete confirm box names them first). Unreadable files are skipped. A rig saved
+    with its own ``definitions`` snapshot still counts: it keeps loading after a delete,
+    but points at a definition the library no longer offers."""
+    out: list[str] = []
+    for p in sorted(userdata.paths(create=False).rigs.glob("*.json")):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            slots = data.get("slots") or []
+        except (OSError, ValueError, AttributeError):
+            continue
+        ids: set[str] = set()
+        for slot in slots:
+            if isinstance(slot, dict) and slot.get("fixture"):
+                try:
+                    ids.add(parse_ref(str(slot["fixture"]))[0])
+                except ValueError:
+                    continue
+        if fid in ids:
+            out.append(str(data.get("name") or p.stem))
+    return out
+
+
+def delete_user_definition(fid: str) -> Path:
+    """Delete ``<fid>.json`` from the user folder; returns the deleted path.
+    ValueError for a built-in id (those ship with the app), KeyError when no user
+    definition exists. Check ``rigs_using(fid)`` first and warn: a rig without its
+    own embedded snapshot stops loading once the definition is gone."""
+    if fid in _builtin_ids():
+        raise ValueError(f"fixture {fid!r} is a built-in model; built-ins cannot be deleted")
+    p = userdata.paths(create=False).fixtures / f"{fid}.json"
+    if not _SAFE_ID.match(fid) or not p.is_file():
+        raise KeyError(f"no user fixture definition {fid!r}")
+    p.unlink()
+    return p
+
+
+def copy_definition(fid: str, new_id: str) -> Path:
+    """Save a copy of definition ``fid`` under ``new_id`` in the user folder -- always
+    unconfirmed, so an edited copy of a confirmed model goes back through the
+    channel-test screen before a laser built from it may output (roadmap item 46).
+    A builtin's copy becomes ``kind="user"``; an import keeps its provenance.
+    ValueError when ``new_id`` is taken or invalid, KeyError when ``fid`` is unknown."""
+    d = _find(fid, None)
+    if new_id in _builtin_ids() or (userdata.paths(create=False).fixtures / f"{new_id}.json").is_file():
+        raise ValueError(f"fixture id {new_id!r} is already taken; pick another id")
+    kind = "user" if d.source.kind == "builtin" else d.source.kind
+    source = dataclasses.replace(d.source, kind=kind, confirmed=False, confirmed_at=None)
+    return save_user_definition(dataclasses.replace(d, id=new_id, source=source))
+
+
+def export_definition(d: FixtureDefinition, path: str | Path) -> Path:
+    """Write ``d`` as definition JSON to ``path`` (the browser's Export…); the file
+    round-trips through ``import_definition_file`` on another machine."""
+    p = Path(path)
+    p.write_text(json.dumps(d.to_dict(), indent=1) + "\n", encoding="utf-8")
+    return p
+
+
+def import_definition_file(path: str | Path) -> Path:
+    """Validate the definition JSON at ``path`` and save it to the user folder --
+    always unconfirmed, because any confirmation happened on someone else's
+    hardware; a built-in id is refused by save_user_definition (roadmap item 47)."""
+    d = load_definition(Path(path))
+    source = dataclasses.replace(d.source, confirmed=False, confirmed_at=None)
+    return save_user_definition(dataclasses.replace(d, source=source))
 
 
 def save_user_definition(d: FixtureDefinition) -> Path:

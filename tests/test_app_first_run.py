@@ -84,11 +84,11 @@ def test_walk_through_and_finish_saves_settings(qapp):
 def test_reopening_shows_the_saved_choices(qapp):
     from livereact.settings import Settings
     d = _dialog()
-    d.output_buttons["artnet"].setChecked(True)
+    d.output_buttons["enttec"].setChecked(True)   # an output this build has (AVAILABLE_OUTPUTS)
     d.cmb_interface.setCurrentIndex(1)
     d.finish()
     d2 = _dialog(Settings.load())
-    assert d2.choices()["output"] == "artnet" and d2.choices()["pdl_interface"] == "none"
+    assert d2.choices()["output"] == "enttec" and d2.choices()["pdl_interface"] == "none"
 
 
 def test_back_navigation(qapp):

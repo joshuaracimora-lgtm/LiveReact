@@ -366,7 +366,7 @@ class App:
             try:
                 source.start()
             except Exception as exc:  # noqa: BLE001 - a failed input must not abort startup
-                # kept for the console's health banner (ui/health.py, 2026-11-02 AEPI post-mortem)
+                # kept for the console's health banner (ui/health.py, 2026-11-02 2026-10-31 show post-mortem)
                 self.failed_inputs[source.name] = exc
                 log.exception("Input source %r failed to start; continuing without it", source.name)
 

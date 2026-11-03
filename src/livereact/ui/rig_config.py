@@ -158,6 +158,18 @@ class RigConfigTab(QtWidgets.QWidget):
         i = type_combo.findData(self._type_key(ftype))
         if i >= 0:
             type_combo.setCurrentIndex(i)
+        # item 54: with built-ins plus definitions the list gets long — type a few letters
+        # of the id, manufacturer or model to jump to it. NoInsert keeps free text out of
+        # the list, so a row can only ever save a type that really exists.
+        type_combo.setEditable(True)
+        type_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
+        completer = QtWidgets.QCompleter(type_combo.model(), type_combo)
+        completer.setCompletionMode(QtWidgets.QCompleter.CompletionMode.PopupCompletion)
+        completer.setFilterMode(QtCore.Qt.MatchFlag.MatchContains)
+        completer.setCaseSensitivity(QtCore.Qt.CaseSensitivity.CaseInsensitive)
+        completer.activated[str].connect(
+            lambda text, tc=type_combo: tc.setCurrentIndex(tc.findText(text)) if tc.findText(text) >= 0 else None)
+        type_combo.setCompleter(completer)
         self.table.setCellWidget(row, C_TYPE, type_combo)
 
         mode_combo = QtWidgets.QComboBox()

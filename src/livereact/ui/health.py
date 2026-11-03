@@ -1,6 +1,6 @@
 """The console's health banner: what is broken right now, in words an operator can act on mid-set.
 
-2026-11-02, AEPI post-mortem: on 2026-10-31 rekordbox held the Pro DJ Link ports all night (only an
+2026-11-02, 2026-10-31 show post-mortem: on 2026-10-31 rekordbox held the Pro DJ Link ports all night (only an
 ERROR line in the log), the XDJ's audio stream died for 44 minutes and the DMX adapter dropped off
 USB, and all the console showed was four small dots. Pure function of the app and a snapshot so it
 is testable without Qt; ui/console.py turns the list into a red banner.

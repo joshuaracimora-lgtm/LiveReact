@@ -1,4 +1,4 @@
-"""ui/health.py -- the console's plain-language fault banner (2026-11-02, AEPI post-mortem)."""
+"""ui/health.py -- the console's plain-language fault banner (2026-11-02, 2026-10-31 show post-mortem)."""
 from __future__ import annotations
 
 import errno

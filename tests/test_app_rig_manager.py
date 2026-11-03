@@ -111,8 +111,9 @@ def test_missing_recent_files_are_hidden(qapp):
     assert d.recent.count() == 0 and not d.b_use_recent.isEnabled()
 
 
-def test_console_rig_menu_opens_the_manager_and_says_restart(qapp):
+def test_console_rig_menu_opens_the_manager_and_says_restart(qapp, monkeypatch):
     from livereact.app import App, AppConfig
+    monkeypatch.delattr(App, "switch_rig")   # App gained live switching (D-38); the fallback still matters
     from livereact.ui.console import ConsoleWindow
     from livereact.ui.rig_manager import RigManagerDialog
     app = App(AppConfig(demo=True, config_path=None))

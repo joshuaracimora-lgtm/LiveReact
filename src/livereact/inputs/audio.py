@@ -118,7 +118,7 @@ ONSET_FLOOR = 0.01         # ... plus this absolute floor (mean-per-bin magnitud
 ONSET_REFRACTORY_S = 0.06  # one onset per this (counted in blocks)
 ONSET_RATE_WINDOW_S = 1.0  # onsets/s = count over this trailing window
 
-# Dead-stream recovery (2026-11-02, AEPI show post-mortem): at 22:45:07 on
+# Dead-stream recovery (2026-11-02, 2026-10-31 show post-mortem): at 22:45:07 on
 # 2026-10-31 the XDJ's capture stream stopped delivering blocks -- MIDI kept
 # arriving, so the device was still there -- and nothing noticed: the analysis
 # thread just waited on an empty ring for 44 minutes and the show sat in its
