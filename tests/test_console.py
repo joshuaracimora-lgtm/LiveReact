@@ -1251,3 +1251,11 @@ def test_rig_config_refuses_to_save_a_typed_duplicate_slot_id(qapp, tmp_path, mo
     assert not asked and not (tmp_path / "x.json").exists()
     assert "Not saved" in tab.status.text() and "slot_1" in tab.status.text()
 
+
+def test_synth_sync_labels_describe_the_threshold_not_the_old_follower(qapp):
+    """D-32: the wash holds the section level and lifts on stabs over the threshold."""
+    from livereact.ui.console import ConsoleWindow, shortcuts_text
+    win = ConsoleWindow(_app())
+    for text in (win.cb_synth.text(), shortcuts_text()):
+        assert "wash follows" not in text and "stabs" in text
+    win.close()

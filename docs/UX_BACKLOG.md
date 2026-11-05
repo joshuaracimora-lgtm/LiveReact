@@ -104,3 +104,6 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
   repeated one still in use, and typed duplicates also saved. Both fixtures load but `Rig._by_slot` keeps one, so
   the Venue tab lost the other. New rows take a free ID and Save refuses a duplicate.
   `test_rig_config_new_rows_never_reuse_a_slot_id`, `test_rig_config_refuses_to_save_a_typed_duplicate_slot_id`.
+- **Synth Sync label** (UX 2, 2026-11-05). The checkbox and the shortcut list still said "wash follows the synths"
+  (the pre-D-32 behaviour). Both say the wash lifts on stabs over the threshold. The name stays, it is the name in
+  Josh's docs. `test_synth_sync_labels_describe_the_threshold_not_the_old_follower`.

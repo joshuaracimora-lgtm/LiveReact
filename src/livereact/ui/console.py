@@ -43,7 +43,7 @@ SHORTCUTS: tuple[tuple[str, str, str], ...] = (
     ("F", "b_freeze.toggle", "Freeze the look on/off"),
     ("Right", "app.phrase_engine.skip", "Next look at the next bar"),
     ("T", "_do_tap", "Tap tempo"),
-    ("S", "cb_synth.toggle", "Synth Sync on/off (wash follows the synths)"),
+    ("S", "cb_synth.toggle", "Synth Sync on/off (wash lifts on stabs over the threshold)"),
     ("L", "cb_laser.toggle", "Arm / disarm lasers"),
     ("K", "b_laser_cue.toggle", "Cue the laser on/off"),
     ("J", "b_laser_hit.click", "Laser hit"),
@@ -477,9 +477,9 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.s_bright = _slider(0, 100, int(m.master_brightness * 100))
         self.s_strobe = _slider(0, 100, int(m.strobe_cap * 100))
         self.s_warm = _slider(-100, 100, int(m.warm_cool_bias * 100))
-        # Synth Sync (Josh, 2026-09-15): wash follows the synths/stabs (the mid
-        # band) and strobes pause -- see engines/reactive.py's SYNTH_* block.
-        self.cb_synth = QtWidgets.QCheckBox("Synth Sync (S) — wash follows the synths")
+        # Synth Sync (Josh, 2026-09-15; thresholded since D-32): the wash holds the section level and
+        # lifts on stabs in the mid band -- see engines/reactive.py's SYNTH_* block.
+        self.cb_synth = QtWidgets.QCheckBox("Synth Sync (S) — wash lifts on stabs over the threshold")
         self.cb_synth.setChecked(m.synth_sync)
         # Synth threshold (Josh, 2026-10-29): below it the wash holds the
         # section's level; only a stab above it lifts the bar. 0 = follow
