@@ -90,3 +90,8 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 - **Rig manager opens empty with no next step** (UX 0, 2026-11-05). A hint inside the empty box, focus on Demo rig,
   tooltips on every button, and disabled buttons say why. `test_empty_rig_manager_says_what_to_do_first`,
   `test_disabled_rig_buttons_say_why`.
+- **Enter went backward in first-run setup** (Bug, 2026-11-05). "Back" was the default button, so Enter on step 2
+  returned to step 1. Next is the default now. `test_enter_moves_forward_through_setup`.
+- **First-run offered outputs that did not exist** (Bug 3, closed 2026-11-05, already fixed by the Mac's launch
+  wiring: Art-Net and sACN are greyed "coming later"). Verified, no change tonight.
+  `test_first_run_offers_only_outputs_this_build_has`.
