@@ -1216,3 +1216,38 @@ def test_demo_mode_does_not_wait_for_real_audio_in_red(qapp):
     assert win.l_synth.styleSheet() != _DOT_BAD
     win.close()
 
+
+# --- 2026-11-05 (UX_BACKLOG): Rig Config could write two fixtures with the same slot ID ---
+def _empty_rig_config(tmp_path):
+    from livereact.fixtures.rig import _rig_from_dict
+    from livereact.ui.rig_config import RigConfigTab
+    return RigConfigTab(_rig_from_dict({"name": "t", "laser_profile": "accent", "slots": []}), str(tmp_path / "t.json"))
+
+
+def _slots(tab):
+    return [tab.table.item(r, 0).text() for r in range(tab.table.rowCount())]
+
+
+def test_rig_config_new_rows_never_reuse_a_slot_id(qapp, tmp_path):
+    tab = _empty_rig_config(tmp_path)
+    for _ in range(3):
+        tab._add_blank_row()
+    tab.table.selectRow(0)
+    tab._remove_selected()
+    tab._add_blank_row()                  # the row count is 3 again, and slot_3 is taken
+    assert len(_slots(tab)) == len(set(_slots(tab))) == 3
+
+
+def test_rig_config_refuses_to_save_a_typed_duplicate_slot_id(qapp, tmp_path, monkeypatch):
+    from PySide6 import QtWidgets
+    tab = _empty_rig_config(tmp_path)
+    tab._add_blank_row()
+    tab._add_blank_row()
+    tab.table.item(1, 0).setText("slot_1")
+    asked = []
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: asked.append(a) or (str(tmp_path / "x.json"), "")))
+    tab._save()
+    assert not asked and not (tmp_path / "x.json").exists()
+    assert "Not saved" in tab.status.text() and "slot_1" in tab.status.text()
+

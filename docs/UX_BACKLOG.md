@@ -100,3 +100,7 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
   it, all four dots are grey, and Synth Sync no longer waits for real audio in red. Hardware mode is unchanged.
   `test_demo_mode_says_so_and_no_dot_claims_a_connection_or_a_fault`,
   `test_hardware_mode_keeps_the_red_dots_and_shows_no_demo_note`, `test_demo_mode_does_not_wait_for_real_audio_in_red`.
+- **Rig Config could save two fixtures with one slot ID** (Bug, 2026-11-05). Remove a row, add a row: the new ID
+  repeated one still in use, and typed duplicates also saved. Both fixtures load but `Rig._by_slot` keeps one, so
+  the Venue tab lost the other. New rows take a free ID and Save refuses a duplicate.
+  `test_rig_config_new_rows_never_reuse_a_slot_id`, `test_rig_config_refuses_to_save_a_typed_duplicate_slot_id`.
