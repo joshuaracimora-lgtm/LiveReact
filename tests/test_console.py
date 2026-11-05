@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 
 import pytest
@@ -1162,3 +1163,56 @@ def test_add_2nd_point_refuses_after_the_first_target_moved(qapp):
     tab.b_set_aim2.click()
     assert mh.calibration.target2 is None        # refused: nothing was solved
     assert "dj_booth" in tab.status.text() and "SET AIM" in tab.status.text()
+
+
+# --- 2026-11-05 (walk-through missing_hardware, UX_BACKLOG 0b): a first launch showed four alarms for nothing ---
+def _demo_console(qapp, *, fresh: bool = False):
+    from livereact.ui.console import ConsoleWindow
+    app = _app()
+    win = ConsoleWindow(app)
+    win.show()
+    if fresh:   # what a really running demo reports: its synthetic beats count as "fresh" LINK and MIDI
+        real = app.show_state.snapshot
+        app.show_state.snapshot = lambda: dataclasses.replace(real(), pdl_fresh=True, midi_fresh=True)
+    win.refresh()
+    qapp.processEvents()
+    return app, win
+
+
+@pytest.mark.parametrize("fresh", [False, True])
+def test_demo_mode_says_so_and_no_dot_claims_a_connection_or_a_fault(qapp, fresh):
+    from livereact.ui.console import _DOT_BAD, _DOT_OK
+    _app_, win = _demo_console(qapp, fresh=fresh)
+    assert win.l_demo_note.isVisible()
+    assert "demo" in win.l_demo_note.text().lower()
+    assert "first-time setup" in win.l_demo_note.text()      # the way out, in the menu's own words
+    for dot in (win.dot_pdl, win.dot_midi, win.dot_audio, win.dot_dmx):
+        assert dot.styleSheet() not in (_DOT_BAD, _DOT_OK)   # grey: neither red (broken) nor green (connected)
+        assert "demo" in dot.toolTip().lower()
+    assert "STALE" not in win.l_health.text() and "stale" not in win.l_health.text()
+    win.close()
+
+
+def test_hardware_mode_keeps_the_red_dots_and_shows_no_demo_note(qapp):
+    from livereact.ui.console import _DOT_BAD, ConsoleWindow
+    app = _app()
+    app.config.demo = False       # same console, same null output: the faults must stay loud
+    win = ConsoleWindow(app)
+    win.show()
+    win.refresh()
+    qapp.processEvents()
+    assert not win.l_demo_note.isVisible()
+    assert win.dot_dmx.styleSheet() == _DOT_BAD and win.dot_pdl.styleSheet() == _DOT_BAD
+    assert "DMX ADAPTER LOST" in win.l_health_banner.text()  # health.py still speaks
+    win.close()
+
+
+def test_demo_mode_does_not_wait_for_real_audio_in_red(qapp):
+    from livereact.ui.console import _DOT_BAD
+    app, win = _demo_console(qapp)
+    app.manual.synth_sync = True
+    win.refresh()
+    assert "SYNTH SYNC" in win.l_synth.text()
+    assert win.l_synth.styleSheet() != _DOT_BAD
+    win.close()
+

@@ -95,3 +95,8 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 - **First-run offered outputs that did not exist** (Bug 3, closed 2026-11-05, already fixed by the Mac's launch
   wiring: Art-Net and sACN are greyed "coming later"). Verified, no change tonight.
   `test_first_run_offers_only_outputs_this_build_has`.
+- **Demo mode looked broken** (UX 0b, 2026-11-05). Four red dots and "PDL STALE" with no words, while a running demo
+  showed LINK and MIDI green with no XDJ attached. A plain note under the menu says it is a demo and how to leave
+  it, all four dots are grey, and Synth Sync no longer waits for real audio in red. Hardware mode is unchanged.
+  `test_demo_mode_says_so_and_no_dot_claims_a_connection_or_a_fault`,
+  `test_hardware_mode_keeps_the_red_dots_and_shows_no_demo_note`, `test_demo_mode_does_not_wait_for_real_audio_in_red`.
