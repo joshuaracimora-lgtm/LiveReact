@@ -28,32 +28,51 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
    keeps running with the lights wrong and no message. Expected: the console says what was lost, retries the
    port / re-resolves the interface when it returns, and never needs a relaunch to recover.
    (`inputs/prodj.py start()`, `app.py` backend selection, `inputs/audio.py start()`.)
+   *Status 2026-11-05: the Mac's show-night work landed the health banner (`ui/health.py`), audio reconnect and
+   the DMX late-plug, so the loss is now said in words. Still open: nothing in `inputs/prodj.py` re-resolves
+   the interface after the adapter comes back (sockets are pinned once, at `start()`). [JOSH: outside the
+   agent's files.]*
 2. **The app does not exit on SIGTERM.** `kill <pid>` logs "Received signal 15" and the process is still
    alive 20 s later; only `kill -9` works (seen three times on 2026-10-29/30). Expected: a clean shutdown in
    under 3 s. Find the thread that does not join (audio stream close? Qt loop?).
-3. **First-run offers outputs that do not exist.** Steps: Help -> Run first-time setup again -> step 1 lists
-   "Art-Net (network)" and "sACN / E1.31 (network)". What happened: `src/livereact/output/` has only the
-   Enttec and null-log backends; a user who picks Art-Net or sACN gets no lights and no error. Expected:
-   either the backends (roadmap) or the options greyed with "coming later", and a plain error if a saved
-   setting names a backend the build lacks. (Found by the offscreen walk-through, 2026-10-30.)
-4. **A numeric `--audio-device` is an index that moves.** The iPhone mic appearing or vanishing shifts every
+   *2026-11-05, could not reproduce in demo mode: `stop_event` set under `run_console` left the Qt loop in
+   0.26 s, shutdown 0.0 s, no thread alive. Windows has no real SIGTERM to send, and the hardware path (audio
+   stream, DJ Link sockets) cannot run on the agent's desktop, so it needs a try on the Mac with the rig.*
+3. **A numeric `--audio-device` is an index that moves.** The iPhone mic appearing or vanishing shifts every
    index; `1` was the MacBook mic one minute and the speakers (0 inputs) the next, and `start()` died on
    `max() of an empty iterable`. Expected: a clear error ("device 1 has no inputs; available: ...") and a
    recommendation to use the name.
+   *Exact change, for Josh (`inputs/` is outside the agent's files): in `AudioAnalyzer._open_stream`, right after
+   `n_in = int(info["max_input_channels"])`, `if n_in < 1: raise AudioInputError(...)` naming the device and
+   listing the input-capable names from `sd.query_devices()`. `failed_inputs` then puts it in the NO AUDIO
+   INPUT banner by itself.*
 
 ## UX (open)
 
-0. **Rig manager opens empty with no next step.** A new user sees an empty "Recent rigs" box and five buttons;
-   nothing says "pick Demo rig to start, or New rig". Proposal: placeholder text in the empty list and the
-   Demo rig button as the default focus. (Walk-through, 2026-10-30.)
-0b. **Demo mode launches with every status dot red and the lasers ARMED in red.** A first-time user reads LINK /
-   MIDI / AUDIO / DMX all red as "broken" and "DISARM LASERS — ARMED" as dangerous. Proposal: in demo mode
-   the dots say "demo" in grey, and the arm button is not pre-armed red on a rig with no laser. (Walk-through.)
+0b. **Demo mode still shows the lasers ARMED in red.** The dots and the words are fixed (see Fixed); the big red
+   "DISARM LASERS / ARMED" stays because `app.py` really arms in demo mode to simulate the operator, and the arm
+   switch must never lie. Proposal: a "simulated" caption beside it in demo mode. (Walk-through.)
 1. **No operator-facing status for the inputs.** The Show tab shows PDL / MIDI / audio as dots in a log
    line; a new user cannot tell "no XDJ audio" from "quiet". Proposal: a status strip naming each input and
    its source ("Audio: XDJ-XZ ch 5-6" / "Audio: none"), red when a required one is missing.
-2. **Synth Sync label.** "Synth Sync (S) — wash follows the synths" no longer describes the thresholded
-   behaviour (D-32). Proposal: "Synth hits (S) — the bar lifts on stabs above the threshold".
+2. **Clicking New rig blacks out a running show.** Rig manager -> New rig: the file is made and the show switches
+   to it at once, so every light goes dark with only a status-bar line. It is what the button says on a fresh
+   install, but mid-set it is one click. Proposal: New rig creates the file and opens Rig Config, and the show
+   keeps its rig until "Save and use now" (branch agent/20261103-ui). Journey that would catch it: with a
+   running show, New rig leaves `app.rig` playing. [UX-structural, for Josh]
+3. **Enter does nothing in the Rig manager now.** Deliberate after the bug below: any rig choice changes the
+   lights, so nothing fires by itself. If Josh wants Enter = "Use selected" with the list focused, it is one
+   line. Space on the focused button and double click work.
+4. **An empty Rig Config table says nothing.** After New rig the tab is an empty grid. Proposal: the same kind
+   of hint as the Rig manager ("Add fixture to start; each fixture needs a DMX address"). Wait for the 11-03
+   branch: its note changes the same screen. Journey: after New rig, the Rig Config tab shows a next step.
+5. **`walkthrough.py` `rig_switch` cannot see the empty-state hint.** It tests `recent.count() == 0`, and
+   `test_missing_recent_files_are_hidden` pins that count, so the hint is a label in the box, not a row, and the
+   journey stays UX with the screen fixed. Proposal: the journey looks for a visible text in `dlg.recent`
+   instead (`dlg.l_empty.isVisible()`).
+6. **`walkthrough.py` needs conftest's `QT_QPA_FONTDIR`** or every PNG on the desktop is tofu boxes; the orchestrator's
+   run also stopped after one PNG with no WALKTHROUGH.md again on 2026-11-05, while the same command run by
+   hand finished in 11 s. Journey: none, a `tools/` fix.
 
 ## Integration (proposals)
 
@@ -64,4 +83,10 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
-(none yet)
+- **Enter on the Rig manager emptied the running show** (Bug, 2026-11-05). "New rig" was the dialog's default button,
+  so Enter made an empty rig and switched the show to it: 8 fixtures to 0, lights dark, with or without recent
+  rigs listed. No button is a default now. `test_enter_on_a_fresh_rig_manager_leaves_the_running_show_alone`,
+  `test_enter_with_recent_rigs_listed_leaves_the_running_show_alone`.
+- **Rig manager opens empty with no next step** (UX 0, 2026-11-05). A hint inside the empty box, focus on Demo rig,
+  tooltips on every button, and disabled buttons say why. `test_empty_rig_manager_says_what_to_do_first`,
+  `test_disabled_rig_buttons_say_why`.
