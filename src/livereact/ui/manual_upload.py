@@ -93,7 +93,7 @@ class UploadManualPage(QtWidgets.QWidget):
         if not self._online():
             return "Offline: the manual reader needs the internet. Enter the channels by hand instead."
         if not self._key_provider():
-            return "Add an Anthropic API key in Settings to use the manual reader."
+            return "Add an Anthropic API key (Fixtures menu, Anthropic API key…) to use the manual reader."
         return ""
 
     def refresh(self) -> None:

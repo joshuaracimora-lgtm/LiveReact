@@ -138,7 +138,6 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
                 item = QtWidgets.QTableWidgetItem(text)
                 item.setData(QtCore.Qt.ItemDataRole.UserRole, d.id)
                 self.table.setItem(r, c, item)
-        self.b_test.setEnabled(bool(self.entries))
         self._update_buttons()
 
     def _selected_entry(self):
@@ -148,6 +147,8 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
     def _update_buttons(self) -> None:
         e = self._selected_entry()
         self.details.setPlainText(definition_summary(e.definition) if e is not None else "")
+        self.b_test.setEnabled(e is not None)
+        self.b_test.setToolTip("" if e is not None else "Select a fixture in the list first")
         self.b_duplicate.setEnabled(e is not None)
         self.b_export.setEnabled(e is not None)
         self.b_delete.setEnabled(e is not None and e.origin != "builtin")
@@ -176,7 +177,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         return name or None
 
     def open_wizard(self) -> FixtureWizard:
-        self.wizard = FixtureWizard(self, save=self._save, laser_armed=self._laser_armed)
+        self.wizard = FixtureWizard(self, save=self._save, laser_armed=self._laser_armed, confirm=self._confirm)
         self.wizard.added.connect(lambda _d: self.reload())
         self.wizard.show()
         return self.wizard
@@ -258,7 +259,8 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         if not rows:
             return None
         e = self.entries[min(rows)]
-        self.test_panel = ChannelTestPanel(e.definition, save=self._save, laser_armed=self._laser_armed)
+        self.test_panel = ChannelTestPanel(e.definition, save=self._save, laser_armed=self._laser_armed,
+                                           builtin=e.origin == "builtin")
         self.test_panel.confirmed.connect(lambda _d: self.reload())
         self.test_panel.setWindowTitle(f"Test {e.definition.manufacturer} {e.definition.model}")
         self.test_panel.show()

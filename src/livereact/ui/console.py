@@ -616,7 +616,8 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.fixture_library = FixtureLibraryBrowser(laser_armed=lambda: self.app.manual.laser_enable)
         self.fixture_library.setWindowTitle("Fixture library")
         # a fixture added or confirmed there shows up in Rig Config's type list
-        self.fixture_library.library_changed.connect(self.rig_config.reload_definitions)
+        # looked up on each change: a rig switch replaces the tab while this window stays open
+        self.fixture_library.library_changed.connect(lambda: self.rig_config.reload_definitions())
         self.fixture_library.show()
         return self.fixture_library
 
