@@ -57,11 +57,4 @@ def health_warnings(app, snap, now: float) -> list[str]:
     elif settled and not snap.audio_fresh:
         out.append("NO AUDIO — LiveReact cannot hear the XDJ. Reconnecting by itself; if this stays, "
                    "check the XDJ's USB cable.")
-
-    # MIDI is silent whenever the DJ leaves the controls alone, so only a port that was
-    # open and VANISHED is a fault (2026-11-03; a setup without XDJ MIDI is never nagged).
-    midi = next((s for s in getattr(app, "sources", ()) if getattr(s, "name", "") == "midi"), None)
-    if midi is not None and getattr(midi, "lost", False):
-        out.append("XDJ MIDI LOST — fader/EQ moves no longer reach the lights. Reconnecting by itself; "
-                   "if this stays, check the XDJ's USB cable.")
     return out
