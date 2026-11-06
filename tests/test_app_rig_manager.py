@@ -156,8 +156,10 @@ def _console_with_manager(qapp):
 
 
 def _press_enter(qapp, dialog):
-    from PySide6 import QtCore, QtTest
-    QtTest.QTest.keyClick(dialog, QtCore.Qt.Key.Key_Return)
+    # keyPressEvent directly, not QTest.keyClick: see test_enter_moves_forward_through_setup
+    from PySide6 import QtCore, QtGui
+    dialog.keyPressEvent(QtGui.QKeyEvent(QtCore.QEvent.Type.KeyPress, QtCore.Qt.Key.Key_Return,
+                                         QtCore.Qt.KeyboardModifier.NoModifier))
     qapp.processEvents()
 
 
