@@ -66,8 +66,6 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
    from Open Fixture Library) is confirmed whole after testing one mode. Journey: a two-mode definition offers both.
 8. **`--fixture-test` has no laser guard.** `ui/fixture_test.py` gives raw sliders on every channel with no arm
    switch. It is a bring-up tool, but tonight's note deliberately does not send laser users there. [JOSH]
-9. **`--fixture-test` "Save as Home Position" to an unwritable path raises.** `_save_home_position` catches only
-   `RigError`, as Rig Config and Venue did until 2026-11-06. One-line fix: `except (RigError, OSError)`.
 
 ## UX (open)
 
@@ -116,6 +114,10 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **`--fixture-test` "Save as Home Position" to an unwritable path raised** (Bug, Open 9, 2026-11-07). Saving into a
+  folder the user cannot write, or over a directory, threw `PermissionError` out of the button and the panel said
+  nothing. `_save_home_position` now catches `OSError` with `RigError` and says "Not saved — <reason>" in red, as Rig
+  Config and Venue do. `tests/test_fixture_test.py::test_save_home_position_to_an_unwritable_path_says_why_instead_of_raising`.
 - **Rig Config edits could not reach the running show** (walk-through UNREACHABLE, 2026-11-03): the tab
   said every edit needs a restart — written before `App.switch_rig` (D-38) existed, while the Rig manager
   already switched live. "Save and use now…" saves with the same validation, then the console switches the

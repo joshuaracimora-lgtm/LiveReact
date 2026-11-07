@@ -134,7 +134,7 @@ class FixtureTestPanel(QtWidgets.QMainWindow):
             # field -- mount heights, positions, unknown keys -- intact.
             save_rig(self.rig, path, self.rig.description
                      or "Home position saved via the fixture-test panel's Save as Home Position.")
-        except RigError as exc:
+        except (RigError, OSError) as exc:  # OSError: unwritable folder, a directory, a full disk
             self.status.setText(f"Not saved — {exc}")
             self.status.setStyleSheet("color:#c33;")
             return

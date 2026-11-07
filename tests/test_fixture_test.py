@@ -50,3 +50,24 @@ def test_flash_lights_a_single_fixture(qapp):
     frame = fb.latest()
     par = rig.fixture("par_l")
     assert any(frame[par.offset + i] for i in range(4))  # the flashed fixture is lit
+
+
+def test_save_home_position_to_an_unwritable_path_says_why_instead_of_raising(qapp, tmp_path, monkeypatch):
+    """UX_BACKLOG Open 9: a folder the user cannot write (or a path that is a directory) raised
+    OSError out of the button's slot; the panel now says "Not saved" in red, like Rig Config and Venue."""
+    from PySide6 import QtWidgets
+
+    from livereact.fixtures.profiles import MovingHead
+    from livereact.ui.fixture_test import FixtureTestPanel
+
+    rig = load_rig()
+    panel = FixtureTestPanel(rig, DmxFrameBuffer())
+    head = next(fx for fx in rig.fixtures if isinstance(fx, MovingHead))
+    bad = tmp_path / "is_a_directory.json"
+    bad.mkdir()  # writing a file over a directory fails with OSError on every OS
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (str(bad), "JSON (*.json)")))
+    panel._save_home_position(head)  # must not raise
+    assert panel.status.text().startswith("Not saved")
+    assert "c33" in panel.status.styleSheet()
+    assert panel.rig_path != str(bad)
