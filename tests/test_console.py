@@ -1162,3 +1162,57 @@ def test_add_2nd_point_refuses_after_the_first_target_moved(qapp):
     tab.b_set_aim2.click()
     assert mh.calibration.target2 is None        # refused: nothing was solved
     assert "dj_booth" in tab.status.text() and "SET AIM" in tab.status.text()
+
+
+def test_rig_config_save_and_use_now_plays_the_saved_rig_without_a_restart(qapp, tmp_path, monkeypatch):
+    """Walk-through UNREACHABLE (2026-11-03): Rig Config said every edit needs a
+    restart, although App.switch_rig (the Rig manager's live path) exists. A
+    "Save and use now" must end in the RUNNING app: the show plays the saved
+    rig, lasers disarm, the tabs rebuild, and the file joins the recent rigs."""
+    from PySide6 import QtWidgets
+    from livereact.settings import Settings
+    from livereact.ui.console import ConsoleWindow
+
+    monkeypatch.setenv("LIVEREACT_HOME", str(tmp_path / "home"))
+    app = _app()
+    win = ConsoleWindow(app)
+    cfg = win.rig_config
+    use = next((b for b in cfg.findChildren(QtWidgets.QPushButton)
+                if "use now" in b.text().lower() or "apply" in b.text().lower()), None)
+    assert use is not None, "Rig Config has no control that applies edits to the running show"
+
+    before = len(app.rig.fixtures)
+    cfg._add_blank_row()                       # the user adds a fixture...
+    app.manual.laser_enable = True
+    out = tmp_path / "edited.json"
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a: (str(out), "JSON (*.json)")))
+    use.click()                                # ...and plays it, no restart
+
+    assert out.is_file()
+    assert len(app.rig.fixtures) == before + 1          # the show's rig, not just a file
+    assert app.manual.laser_enable is False             # a switch always disarms the lasers
+    assert win.rig_config is not cfg                    # Venue / Rig Config rebuilt on the new rig
+    assert win.rig_config.table.rowCount() == before + 1
+    assert str(out) in Settings.load().recent_rigs      # it shows up in Rig > recent rigs
+
+
+def test_rig_config_save_and_use_now_refuses_an_invalid_rig_and_changes_nothing(qapp, monkeypatch):
+    """The live path keeps the save validation: an overlapping table never
+    reaches the show, and the status says why instead of a file dialog."""
+    from PySide6 import QtWidgets
+    from livereact.ui.console import ConsoleWindow
+
+    app = _app()
+    win = ConsoleWindow(app)
+    cfg = win.rig_config
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a: (_ for _ in ()).throw(AssertionError("no dialog on an invalid rig"))))
+    spin = cfg.table.cellWidget(1, 4)          # give row 1 row 0's address: an overlap
+    spin.setValue(cfg._row_address(0))
+    rig_before = app.rig
+    use = next(b for b in cfg.findChildren(QtWidgets.QPushButton) if "use now" in b.text().lower())
+    use.click()
+    assert app.rig is rig_before               # nothing switched
+    assert win.rig_config is cfg               # nothing rebuilt
+    assert cfg.status.text().startswith("Not saved")
