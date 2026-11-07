@@ -2,8 +2,11 @@
 
 New (an empty rig in the user's rigs folder), Open (a file dialog there), Recent (from
 settings.py) and the Demo rig (the packaged ``default_rig.json``, read-only: "Save as" copies
-it to the user folder first). Emits ``rig_chosen(path)``; the console decides what to do with
-it (switching live needs ``App.switch_rig``, roadmap item 4; until then: restart to apply).
+it to the user folder first). Emits ``rig_chosen(path)``; the console switches the running show
+to it (``App.switch_rig``), so every way of choosing a rig here changes the lights at once.
+
+That is why no button here is a dialog default (2026-11-05): "New rig" was, so pressing Enter swapped
+the running show onto an empty rig. A rig only changes on a click, a double click or Space on a button.
 
 Rename and delete (item 50) work only on files inside the user's rigs folder: the demo rig
 ships read-only, and a rig opened from anywhere else (say a source checkout's ``rigs/``) is
@@ -112,10 +115,21 @@ class RigManagerDialog(QtWidgets.QDialog):
         self.b_demo_copy = QtWidgets.QPushButton("Save demo rig as…")
         for b in (self.b_new, self.b_open, self.b_demo, self.b_demo_copy):
             row.addWidget(b)
+        self.b_new.setToolTip("Start an empty rig and play it now: the lights go dark until you add "
+                              "fixtures on the Rig Config tab.")
+        self.b_open.setToolTip("Play a rig file from anywhere on this computer.")
+        self.b_demo.setToolTip("Play the rig that ships with LiveReact. A safe way to look around.")
+        self.b_demo_copy.setToolTip("Make your own editable copy of the demo rig and play it.")
         v.addLayout(row)
         v.addWidget(QtWidgets.QLabel("Recent rigs"))
         self.recent = QtWidgets.QListWidget()
         v.addWidget(self.recent, 1)
+        # inside the empty box, where the eye goes (a real row would look like a rig you could pick)
+        self.l_empty = QtWidgets.QLabel("No rigs here yet.\n\nPress Demo rig to look around with the rig that "
+                                        "ships with LiveReact, or New rig to build your own.")
+        self.l_empty.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.l_empty.setWordWrap(True)
+        QtWidgets.QVBoxLayout(self.recent.viewport()).addWidget(self.l_empty)
         sel_row = QtWidgets.QHBoxLayout()
         self.b_use_recent = QtWidgets.QPushButton("Use selected")
         self.b_rename = QtWidgets.QPushButton("Rename…")
@@ -126,7 +140,10 @@ class RigManagerDialog(QtWidgets.QDialog):
         self.l_msg = QtWidgets.QLabel("")
         self.l_msg.setWordWrap(True)
         v.addWidget(self.l_msg)
+        for b in self.findChildren(QtWidgets.QPushButton):
+            b.setAutoDefault(False)     # see the module docstring: Enter must not change the running rig
         self.reload_recent()
+        (self.recent if self.recent.count() else self.b_demo).setFocus()
 
         self.b_new.clicked.connect(lambda: self.choose(new_rig_file()))
         self.b_open.clicked.connect(self.open_rig)
@@ -163,6 +180,7 @@ class RigManagerDialog(QtWidgets.QDialog):
         if self.recent.count():
             self.recent.setCurrentRow(0)
         self.b_use_recent.setEnabled(self.recent.count() > 0)
+        self.l_empty.setVisible(self.recent.count() == 0)
         self._update_buttons()
 
     def _selected_path(self) -> str | None:
@@ -174,6 +192,17 @@ class RigManagerDialog(QtWidgets.QDialog):
         editable = path is not None and in_user_rigs_folder(path)
         self.b_rename.setEnabled(editable)
         self.b_delete.setEnabled(editable)
+        self.b_use_recent.setToolTip("" if path else "Pick a rig in the list first.")
+        if editable:
+            why = ""
+        elif path is None:
+            why = "Pick a rig in the list first."
+        elif is_read_only(path):
+            why = "The demo rig is read-only. Use “Save demo rig as…” for a copy you can change."
+        else:
+            why = "This rig's file is outside your LiveReact folder, so it is not changed from here."
+        self.b_rename.setToolTip(why)
+        self.b_delete.setToolTip(why)
 
     def open_rig(self) -> None:
         path = self._open_file(str(userdata.paths().rigs))

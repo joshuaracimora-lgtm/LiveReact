@@ -119,6 +119,8 @@ class FirstRunDialog(QtWidgets.QDialog):
         nav.addStretch(1)
         nav.addWidget(self.b_next)
         v.addLayout(nav)
+        self.b_back.setAutoDefault(False)   # Enter moves forward: Back came first, so it was the default
+        self.b_next.setDefault(True)
         self.b_back.clicked.connect(lambda: self.go(self.stack.currentIndex() - 1))
         self.b_next.clicked.connect(self.next)
         self.go(0)

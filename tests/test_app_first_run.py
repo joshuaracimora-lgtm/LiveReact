@@ -127,3 +127,23 @@ def test_about_credits_imported_ofl_fixtures(qapp):
     d = ofl_to_definition(json.loads(data.read_text(encoding="utf-8")), "test-maker/test-par-rgbw")
     library.save_user_definition(d)
     assert "fixture test-maker/test-par-rgbw, by LiveReact tests" in about_text()
+
+
+def test_enter_moves_forward_through_setup(qapp):
+    """2026-11-05: "Back" was the dialog's default button, so Enter on step 2 went back to step 1."""
+    from PySide6 import QtCore, QtGui
+    # keyPressEvent directly: QTest.keyClick on a dialog this file then deletes crashed Qt in a later
+    # test's setStyleSheet (access violation, full suite only, 2026-11-05)
+    enter = QtGui.QKeyEvent(QtCore.QEvent.Type.KeyPress, QtCore.Qt.Key.Key_Return, QtCore.Qt.KeyboardModifier.NoModifier)
+    d = _dialog()
+    d.show()
+    assert d.stack.currentIndex() == 0
+    d.keyPressEvent(enter)
+    qapp.processEvents()
+    assert d.stack.currentIndex() == 1
+    d.keyPressEvent(enter)
+    qapp.processEvents()
+    assert d.stack.currentIndex() == 2
+    d.b_back.click()                       # Back itself still works
+    assert d.stack.currentIndex() == 1
+    d.close()

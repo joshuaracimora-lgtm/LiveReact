@@ -136,3 +136,113 @@ def test_console_switches_live_when_the_app_can(qapp):
     win = ConsoleWindow(app)
     win.open_rig_manager().b_demo.click()
     assert len(switched) == 1
+
+
+# --- 2026-11-05 (UX_BACKLOG): pressing Enter on the Rig manager took the running show from 8 fixtures to 0 ---
+def _rig_file(folder):
+    import shutil
+    from livereact.ui.rig_manager import demo_rig_path
+    return shutil.copyfile(demo_rig_path(), folder / "my rig.json")
+
+
+def _console_with_manager(qapp):
+    from livereact.app import App, AppConfig
+    from livereact.clock import FakeClock
+    from livereact.ui.console import ConsoleWindow
+    app = App(AppConfig(demo=True, config_path=None), clock=FakeClock())
+    win = ConsoleWindow(app)
+    win.show()
+    return app, win, win.open_rig_manager()
+
+
+def _press_enter(qapp, dialog):
+    # keyPressEvent directly, not QTest.keyClick: see test_enter_moves_forward_through_setup
+    from PySide6 import QtCore, QtGui
+    dialog.keyPressEvent(QtGui.QKeyEvent(QtCore.QEvent.Type.KeyPress, QtCore.Qt.Key.Key_Return,
+                                         QtCore.Qt.KeyboardModifier.NoModifier))
+    qapp.processEvents()
+
+
+def test_enter_on_a_fresh_rig_manager_leaves_the_running_show_alone(qapp):
+    from livereact import userdata
+    app, win, d = _console_with_manager(qapp)
+    rig, fixtures = app.rig, len(app.rig.fixtures)
+    _press_enter(qapp, d)
+    assert app.rig is rig and len(app.rig.fixtures) == fixtures
+    assert list(userdata.paths().rigs.glob("*.json")) == []   # and no stray "New rig" file
+    d.close(); win.close()
+
+
+def test_enter_with_recent_rigs_listed_leaves_the_running_show_alone(qapp, tmp_path):
+    from livereact.settings import Settings
+    s = Settings.load()
+    s.add_recent_rig(str(_rig_file(tmp_path)))
+    s.save()
+    app, win, d = _console_with_manager(qapp)
+    rig = app.rig
+    assert d.recent.count() == 1
+    _press_enter(qapp, d)
+    assert app.rig is rig
+    d.close(); win.close()
+
+
+def test_a_click_still_switches_the_rig(qapp, tmp_path):
+    """Enter does nothing, but the deliberate ways in must still work."""
+    from livereact.settings import Settings
+    path = _rig_file(tmp_path)
+    s = Settings.load()
+    s.add_recent_rig(str(path))
+    s.save()
+    app, win, d = _console_with_manager(qapp)
+    d.b_use_recent.click()
+    assert app.config.rig_path == str(path)
+    d.close(); win.close()
+
+
+def test_empty_rig_manager_says_what_to_do_first(qapp):
+    d, _ = _dialog()
+    d.show()
+    qapp.processEvents()
+    assert d.recent.count() == 0
+    assert d.l_empty.isVisible()
+    assert "Demo rig" in d.l_empty.text() and "New rig" in d.l_empty.text()
+    assert d.focusWidget() is d.b_demo          # the safe first step, not "New rig"
+    d.close()
+
+
+def test_the_hint_goes_away_when_there_are_rigs_and_comes_back_when_the_last_is_gone(qapp, tmp_path):
+    from livereact.settings import Settings
+    s = Settings.load()
+    s.add_recent_rig(str(_rig_file(tmp_path)))
+    s.save()
+    d, _ = _dialog()
+    d.show()
+    qapp.processEvents()
+    assert d.recent.count() == 1 and not d.l_empty.isVisible()
+    d.settings.recent_rigs = []
+    d.reload_recent()
+    qapp.processEvents()
+    assert d.recent.count() == 0 and d.l_empty.isVisible()
+    d.close()
+
+
+def test_disabled_rig_buttons_say_why(qapp, tmp_path):
+    from livereact.settings import Settings
+    from livereact.ui.rig_manager import demo_rig_path
+    d, _ = _dialog()
+    assert not d.b_use_recent.isEnabled() and "list" in d.b_use_recent.toolTip()
+    assert not d.b_rename.isEnabled() and d.b_rename.toolTip() and d.b_delete.toolTip()
+
+    s = Settings.load()
+    s.add_recent_rig(str(demo_rig_path()))
+    s.save()
+    d2, _ = _dialog()
+    assert not d2.b_rename.isEnabled() and "read-only" in d2.b_rename.toolTip()
+    assert "read-only" in d2.b_delete.toolTip()
+
+    s.recent_rigs = []
+    s.add_recent_rig(str(_rig_file(tmp_path)))     # a rig outside the user's folder: not ours to move
+    s.save()
+    d3, _ = _dialog()
+    assert not d3.b_rename.isEnabled() and "outside" in d3.b_rename.toolTip()
+    assert d3.b_use_recent.isEnabled() and d3.b_use_recent.toolTip() == ""

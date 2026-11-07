@@ -276,7 +276,11 @@ class RigConfigTab(QtWidgets.QWidget):
         first_type = sorted(FIXTURE_TYPES)[0] if FIXTURE_TYPES else ""
         cls = FIXTURE_TYPES.get(first_type)
         address = self.next_free_address(cls.channel_count if cls else 1)
-        self._add_row(f"slot_{self.table.rowCount() + 1}", "New Fixture", first_type, address, "wash", "left")
+        used = {self.table.item(r, C_SLOT).text().strip() for r in range(self.table.rowCount())}
+        n = self.table.rowCount() + 1
+        while f"slot_{n}" in used:      # after a removal the row count points at an ID still in use
+            n += 1
+        self._add_row(f"slot_{n}", "New Fixture", first_type, address, "wash", "left")
         self.check_overlaps()
 
     def check_overlaps(self) -> list[int]:
@@ -386,10 +390,20 @@ class RigConfigTab(QtWidgets.QWidget):
             data.pop("definitions", None)
         return data
 
+    @staticmethod
+    def _validate(data: dict) -> None:
+        """The loader's overlap/overflow/unknown-type checks, plus one it lacks: two rows with one slot
+        ID both load, but ``Rig._by_slot`` keeps only the last, so the Venue tab loses the other."""
+        ids = [s["slot_id"] for s in data["slots"]]
+        dupes = sorted({i for i in ids if ids.count(i) > 1})
+        if dupes:
+            raise RigError(f"two fixtures share the slot ID {', '.join(dupes)}: give each its own")
+        _rig_from_dict(data)
+
     def _save(self, apply: bool = False) -> None:
         data = self._collect()
         try:
-            _rig_from_dict(data)  # same overlap/overflow/unknown-type validation the loader uses
+            self._validate(data)
         except RigError as exc:
             self.status.setText(f"Not saved — {exc}")
             self.status.setStyleSheet("color:#c33;")

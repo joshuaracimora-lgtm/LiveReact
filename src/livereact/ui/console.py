@@ -43,7 +43,7 @@ SHORTCUTS: tuple[tuple[str, str, str], ...] = (
     ("F", "b_freeze.toggle", "Freeze the look on/off"),
     ("Right", "app.phrase_engine.skip", "Next look at the next bar"),
     ("T", "_do_tap", "Tap tempo"),
-    ("S", "cb_synth.toggle", "Synth Sync on/off (wash follows the synths)"),
+    ("S", "cb_synth.toggle", "Synth Sync on/off (wash lifts on stabs over the threshold)"),
     ("L", "cb_laser.toggle", "Arm / disarm lasers"),
     ("K", "b_laser_cue.toggle", "Cue the laser on/off"),
     ("J", "b_laser_hit.click", "Laser hit"),
@@ -69,6 +69,9 @@ def _slider(lo: int, hi: int, value: int) -> QtWidgets.QSlider:
 
 _DOT_OK = "color:#3c6; font-weight:bold;"
 _DOT_BAD = "color:#c33; font-weight:bold;"
+_DOT_IDLE = "color:#8a8f98; font-weight:bold;"   # demo mode: not connected, and nothing is wrong
+_DEMO_NOTE = ("DEMO MODE — simulated music, no lights or decks connected, so the status dots stay grey. Nothing "
+              "is wrong. To run real lights: Help → Run first-time setup again, choose your output, restart.")
 # Feature-profile laser moods (engines/laser_feature.py) -> chip colors, calm
 # to fan reading cool to hot like the bucket chip does.
 _MOOD_COLORS = {
@@ -87,8 +90,11 @@ def _status_dot(label: str) -> QtWidgets.QLabel:
     return dot
 
 
-def _set_dot(dot: QtWidgets.QLabel, ok: bool) -> None:
-    dot.setStyleSheet(_DOT_OK if ok else _DOT_BAD)
+def _set_dot(dot: QtWidgets.QLabel, ok: bool, demo: bool = False) -> None:
+    """Green = really connected, red = missing. Demo mode is neither: its synthetic beats read as a
+    fresh LINK and MIDI, and with no hardware expected a red dot would be a false alarm."""
+    dot.setStyleSheet(_DOT_IDLE if demo else _DOT_OK if ok else _DOT_BAD)
+    dot.setToolTip("Demo mode: nothing is connected, and none of it is needed." if demo else "")
 
 
 def _readout(caption: str, value_label: QtWidgets.QLabel) -> QtWidgets.QWidget:
@@ -225,11 +231,17 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.l_health_banner.setStyleSheet(
             "background:#b3261e; color:white; font-weight:bold; font-size:15px; padding:10px; border-radius:6px;")
         self.l_health_banner.setVisible(False)
+        # health.py stays silent in demo mode, which left four red dots and no words on a first launch
+        self.l_demo_note = QtWidgets.QLabel(_DEMO_NOTE)
+        self.l_demo_note.setWordWrap(True)
+        self.l_demo_note.setStyleSheet(f"color:{MUTED}; padding:4px 10px;")
+        self.l_demo_note.setVisible(bool(getattr(app.config, "demo", False)))
         central = QtWidgets.QWidget()
         cv = QtWidgets.QVBoxLayout(central)
         cv.setContentsMargins(0, 0, 0, 0)
         cv.setSpacing(6)
         cv.addWidget(self.l_health_banner)
+        cv.addWidget(self.l_demo_note)
         cv.addWidget(tabs, 1)
         self.setCentralWidget(central)
         # Rig menu (2026-10-28, ui/rig_manager.py): pick the rig instead of --rig <path>.
@@ -466,9 +478,9 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self.s_bright = _slider(0, 100, int(m.master_brightness * 100))
         self.s_strobe = _slider(0, 100, int(m.strobe_cap * 100))
         self.s_warm = _slider(-100, 100, int(m.warm_cool_bias * 100))
-        # Synth Sync (Josh, 2026-09-15): wash follows the synths/stabs (the mid
-        # band) and strobes pause -- see engines/reactive.py's SYNTH_* block.
-        self.cb_synth = QtWidgets.QCheckBox("Synth Sync (S) — wash follows the synths")
+        # Synth Sync (Josh, 2026-09-15; thresholded since D-32): the wash holds the section level and
+        # lifts on stabs in the mid band -- see engines/reactive.py's SYNTH_* block.
+        self.cb_synth = QtWidgets.QCheckBox("Synth Sync (S) — wash lifts on stabs over the threshold")
         self.cb_synth.setChecked(m.synth_sync)
         # Synth threshold (Josh, 2026-10-29): below it the wash holds the
         # section's level; only a stab above it lifts the bar. 0 = follow
@@ -777,17 +789,19 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             rb = f"\nrb: track {snap.track_id} beat {snap.track_beat} (no phrase table)"
         else:
             rb = ""
-        self.l_health.setText(f"clock {clock}\nPDL {pdl} · MIDI {midi}{trans}{rb}")
+        demo = bool(getattr(self.app.config, "demo", False))
+        inputs = "demo: simulated beats" if demo else f"PDL {pdl} · MIDI {midi}"
+        self.l_health.setText(f"clock {clock}\n{inputs}{trans}{rb}")
 
         # connection dots: PDL/MIDI green only once real beat data is flowing (not
         # just a device seen on the wire); DMX green only once a real hardware
         # backend (not the null/log fallback) has successfully opened.
-        _set_dot(self.dot_pdl, snap.pdl_fresh)
-        _set_dot(self.dot_midi, snap.midi_fresh)
-        _set_dot(self.dot_audio, snap.audio_fresh)
+        _set_dot(self.dot_pdl, snap.pdl_fresh, demo)
+        _set_dot(self.dot_midi, snap.midi_fresh, demo)
+        _set_dot(self.dot_audio, snap.audio_fresh, demo)
         writer = self.app.writer
         dmx_ok = writer.is_open and writer.backend.name != "null-log"
-        _set_dot(self.dot_dmx, dmx_ok)
+        _set_dot(self.dot_dmx, dmx_ok, demo)
 
         warnings = health_warnings(self.app, snap, self.app.clock.monotonic())
         self.l_health_banner.setText("\n".join(f"⚠ {w}" for w in warnings))
@@ -942,8 +956,12 @@ class ConsoleWindow(QtWidgets.QMainWindow):
                 self.l_synth.setText("● SYNTH SYNC — wash follows the mids; strobes cut through")
             self.l_synth.setStyleSheet(_DOT_OK)
         elif self.app.manual.synth_sync:
-            self.l_synth.setText("● SYNTH SYNC armed — waiting for real audio")
-            self.l_synth.setStyleSheet(_DOT_BAD)
+            if demo:
+                self.l_synth.setText("○ SYNTH SYNC on — it needs real audio, so it is idle in demo mode")
+                self.l_synth.setStyleSheet(_DOT_IDLE)
+            else:
+                self.l_synth.setText("● SYNTH SYNC armed — waiting for real audio")
+                self.l_synth.setStyleSheet(_DOT_BAD)
         else:
             self.l_synth.setText("")
 
