@@ -99,8 +99,6 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
    a Name field in Rig Config. Journey: save a rig as a new file and the status bar names it.
 8. **Laser Confirm is possible with nothing seen.** See Open 5: Capture Blank works on all-zero sliders no one
    watched. Proposal: until the screen reaches the rig, a confirmed laser definition stays visibly "not verified".
-9. **"Confirmed: no" on a built-in reads as a job to do,** but a built-in can never be confirmed. Proposal: "built-in"
-   in that column, or an empty cell.
 
 ## Integration (proposals)
 
@@ -114,6 +112,10 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **"Confirmed: no" on a built-in read as a job to do** (UX 9, 2026-11-07). The Fixture library said "no" for the
+  three unconfirmed built-ins, which the channel test refuses to confirm. They read "n/a (built-in)" now, with a tooltip
+  pointing to Duplicate…; a user's own unconfirmed definition still says "no", with a tooltip naming Test / confirm….
+  `tests/test_ui_fixture_library_confirmed.py` (3 tests).
 - **`--fixture-test` "Save as Home Position" to an unwritable path raised** (Bug, Open 9, 2026-11-07). Saving into a
   folder the user cannot write, or over a directory, threw `PermissionError` out of the button and the panel said
   nothing. `_save_home_position` now catches `OSError` with `RigError` and says "Not saved — <reason>" in red, as Rig

@@ -36,6 +36,17 @@ def origin_label(origin: str, source_kind: str) -> str:
     return {"ofl": "imported (Open Fixture Library)", "manual_ai": "imported (manual reader)"}.get(source_kind, "yours")
 
 
+def confirmed_cell(origin: str, confirmed: bool) -> tuple[str, str]:
+    """The "Confirmed" column's text and tooltip. A built-in cannot be confirmed here (the channel test
+    refuses it), so an unconfirmed one does not say "no" as if it were a job left to do (UX_BACKLOG UX 9)."""
+    if confirmed:
+        return "yes", ""
+    if origin == "builtin":
+        return ("n/a (built-in)",
+                "Built-in models cannot be confirmed here. Use Duplicate… to make a copy, then test and confirm it.")
+    return "no", "Not tested yet: select it and click Test / confirm… to check each channel on the light."
+
+
 def definition_summary(d) -> str:
     """The details pane's read-only text for one definition (roadmap item 48)."""
     src = d.source
@@ -132,11 +143,14 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
             d = e.definition
             r = self.table.rowCount()
             self.table.insertRow(r)
+            confirmed, confirmed_tip = confirmed_cell(e.origin, d.source.confirmed)
             cells = [d.manufacturer, d.model, d.category, ", ".join(m.name for m in d.modes),
-                     origin_label(e.origin, d.source.kind), "yes" if d.source.confirmed else "no"]
+                     origin_label(e.origin, d.source.kind), confirmed]
             for c, text in enumerate(cells):
                 item = QtWidgets.QTableWidgetItem(text)
                 item.setData(QtCore.Qt.ItemDataRole.UserRole, d.id)
+                if c == len(cells) - 1 and confirmed_tip:
+                    item.setToolTip(confirmed_tip)
                 self.table.setItem(r, c, item)
         self._update_buttons()
 
