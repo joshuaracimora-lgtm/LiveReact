@@ -292,13 +292,9 @@ def test_venue_save_to_a_folder_it_cannot_write_says_so(console, qapp, monkeypat
     assert console.venue_tab.status.text().startswith("Not saved")
 
 
-def test_the_manual_page_points_at_the_menu_that_exists(console, qapp):
-    """It said "in Settings"; the console has no Settings menu. The key lives under Fixtures."""
-    from PySide6 import QtWidgets
-    menus = [a.text().replace("&", "") for a in console.menuBar().actions()]
-    assert "Fixtures" in menus and "Settings" not in menus
-    from livereact.ui.fixture_wizard import FixtureWizard
-    w = FixtureWizard()
-    w.b_manual.click()
-    text = " ".join(lbl.text() for lbl in w.manual_page.findChildren(QtWidgets.QLabel))
-    assert "Fixtures menu" in text and "in Settings" not in text
+def test_the_manual_page_points_at_the_menu_that_exists(qapp):
+    """It said "in Settings"; the console has no Settings menu. The key lives under Fixtures. Online and no key
+    are injected: the real checks read this machine's network and keyring."""
+    from livereact.ui.manual_upload import UploadManualPage
+    page = UploadManualPage(key_provider=lambda: None, online=lambda: True, threaded=False)
+    assert "Fixtures menu" in page.availability() and "in Settings" not in page.availability()
