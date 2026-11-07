@@ -28,6 +28,15 @@ UNTESTED, PASS, FAIL = "untested", "pass", "fail"
 _MARKS = (UNTESTED, PASS, FAIL)
 LOW_CONFIDENCE = 0.6
 ARM_POLL_MS = 100
+NOT_CONNECTED = ("These sliders do not reach your lights: this screen is not connected to the DMX output yet. "
+                 "Marking a channel pass here records what you say, not what the fixture did.")
+# not offered for a laser: that tool is raw DMX, with no arm switch and no safety gate in front of it
+NOT_CONNECTED_HOW = (" To watch a fixture respond, add it to a rig in Rig Config, save, quit LiveReact, then run:  "
+                     "python -m livereact --fixture-test --hardware --rig <your rig file>")
+NOT_CONNECTED_NO_ROUTE = " There is no safe way to test a laser from LiveReact yet: check it against its manual."
+NOT_CONNECTED_LASER = "This screen does not reach your lights yet, so there is nothing to enable."
+BUILT_IN = ("Built-in model: it cannot be confirmed or changed here. To adapt it, close this screen and use "
+            "Duplicate in the Fixture library, then test the copy.")
 _INTENT_LABELS = {"blank": "Blank (laser off)", "line_static": "Static line", "fan": "Fan"}
 
 
@@ -40,20 +49,24 @@ class ChannelTestPanel(QtWidgets.QWidget):
 
     def __init__(self, definition: FixtureDefinition, mode: str | None = None, address: int = 1,
                  frame_buffer: DmxFrameBuffer | None = None, save=None, now=_now,
-                 laser_armed: Callable[[], bool] | None = None,
+                 laser_armed: Callable[[], bool] | None = None, builtin: bool = False,
                  parent: QtWidgets.QWidget | None = None) -> None:
         """``save(definition) -> path``: where Confirm writes (default: the user library).
-        ``laser_armed()``: the console's arm switch (``manual.laser_enable``); None = never armed."""
+        ``laser_armed()``: the console's arm switch (``manual.laser_enable``); None = never armed.
+        ``frame_buffer``: what the sliders publish to; None = a private one nothing reads, and the
+        screen says so. ``builtin``: a packaged model, which the library refuses to save."""
         super().__init__(parent)
         self.laser_armed: Callable[[], bool] = laser_armed or (lambda: False)
         self._armed = False
         self.definition = definition
         self.mode = definition.mode(mode)
         self.address = address
+        self.is_laser = definition.category == "laser"
+        self.connected = frame_buffer is not None
+        self.builtin = builtin
         self.frame_buffer = frame_buffer or DmxFrameBuffer()
         self._save = save
         self._now = now
-        self.is_laser = definition.category == "laser"
         self.values = [0] * len(self.mode.channels)
         li = definition.laser_intents
         self.intents: dict[str, dict[int, int]] = {k: dict(getattr(li, k)) if li else {} for k in LASER_INTENTS}
@@ -65,14 +78,23 @@ class ChannelTestPanel(QtWidgets.QWidget):
 
         v = QtWidgets.QVBoxLayout(self)
         src = definition.source
-        head = QtWidgets.QLabel(f"{definition.manufacturer} {definition.model} — {self.mode.name} — "
-                                f"DMX {address}-{address + len(self.mode.channels) - 1} — "
-                                + ("confirmed" if src.confirmed else "not confirmed yet"))
-        head.setWordWrap(True)
-        v.addWidget(head)
+        dmx = f"DMX {address}-{address + len(self.mode.channels) - 1} — " if self.connected else ""
+        self.head = QtWidgets.QLabel(f"{definition.manufacturer} {definition.model} — {self.mode.name} — {dmx}"
+                                     + ("confirmed" if src.confirmed else "not confirmed yet"))
+        self.head.setWordWrap(True)
+        v.addWidget(self.head)
+        self.l_offline = QtWidgets.QLabel(NOT_CONNECTED + (NOT_CONNECTED_NO_ROUTE if self.is_laser
+                                                           else NOT_CONNECTED_HOW))
+        self.l_offline.setWordWrap(True)
+        self.l_offline.setStyleSheet("color:#e0a030;")
+        self.l_offline.setVisible(not self.connected)
+        v.addWidget(self.l_offline)
 
         self.cb_laser_out = QtWidgets.QCheckBox("Enable laser output on this screen")
         self.cb_laser_out.setVisible(self.is_laser)
+        if not self.connected:
+            self.cb_laser_out.setEnabled(False)
+            self.cb_laser_out.setToolTip(NOT_CONNECTED_LASER)
         self.cb_laser_out.toggled.connect(lambda _on: self._on_box())
         v.addWidget(self.cb_laser_out)
         self.l_arm = QtWidgets.QLabel("")
@@ -150,7 +172,7 @@ class ChannelTestPanel(QtWidgets.QWidget):
         row.addStretch(1)
         row.addWidget(self.b_confirm)
         v.addLayout(row)
-        self.status = QtWidgets.QLabel("")
+        self.status = QtWidgets.QLabel(BUILT_IN if builtin else "")
         self.status.setWordWrap(True)
         v.addWidget(self.status)
         self._refresh_intents()
@@ -227,6 +249,8 @@ class ChannelTestPanel(QtWidgets.QWidget):
     # --- confirm ---
     def missing(self) -> list[str]:
         """What still stops Confirm, in words; empty when it may confirm."""
+        if self.builtin:
+            return [BUILT_IN]
         out = []
         untested = [i + 1 for i, m in enumerate(self.marks) if m.currentText() != PASS]
         if untested:

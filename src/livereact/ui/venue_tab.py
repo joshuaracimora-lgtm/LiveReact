@@ -49,9 +49,10 @@ from ..fixtures.geometry import (
     m_to_ft,
     wrap_deg,
 )
+from ..fixtures.generic import GenericMovingHead
 from ..fixtures.profiles import Laser, MotionBounds, MovingHead, _to16
 from ..fixtures.rig import Rig, RigError, save_rig
-from ..merge.merge import CalibrationPins
+from ..merge.merge import CalibrationPins, Contribution
 from .floorplan import DEFAULT_VENUE_FT, FloorPlanView
 from .theme import MUTED
 
@@ -103,6 +104,14 @@ class _WheelGuard(QtCore.QObject):
             event.ignore()
             return True
         return super().eventFilter(obj, event)
+
+
+def _open_white(fx: MovingHead) -> dict[int, int]:
+    """The channels that make this head open white, from its own set_color: a wheel head has one
+    (the open slot), an RGBW head four, and an offset written here would be a different colour."""
+    c = Contribution()
+    fx.set_color(c, 1.0, 1.0, 1.0, 1.0)
+    return {ch: c.values[ch - 1] for ch in fx.channels() if c.touched[ch - 1]}
 
 
 class VenueTab(QtWidgets.QWidget):
@@ -289,6 +298,12 @@ class VenueTab(QtWidgets.QWidget):
             b.valueChanged.connect(lambda v, a=axis: self._placement_edited(a, v))
         v.addWidget(place)
 
+        # a head from the library is not a MovingHead: say why the group below is missing
+        self.l_no_cal = _hint("Calibration works only on the built-in moving head models for now, so a head "
+                              "added from the fixture library cannot be aimed at a target here.")
+        self.l_no_cal.setVisible(False)
+        v.addWidget(self.l_no_cal)
+
         # moving head: calibrate
         self.grp_head = QtWidgets.QGroupBox("Calibrate (moving head)")
         hf = QtWidgets.QFormLayout(self.grp_head)
@@ -420,6 +435,7 @@ class VenueTab(QtWidgets.QWidget):
             is_head, is_laser = isinstance(fx, MovingHead), isinstance(fx, Laser)
             self.grp_head.setVisible(is_head)
             self.grp_laser.setVisible(is_laser)
+            self.l_no_cal.setVisible(isinstance(fx, GenericMovingHead))
             if is_head and self.cb_light.isChecked():
                 self._push_head_pins()  # 2026-10-05: light the head on select, so it can be calibrated
             if is_head:
@@ -564,7 +580,8 @@ class VenueTab(QtWidgets.QWidget):
         a = fx.address
         channels: dict[int, int] = {}
         if light:
-            channels.update({a + 4: 128, a + 5: 255, a + 6: 0, a + 7: 0})  # speed, dimmer, strobe off, colour open
+            channels.update({a + 4: 128, a + 5: 255, a + 6: 0})  # speed, dimmer, strobe off
+            channels.update(_open_white(fx))
         if jog:
             pan01, tilt01 = self._pan_tilt01()
             ph, pl = _to16(pan01)
@@ -848,7 +865,7 @@ class VenueTab(QtWidgets.QWidget):
             # the rig's own description survives; the stock line only fills an empty one
             save_rig(self.rig, path, self.rig.description
                      or "Venue layout + calibration edited in the LiveReact console's Venue tab.")
-        except RigError as exc:
+        except (RigError, OSError) as exc:
             self.status.setText(f"Not saved — {exc}")
             self.status.setStyleSheet("color:#c33;")
             return

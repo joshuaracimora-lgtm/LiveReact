@@ -138,8 +138,9 @@ class RigConfigTab(QtWidgets.QWidget):
     def reload_definitions(self) -> None:
         """Pick up definitions added to the user library since the tab was built."""
         for d in _user_definitions():
-            if d.id not in self.definitions:
-                self.definitions[d.id] = d
+            known = d.id in self.definitions
+            self.definitions[d.id] = d      # also a saved fixture that was replaced: its channels may differ
+            if not known:
                 for r in range(self.table.rowCount()):
                     tc = self.table.cellWidget(r, C_TYPE)
                     if isinstance(tc, QtWidgets.QComboBox):
@@ -417,11 +418,16 @@ class RigConfigTab(QtWidgets.QWidget):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save rig", default_path, "JSON (*.json)")
         if not path:
             return
-        dirname = os.path.dirname(path)
-        if dirname:
-            os.makedirs(dirname, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2)
+        try:
+            dirname = os.path.dirname(path)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=2)
+        except OSError as exc:
+            self.status.setText(f"Not saved — {exc}")
+            self.status.setStyleSheet("color:#c33;")
+            return
         log.info("Saved rig config to %s", path)
         self.rig_path = path
         if apply:

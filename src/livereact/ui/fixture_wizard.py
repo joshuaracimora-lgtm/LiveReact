@@ -12,13 +12,19 @@ import re
 
 from PySide6 import QtCore, QtWidgets
 
+from .. import userdata
 from ..fixtures.definition import CATEGORIES, FUNCTIONS, SCHEMA, DefinitionError, load_definition, validate
+from ..fixtures.library import rigs_using, save_user_definition
 from .channel_test import ChannelTestPanel
 from .manual_upload import UploadManualPage
 from .ofl_worker import OflSearchPage
 
 PAGE_START, PAGE_OFL, PAGE_MANUAL, PAGE_HAND, PAGE_TEST = range(5)
 NOT_BUILT = "Not available in this version yet — use “Enter by hand” for now."
+NEXT_STEP = "Next: open the Rig Config tab, press Add fixture, and pick it in the Type list."
+# scenes and engines write the wash role only through isinstance(fx, (Par, WashBar)) (roadmap item 15)
+WASH_LIMIT = "Known limit in this version: the show does not light a fixture added here on the wash role."
+HEAD_ROLE = "Set its Role to spot: the show does not light a fixture added here on the wash role yet."
 
 
 def slug(text: str) -> str:
@@ -104,8 +110,17 @@ class HandEntryPage(QtWidgets.QWidget):
         errs = []
         if not raw["manufacturer"] or not raw["model"]:
             errs.append("enter the manufacturer and the model")
-        if not raw["modes"][0]["channels"]:
+        elif not raw["id"]:
+            errs.append("the manufacturer or the model needs at least one letter or digit")
+        channels = raw["modes"][0]["channels"]
+        if not channels:
             errs.append("add at least one channel")
+        elif raw["category"] == "moving_head" and not {"pan", "tilt"} <= {c["function"] for c in channels}:
+            errs.append("a moving head needs pan and tilt channels")
+        for ch in channels:
+            if ch["function"].endswith("_fine") and "fine_of" not in ch:
+                fine = ch["function"].replace("_", " ")
+                errs.append(f"{fine} needs a {fine[:-len(' fine')]} channel in the list")
         d = None
         if not errs:
             try:
@@ -127,8 +142,9 @@ class FixtureWizard(QtWidgets.QDialog):
 
     def __init__(self, parent: QtWidgets.QWidget | None = None, save=None,
                  ofl_service_factory=None, threaded: bool = True, manual_page_kwargs: dict | None = None,
-                 laser_armed=None) -> None:
-        """``save``: passed to the channel-test screen (default: the user library).
+                 laser_armed=None, confirm=None) -> None:
+        """``save``: what Confirm writes through (default: the user library).
+        ``confirm(title, text) -> bool``: the replace-a-saved-fixture box (default: a QMessageBox).
         ``ofl_service_factory() -> OflService`` (default: the real one, cached in the user folder).
         ``manual_page_kwargs``: passed to UploadManualPage (tests inject a fake reader / key).
         ``laser_armed()``: the console's arm switch, the channel-test screen's second laser key."""
@@ -136,6 +152,7 @@ class FixtureWizard(QtWidgets.QDialog):
         self.setWindowTitle("Add a fixture")
         self._save = save
         self._laser_armed = laser_armed
+        self._confirm = confirm if confirm is not None else self._ask
         self.test_panel: ChannelTestPanel | None = None
         v = QtWidgets.QVBoxLayout(self)
         self.stack = QtWidgets.QStackedWidget()
@@ -191,6 +208,35 @@ class FixtureWizard(QtWidgets.QDialog):
         lv.addStretch(1)
         return w
 
+    def _ask(self, title: str, text: str) -> bool:
+        box = QtWidgets.QMessageBox
+        return box.question(self, title, text, box.StandardButton.Yes | box.StandardButton.No,
+                            box.StandardButton.No) == box.StandardButton.Yes
+
+    def _save_checked(self, d):
+        """Save the definition this wizard built, asking first if that would change a saved fixture of the
+        same id: a different channel layout under an old id moves every rig that uses it. The manual
+        reader's own draft, or the same channels confirmed again, change nothing and are not asked about."""
+        path = userdata.paths(create=False).fixtures / f"{d.id}.json"
+        if path.is_file():
+            try:
+                old = load_definition(path).to_dict()["modes"]
+            except (DefinitionError, OSError, ValueError):
+                old = None
+            if old != d.to_dict()["modes"]:
+                text = f"You already have a saved fixture {d.id!r} with different channels. Replace it?"
+                used = rigs_using(d.id)
+                if used:
+                    text += "\n\nThese rigs use it and will change: " + ", ".join(used) + "."
+                if not self._confirm("Replace fixture", text):
+                    raise ValueError(f"you kept the saved {d.id!r}; change the model name to save this as a new one")
+        return (self._save or save_user_definition)(d)
+
+    def _confirmed(self, d) -> None:
+        limit = {"moving_head": HEAD_ROLE, "laser": ""}.get(d.category, WASH_LIMIT)
+        self.test_panel.status.setText(" ".join(t for t in (self.test_panel.status.text(), NEXT_STEP, limit) if t))
+        self.added.emit(d)
+
     def go(self, page: int) -> None:
         if page == PAGE_OFL and self.ofl_page.service is None:
             self.ofl_page.load()
@@ -212,8 +258,8 @@ class FixtureWizard(QtWidgets.QDialog):
         if self.test_panel is not None:
             lay.removeWidget(self.test_panel)
             self.test_panel.deleteLater()
-        self.test_panel = ChannelTestPanel(definition, save=self._save, laser_armed=self._laser_armed)
-        self.test_panel.confirmed.connect(self.added.emit)
+        self.test_panel = ChannelTestPanel(definition, save=self._save_checked, laser_armed=self._laser_armed)
+        self.test_panel.confirmed.connect(self._confirmed)
         lay.addWidget(self.test_panel)
         self.go(PAGE_TEST)
         return self.test_panel
