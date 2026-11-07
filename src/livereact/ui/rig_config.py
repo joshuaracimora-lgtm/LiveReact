@@ -78,6 +78,16 @@ class RigConfigTab(QtWidgets.QWidget):
         note.setWordWrap(True)
         v.addWidget(note)
 
+        # The rig's name (UX_BACKLOG UX 7): a rig saved under a new file used to keep the old rig's
+        # name, so the status bar announced the wrong rig after "Save and use now".
+        name_row = QtWidgets.QHBoxLayout()
+        name_row.addWidget(QtWidgets.QLabel("Rig name:"))
+        self.name_edit = QtWidgets.QLineEdit(rig.name or "")
+        self.name_edit.setPlaceholderText(rig.name or "rig")
+        self.name_edit.setToolTip("Saved in the rig file; the status bar and the Rig manager show it")
+        name_row.addWidget(self.name_edit, 1)
+        v.addLayout(name_row)
+
         self.table = QtWidgets.QTableWidget(0, len(_COLUMNS))
         self.table.setHorizontalHeaderLabels(_COLUMNS)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -382,6 +392,7 @@ class RigConfigTab(QtWidgets.QWidget):
             slots.append(slot)
         data = rig_to_dict(self.rig, self.rig.description or "Edited via the LiveReact console's Rig Config tab.")
         data["slots"] = slots
+        data["name"] = self.name_edit.text().strip() or self.rig.name
         from ..fixtures.library import BUILTIN_DIR
         defs = {fid: self.definitions[fid].to_dict() for fid in sorted(used_defs)
                 if fid in self.definitions and not (BUILTIN_DIR / f"{fid}.json").is_file()}

@@ -94,9 +94,6 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
    run also stopped after one PNG with no WALKTHROUGH.md again on 2026-11-05, while the same command run by
    hand finished in 11 s. Journey: none, a `tools/` fix.
 
-7. **Saved-as rigs keep the old rig's name.** Rig Config has no name field, so a file saved under a new name still
-   announces "Now playing rig: LiveReact default rig", and the fixture delete box lists that name for it. Proposal:
-   a Name field in Rig Config. Journey: save a rig as a new file and the status bar names it.
 8. **Laser Confirm is possible with nothing seen.** See Open 5: Capture Blank works on all-zero sliders no one
    watched. Proposal: until the screen reaches the rig, a confirmed laser definition stays visibly "not verified".
 
@@ -112,6 +109,11 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Saved-as rigs kept the old rig's name** (UX 7, 2026-11-07). Rig Config had no name field, so a rig saved to a new
+  file still announced "Now playing rig: <old name>" and the fixture-delete box listed the old name for it. A "Rig name"
+  field above the table (prefilled with the current name) is written into the file; "Save and use now" plays the rig
+  under the new name. A blank field keeps the old name. Not done: naming the rig after the file automatically when
+  the field is left unchanged (Josh's call). `tests/test_ui_rig_config_name.py` (3 tests).
 - **"Confirmed: no" on a built-in read as a job to do** (UX 9, 2026-11-07). The Fixture library said "no" for the
   three unconfirmed built-ins, which the channel test refuses to confirm. They read "n/a (built-in)" now, with a tooltip
   pointing to Duplicate…; a user's own unconfirmed definition still says "no", with a tooltip naming Test / confirm….
