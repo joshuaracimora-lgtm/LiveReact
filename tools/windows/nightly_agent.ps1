@@ -20,6 +20,8 @@ param(
   [double]$SearchHours = 0,      # knob search after the Preference Verifier (0 = skip; off since 2026-10-30: it optimises the old Bible scorer, see docs/LIGHTING_PREFERENCES.md)
   [double]$SweepMinutes = 40,    # bug/invariant sweep over the USB export before the agents (0 = skip)
   [double]$LaserMinutes = 30,    # laser report (fan profile) over the USB export after the sweep (0 = skip)
+  [double]$TestMinutes = 30,     # cap on the full pytest after each agent (2026-11-07: it had grown to 5.5-7.5 h and ate the App/Tracks windows)
+  [double]$GateMinutes = 60,     # cap on each agent's independent gate; both caps are also clamped to the hard stop
   [int]$Patience = 300,
   [string]$Model = "",           # e.g. "opus"; empty = Claude Code's default
   [double]$MaxBudgetUsd = 0,     # per agent; 0 = no cap
@@ -105,6 +107,22 @@ function Wait-ApiReachable([string]$Role, [int]$MaxMinutes) {
   }
   Step "$Role agent: API still unreachable at $(Get-Date -Format 'HH:mm')"
   return $false
+}
+
+# A command line with a wall-clock cap, its output to $LogPath. 2026-11-07: the post-agent full pytest had grown
+# to 5.5-7.5 h, left the App and Tracks agents minutes (or nothing), and on 11-06 ran past the hard stop until the
+# task's 10 h limit killed the night. The cap is clamped to the hard stop too. Returns @{Exit; TimedOut; Lines}.
+function Invoke-Capped([string]$CmdLine, [string]$LogPath, [double]$Minutes) {
+  $left = (Get-HoursLeft 0) * 60
+  if ($left -lt $Minutes) { $Minutes = $left }
+  $ms = [int][math]::Max(60000, $Minutes * 60000)
+  $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "$CmdLine > `"$LogPath`" 2>&1" -WorkingDirectory $root -PassThru -WindowStyle Hidden
+  $null = $p.Handle   # without touching the handle, ExitCode can read back empty after WaitForExit(ms)
+  $done = $p.WaitForExit($ms)
+  if (-not $done) { & taskkill /T /F /PID $p.Id 2>&1 | Out-Null; $p.WaitForExit(10000) | Out-Null }
+  $lines = @(); if (Test-Path $LogPath) { $lines = @(Get-Content $LogPath -Encoding UTF8) }
+  $code = if ($done) { $p.ExitCode } else { -1 }
+  return @{ Exit = $code; TimedOut = (-not $done); Lines = $lines; Minutes = [int]$Minutes }
 }
 
 function Get-Changed([string]$range) { @(git -c core.quotepath=off diff --name-only $range 2>$null | Where-Object { $_ }) }
@@ -279,36 +297,52 @@ $SweepNote
     Write-Host "working tree still dirty after stashing; verification would judge the wrong code"
     $r.Tests = "FAIL"; $r.Gate = "ERROR"; $r.Exit = 4
   } elseif ($r.Commits -gt 0) {
-    Step "$Role agent: full pytest"
-    $pt = @(& $py -m pytest -o addopts="" -q 2>&1)
-    $ptExit = $LASTEXITCODE
-    # the LAST "N passed / N failed" line, not the last line: Qt prints errors from callbacks to stderr,
-    # which can land after pytest's summary (stress test 2026-10-26: a green run read as FAIL)
-    $summary = "$(@($pt | Where-Object { "$_" -match '^\s*=*\s*\d+ (passed|failed)|^\s*=*\s*no tests ran' }) | Select-Object -Last 1)"
-    Write-Host "pytest (exit $ptExit): $summary"
-    $failed = 0; if ($summary -match '(\d+) failed') { $failed = [int]$Matches[1] }
-    $unknown = @($pt | Where-Object { $_ -match '^(FAILED|ERROR)' } | Where-Object { $_ -notmatch 'test_spec_conformance_gaps' })
-    $r.Tests = if ($ptExit -le 1 -and $failed -le 3 -and $unknown.Count -eq 0 -and $summary -match 'passed') { "ok" } else { "FAIL" }
-    $unknown | ForEach-Object { Write-Host "  $_" }
+    # The gate first (2026-11-07): it is the verdict that matters, and before this the full pytest ran first and
+    # could take the whole night. Both are capped (-GateMinutes / -TestMinutes) and clamped to the hard stop.
     $verify = Join-Path $dir "gate_verify.json"
+    $gateLog = Join-Path $dir "gate_verify.log"
     if ($Role -eq "ui") {
       Step "ui agent: gate_ui vs harness"
-      & $py tools\agent\gate_ui.py --base harness --baseline $BaselineBefore --out $verify 2>&1 | Select-Object -Last 30 | Out-Host
+      $gateCmd = "$py tools\agent\gate_ui.py --base harness --baseline `"$BaselineBefore`" --out `"$verify`""
     } elseif ($Role -eq "app") {
       Step "app agent: gate_app vs harness"
-      & $py tools\agent\gate_app.py --base harness --baseline $BaselineBefore --out $verify 2>&1 | Select-Object -Last 30 | Out-Host
+      $gateCmd = "$py tools\agent\gate_app.py --base harness --baseline `"$BaselineBefore`" --out `"$verify`""
     } else {
       $rulesOnly = @($r.Changed | Where-Object { $_ -notmatch '^(section_classes\.json|src/livereact/rekordbox/sections\.py|tests/.+)$' }).Count -eq 0
       $r.HeadEval = Join-Path $dir "head_eval.json"
-      if ($rulesOnly) {
-        Step "tracks agent: class rules only -> lighting gate in no-regression mode"
-        & $py tools\agent\gate_head.py --baseline $BaselineBefore --usb usb_export --drive --no-regress --out $verify --out-eval $r.HeadEval 2>&1 | Select-Object -Last 30 | Out-Host
-      } else {
-        Step "tracks agent: lighting gate"
-        & $py tools\agent\gate_head.py --baseline $BaselineBefore --usb usb_export --drive --out $verify --out-eval $r.HeadEval 2>&1 | Select-Object -Last 30 | Out-Host
-      }
+      $noRegress = ""
+      if ($rulesOnly) { Step "tracks agent: class rules only -> lighting gate in no-regression mode"; $noRegress = " --no-regress" }
+      else { Step "tracks agent: lighting gate" }
+      $gateCmd = "$py tools\agent\gate_head.py --baseline `"$BaselineBefore`" --usb usb_export --drive$noRegress --out `"$verify`" --out-eval `"$($r.HeadEval)`""
     }
-    $r.Gate = if ($LASTEXITCODE -eq 0) { "ACCEPT" } elseif ($LASTEXITCODE -eq 1) { "REJECT" } else { "ERROR" }
+    $g = Invoke-Capped $gateCmd $gateLog $GateMinutes
+    $g.Lines | Select-Object -Last 30 | Out-Host
+    if ($g.TimedOut) { Write-Host "$Role agent: gate stopped at its $($g.Minutes)-min cap" }
+    $r.Gate = if ($g.TimedOut) { "TIMEOUT" } elseif ($g.Exit -eq 0) { "ACCEPT" } elseif ($g.Exit -eq 1) { "REJECT" } else { "ERROR" }
+
+    Step "$Role agent: full pytest (cap $TestMinutes min)"
+    # --durations and faulthandler_timeout: the suite went from ~1.3 h (October) to 5.5-7.5 h after 11-02, cause
+    # not yet found; the log now names the slowest tests and dumps the stack of any test stuck over 5 min.
+    # The deselected test hangs in a full run (known since 2026-10-28).
+    $ptLog = Join-Path $dir "full_pytest.log"
+    $ptCmd = "$py -m pytest -o addopts= -q -p no:cacheprovider -o faulthandler_timeout=300 --durations=40 " +
+             "--deselect tests/test_console.py::test_console_launch_pins_nothing_until_the_venue_tab_is_opened"
+    $t = Invoke-Capped $ptCmd $ptLog $TestMinutes
+    $pt = $t.Lines; $ptExit = $t.Exit
+    # the LAST "N passed / N failed" line, not the last line: Qt prints errors from callbacks to stderr,
+    # which can land after pytest's summary (stress test 2026-10-26: a green run read as FAIL)
+    $summary = "$(@($pt | Where-Object { "$_" -match '^\s*=*\s*\d+ (passed|failed)|^\s*=*\s*no tests ran' }) | Select-Object -Last 1)"
+    $unknown = @($pt | Where-Object { $_ -match '^(FAILED|ERROR)' } | Where-Object { $_ -notmatch 'test_spec_conformance_gaps' })
+    if ($t.TimedOut) {
+      $progress = "$(@($pt | Where-Object { "$_" -match '\[\s*\d+%\]' }) | Select-Object -Last 1)".Trim()
+      Write-Host "pytest: stopped at its $($t.Minutes)-min cap, last progress line: $progress (full log: $ptLog)"
+      $r.Tests = "TIMEOUT"
+    } else {
+      Write-Host "pytest (exit $ptExit): $summary"
+      $failed = 0; if ($summary -match '(\d+) failed') { $failed = [int]$Matches[1] }
+      $r.Tests = if ($ptExit -le 1 -and $failed -le 3 -and $unknown.Count -eq 0 -and $summary -match 'passed') { "ok" } else { "FAIL" }
+    }
+    $unknown | ForEach-Object { Write-Host "  $_" }
     Step "$Role agent: independent gate $($r.Gate) ; tests $($r.Tests)"
     if ($r.Gate -ne "ACCEPT" -or $r.Tests -ne "ok") { $r.Exit = 4 }
   }
