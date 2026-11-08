@@ -339,3 +339,8 @@ Hard rules for every item, whoever does it:
   manufacturer or model jump to the definition, picking a completion selects that item, junk text
   leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
   searchable at once. Tests: `tests/test_app_type_picker.py`.
+- **56. Resilience: XDJ MIDI comes back after a USB drop** (2026-11-07; code from the ungated 11-03/11-05
+  nights). `inputs/midi.py`: a 2 s watchdog polls the OS port list; a vanished port is closed and the same
+  port (or another XDJ port, never an arbitrary controller) reopened when it returns; launching with the
+  XDJ unplugged no longer loses MIDI for the night. `ui/health.py` banner: "XDJ MIDI LOST". Fake mido only,
+  not yet tried on the real XDJ. Tests: `tests/test_app_midi_recovery.py`.
