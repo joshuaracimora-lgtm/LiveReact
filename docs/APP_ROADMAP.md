@@ -344,3 +344,7 @@ Hard rules for every item, whoever does it:
   port (or another XDJ port, never an arbitrary controller) reopened when it returns; launching with the
   XDJ unplugged no longer loses MIDI for the night. `ui/health.py` banner: "XDJ MIDI LOST". Fake mido only,
   not yet tried on the real XDJ. Tests: `tests/test_app_midi_recovery.py`.
+- **57. Resilience: the recordings disk is checked** (2026-11-07). `--preflight` has a "Recordings disk"
+  line (FAIL under 0.5 GB free, WARN under 2 GB; calibration defaults), and a `--record` session's console
+  banner says "RECORDING DISK FULL" (asked at most every 30 s) instead of the recorder failing in silence.
+  Tests: `tests/test_app_disk_space.py`, `tests/test_preflight.py`.

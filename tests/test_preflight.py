@@ -10,7 +10,8 @@ ADDRS = [("en0", "192.168.1.20"), ("en8", "169.254.116.220")]
 
 def _run(**kw):
     base = dict(running=False, bind=lambda p: None, holder=lambda p: "", addresses=ADDRS,
-                audio=lambda: ("XDJ-XZ", 43, 0.05), midi=["XDJ-XZ (2)"], dmx=lambda: "/dev/cu.usbserial-EN489520")
+                audio=lambda: ("XDJ-XZ", 43, 0.05), midi=["XDJ-XZ (2)"], dmx=lambda: "/dev/cu.usbserial-EN489520",
+                disk=lambda: ("/", 50 * 1024 ** 3))   # faked: the test must not depend on this disk
     base.update(kw)
     return pf.run("rigs/junior_crib_fan.json", "en8", **base)
 

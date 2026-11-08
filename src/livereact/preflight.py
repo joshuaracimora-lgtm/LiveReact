@@ -10,6 +10,8 @@ Each check returns a ``Check``; ``run`` takes the probes as arguments so tests c
 from __future__ import annotations
 
 import errno
+import os
+import shutil
 import socket
 import subprocess
 from dataclasses import dataclass
@@ -21,6 +23,11 @@ PDL_PORTS = (KEEPALIVE_PORT, BEAT_PORT, STATUS_PORT)
 AUDIO_SECONDS = 1.0
 AUDIO_MIN_BLOCKS = 10          # a live stream delivers ~43 blocks/s; fewer means it is not really running
 AUDIO_SILENT_RMS = 1e-4        # below this the XDJ is connected but nothing is playing (or the master is down)
+# Recordings disk (2026-11-07): a full disk silently stops a --record session. Calibration defaults,
+# not measured: a session writes tens of MB per hour, so 2 GB is a long night with room to spare.
+DISK_FAIL_BYTES = 500 * 1024 ** 2
+DISK_WARN_BYTES = 2 * 1024 ** 3
+RECORDINGS_DIR = "recordings"
 
 
 @dataclass
@@ -104,6 +111,15 @@ def probe_dmx() -> str:
     return str(port)
 
 
+def free_bytes(path: str = RECORDINGS_DIR) -> tuple[str, int]:
+    """Free space on the disk ``path`` will live on; walks up to the nearest folder that exists
+    (the recordings folder is only created on the first --record)."""
+    where = os.path.abspath(path)
+    while not os.path.isdir(where) and os.path.dirname(where) != where:
+        where = os.path.dirname(where)
+    return where, shutil.disk_usage(where).free
+
+
 # ---------------------------------------------------------------- checks
 
 def check_not_running(running: bool) -> Check:
@@ -168,6 +184,21 @@ def check_dmx(probe=probe_dmx) -> Check:
     return Check("DMX adapter", PASS, f"Enttec opened on {port}")
 
 
+def check_disk(probe=free_bytes) -> Check:
+    try:
+        where, free = probe()
+    except Exception as exc:  # noqa: BLE001
+        return Check("Recordings disk", WARN, f"cannot read free space ({exc}) — a --record session may not be saved")
+    gb = free / 1024 ** 3
+    if free < DISK_FAIL_BYTES:
+        return Check("Recordings disk", FAIL, f"{where}: only {gb:.1f} GB free — a recording would stop partway "
+                     "through the set. Free up space (or record to another disk with --session-dir).")
+    if free < DISK_WARN_BYTES:
+        return Check("Recordings disk", WARN, f"{where}: {gb:.1f} GB free — enough for a short set; "
+                     "free up space before a long night of --record.")
+    return Check("Recordings disk", PASS, f"{where}: {gb:.1f} GB free")
+
+
 def check_rig(path: str | None) -> list[Check]:
     from .fixtures.rig import load_rig
     try:
@@ -183,7 +214,7 @@ def check_rig(path: str | None) -> list[Check]:
 
 
 def run(rig_path: str | None, interface: str | None, *, running=app_running, bind=try_bind_udp,
-        holder=port_holder, addresses=None, audio=probe_audio, midi=None, dmx=probe_dmx) -> list[Check]:
+        holder=port_holder, addresses=None, audio=probe_audio, midi=None, dmx=probe_dmx, disk=free_bytes) -> list[Check]:
     from . import network
     if addresses is None:
         addresses = network.list_ipv4_addresses()
@@ -195,7 +226,7 @@ def run(rig_path: str | None, interface: str | None, *, running=app_running, bin
     if first.status == FAIL:
         return checks + check_rig(rig_path)
     checks += [check_pdl_ports(bind, holder), check_link_local(addresses, interface), check_audio(audio),
-               check_midi(midi), check_dmx(dmx)]
+               check_midi(midi), check_dmx(dmx), check_disk(disk)]
     return checks + check_rig(rig_path)
 
 

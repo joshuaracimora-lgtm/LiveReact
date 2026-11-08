@@ -8,9 +8,14 @@ is testable without Qt; ui/console.py turns the list into a red banner.
 from __future__ import annotations
 
 import errno
+import os
+import shutil
 
 GRACE_S = 5.0   # inputs get this long after start before a missing signal counts as a fault
 PDL_QUIET_S = 5.0   # no Pro DJ Link packet of ANY kind for this long = the XDJ is off the network
+DISK_CHECK_S = 30.0                 # the banner refreshes several times a second; the disk is asked this often
+DISK_LOW_BYTES = 500 * 1024 ** 2    # same line as preflight's FAIL (calibration default)
+_DISK_CACHE: dict[str, tuple[float, int | None]] = {}   # session dir -> (checked at, free bytes or None)
 
 
 def _port_in_use(exc: BaseException | None) -> bool:
@@ -23,6 +28,29 @@ def _pdl_quiet(app, now: float) -> bool:
         return False   # no Pro DJ Link input in this setup: nothing to warn about
     last = getattr(src, "last_packet_time", None)
     return last is None or now - last >= PDL_QUIET_S
+
+
+def _free_bytes(path: str) -> int:
+    where = os.path.abspath(path)
+    while not os.path.isdir(where) and os.path.dirname(where) != where:
+        where = os.path.dirname(where)
+    return shutil.disk_usage(where).free
+
+
+def _recording_disk_low(app, now: float) -> bool:
+    """2026-11-07: a full disk made the recorder fail every tick with only log lines (which also
+    could not be written). Only asked when this session records, at most every DISK_CHECK_S."""
+    session_dir = getattr(app.config, "session_dir", None)
+    if getattr(app, "recorder", None) is None or not session_dir:
+        return False
+    checked, free = _DISK_CACHE.get(session_dir, (None, None))
+    if checked is None or now - checked >= DISK_CHECK_S or now < checked:
+        try:
+            free = _free_bytes(session_dir)
+        except Exception:  # noqa: BLE001 - an unreadable disk must never break the banner
+            free = None
+        _DISK_CACHE[session_dir] = (now, free)
+    return free is not None and free < DISK_LOW_BYTES
 
 
 def health_warnings(app, snap, now: float) -> list[str]:
@@ -64,4 +92,8 @@ def health_warnings(app, snap, now: float) -> list[str]:
     if midi is not None and getattr(midi, "lost", False):
         out.append("XDJ MIDI LOST — fader/EQ moves no longer reach the lights. Reconnecting by itself; "
                    "if this stays, check the XDJ's USB cable.")
+
+    if _recording_disk_low(app, now):
+        out.append("RECORDING DISK FULL — this session's recording is about to stop (or has). The show itself "
+                   "is not affected; free up space on this computer to keep recording.")
     return out
