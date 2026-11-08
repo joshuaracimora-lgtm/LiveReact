@@ -419,3 +419,31 @@ def test_a_long_planned_build_still_shows_build():
     assert snap.bucket == "drop"
     snap = sim.run_to(156, level=0.1)                  # 4-bar build after the chorus: after a drop
     assert snap.bucket == "build" and snap.classifier_bucket == "build"
+
+
+def test_no_strobe_in_the_last_two_bars_before_a_planned_roll():
+    """P-13 (D-34): "the roll is the count-in" -- zero strobe in the last two bars of a build whose next
+    drop boundary is a roll lead-in. The count-in was already muted there (planned_roll_ahead), but the
+    armed + rising build strobe still fired: the 2026-11-07 preference pass found 2-14 flashes in those
+    two bars on 7 of 30 replayed library tracks, then the roll restarted from dim ("build up into a drop
+    into a build up"). The drive path closes the plan's strobe permission for those beats only; the
+    roll itself, and the build before those two bars, are unchanged."""
+    import dataclasses
+
+    from livereact.engines.reactive import ReactiveLayerEngine
+    from livereact.fixtures.rig import load_rig
+
+    sim = _roll_sim()                                      # build 17-65, roll 65-97, chorus 97-161
+    snap = sim.run_to(50, level=0.1)
+    assert snap.planned_roll_ahead and snap.beats_to_drop == 15 and snap.planned_strobe_allowed
+    rig = load_rig()
+    for beat in range(57, 65):                             # the last two bars before the roll
+        snap = sim.run_to(beat, level=0.1)
+        assert snap.planned_roll_ahead and 0 < snap.beats_to_drop <= 8
+        assert not snap.planned_strobe_allowed, beat
+        eng = ReactiveLayerEngine(FakeClock())
+        rising = dataclasses.replace(snap, drop_armed=True, rising=True, rise_index=1.0, energy=0.5)
+        eng.tick(rising, rig)
+        assert eng.strobe_level == 0.0 and not eng.strobe_on, beat
+    snap = sim.run_to(66, level=0.1)                       # inside the roll: the planned roll strobe owns it
+    assert snap.planned_roll_progress >= 0.0 and snap.planned_strobe_allowed

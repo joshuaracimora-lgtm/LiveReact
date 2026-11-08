@@ -58,6 +58,10 @@ PLAN_ROLL_WINDOW_BEATS = 32    # a snare-roll start this close before a planned 
                                # is where the bass comes back (the waveform agrees), but Josh marks the drop at
                                # the roll that leads into it, 4-8 bars earlier -- so the plan fixes the hit and
                                # the live roll detector (core/roll_period.py) is allowed to pull the look forward.
+PLAN_ROLL_QUIET_BEATS = 8      # P-13 (D-34): no strobe in the last two bars before a planned roll lead-in -- the
+                               # roll IS the count-in. The count-in was muted there (planned_roll_ahead), but the
+                               # armed + rising build strobe still fired (2026-11-07 preference pass: 7 of 30
+                               # replayed tracks), so the plan's strobe permission closes for these beats.
 PSSI_BEAT_OFFSET = 0           # status beat_count -> phrase-table beat index correction; a Gate-1 hardware
                                # measurement (plan: lets-start-building-this-shimmering-knuth.md). ear-tuned.
 _BACKDATE_EPS_S = 1e-3         # a cue's back-dated base sits this far past its dwell floor (float rounding), not a knob
@@ -2216,6 +2220,16 @@ class Metronome(threading.Thread):
         return bool(sec.plan_active and sec.planned_bucket == "break" and self._is_audio_fresh(now)
                     and self._bass_env < QUIET_BASS_ABS)
 
+    def _planned_strobe_allowed(self) -> bool:
+        """The plan's strobe permission for this beat: the section's, closed for the last
+        PLAN_ROLL_QUIET_BEATS of a non-drop section whose next drop boundary is a roll lead-in (P-13)."""
+        sec = self._section
+        if not sec.strobe_allowed:
+            return False
+        return not (sec.plan_active and sec.roll_ahead and sec.roll_progress < 0.0
+                    and sec.planned_bucket not in ("drop", "peak")
+                    and 0 < sec.beats_to_drop <= PLAN_ROLL_QUIET_BEATS)
+
     def _tease_active(self) -> bool:
         """P-24: a planned Tease is running (drive mode only, like every planned look)."""
         return bool(self._section.plan_active and self._section.tease_progress >= 0.0)
@@ -2289,7 +2303,7 @@ class Metronome(threading.Thread):
             plan_active=self._section.plan_active,
             planned_scene=self._section.planned_scene,
             planned_big_moment=self._section.big_moment,
-            planned_strobe_allowed=self._section.strobe_allowed,
+            planned_strobe_allowed=self._planned_strobe_allowed(),   # P-13: quiet before a planned roll
             planned_laser_allowed=self._section.laser_allowed and not self._tease_active(),   # P-24: no lasers in a Tease
             planned_laser_scene=self._section.laser_scene if self._section.plan_active else "",
             planned_laser_cues=self._section.laser_cues if self._section.plan_active else (),
