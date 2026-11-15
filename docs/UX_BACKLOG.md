@@ -62,8 +62,6 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
    par on wash all 0 while a native par moved; a generic head on spot played. This is roadmap item 15 ([JOSH],
    show path). The wizard now says so after Confirm; the Rig Config row itself still says nothing. Journey: a
    definition patched as wash gets non-zero output, or the row warns.
-7. **The channel test only tests a definition's first mode.** No mode picker, so a multi-mode definition (common
-   from Open Fixture Library) is confirmed whole after testing one mode. Journey: a two-mode definition offers both.
 8. **`--fixture-test` has no laser guard.** `ui/fixture_test.py` gives raw sliders on every channel with no arm
    switch. It is a bring-up tool, but tonight's note deliberately does not send laser users there. [JOSH]
 9. **`--fixture-test` "Save as Home Position" to an unwritable path raises.** `_save_home_position` catches only
@@ -116,6 +114,12 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **The channel test only tested a definition's first mode** (Open 7, 2026-11-15). A multi-mode definition (common
+  from Open Fixture Library) was confirmed whole after the user had seen one mode. A "Mode:" picker now shows when a
+  definition has more than one; switching zeroes every channel and shows that mode's sliders, each mode keeps its
+  pass marks, and Confirm (which marks the whole definition) waits until every mode is marked pass ("test mode
+  '5ch' too"). One-mode definitions look as before. Laser intents stay definition-wide, captured in whichever mode is
+  on screen (unchanged). `tests/test_ui_channel_test_modes.py` (3 tests).
 - **Rig Config edits could not reach the running show** (walk-through UNREACHABLE, 2026-11-03): the tab
   said every edit needs a restart — written before `App.switch_rig` (D-38) existed, while the Rig manager
   already switched live. "Save and use now…" saves with the same validation, then the console switches the

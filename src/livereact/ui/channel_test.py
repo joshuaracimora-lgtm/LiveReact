@@ -5,9 +5,10 @@ Every route that adds a fixture (Open Fixture Library, the manual reader, hand e
 10-19") that sends the middle of that range; a pass/fail mark per channel; and **Confirm**,
 which sets ``source.confirmed`` + ``confirmed_at`` and saves through fixtures/library.py.
 
-Confirm needs every channel marked pass. For a laser it also needs the user's values for the
-three intents (blank, static line, fan; captured from the sliders), because a GenericLaser
-outputs nothing without them. Laser channels are sent as zeros unless BOTH "Enable laser output
+Confirm needs every channel marked pass, in every mode the definition has (a mode picker appears
+when there is more than one; Confirm marks the whole definition, so every mode gets tested). For a
+laser it also needs the user's values for the three intents (blank, static line, fan; captured
+from the sliders), because a GenericLaser outputs nothing without them. Laser channels are sent as zeros unless BOTH "Enable laser output
 on this screen" is ticked AND the console's arm switch is on (roadmap item 41: two keys for a
 laser). ``laser_armed()`` reads ``manual.laser_enable``; without it the laser stays dark. The
 switch is polled, so disarming in the console (button, L, MIDI, an event type) zeroes this screen.
@@ -75,14 +76,27 @@ class ChannelTestPanel(QtWidgets.QWidget):
         self.pickers: list[QtWidgets.QComboBox] = []
         self.marks: list[QtWidgets.QComboBox] = []
         self.flagged: list[int] = []     # channel offsets with a low-confidence reading
+        self._marks_by_mode: dict[str, list[str]] = {}   # each mode's pass marks, kept across a switch
 
         v = QtWidgets.QVBoxLayout(self)
-        src = definition.source
-        dmx = f"DMX {address}-{address + len(self.mode.channels) - 1} — " if self.connected else ""
-        self.head = QtWidgets.QLabel(f"{definition.manufacturer} {definition.model} — {self.mode.name} — {dmx}"
-                                     + ("confirmed" if src.confirmed else "not confirmed yet"))
+        self.head = QtWidgets.QLabel("")
         self.head.setWordWrap(True)
         v.addWidget(self.head)
+        self.mode_row = QtWidgets.QWidget()
+        mr = QtWidgets.QHBoxLayout(self.mode_row)
+        mr.setContentsMargins(0, 0, 0, 0)
+        mr.addWidget(QtWidgets.QLabel("Mode:"))
+        self.mode_picker = QtWidgets.QComboBox()
+        for m in definition.modes:
+            self.mode_picker.addItem(f"{m.name} ({len(m.channels)} ch)", m.name)
+        self.mode_picker.setCurrentIndex(max(0, self.mode_picker.findData(self.mode.name)))
+        self.mode_picker.setToolTip("Set the fixture to this mode on its own menu, then test it here. "
+                                    "Confirm needs every mode tested.")
+        self.mode_picker.currentIndexChanged.connect(lambda i: self.set_mode(self.mode_picker.itemData(i)))
+        mr.addWidget(self.mode_picker)
+        mr.addStretch(1)
+        self.mode_row.setVisible(len(definition.modes) > 1)
+        v.addWidget(self.mode_row)
         self.l_offline = QtWidgets.QLabel(NOT_CONNECTED + (NOT_CONNECTED_NO_ROUTE if self.is_laser
                                                            else NOT_CONNECTED_HOW))
         self.l_offline.setWordWrap(True)
@@ -108,7 +122,54 @@ class ChannelTestPanel(QtWidgets.QWidget):
             self._armed = self._read_arm()
             self.arm_timer.start()
 
-        grid = QtWidgets.QGridLayout()
+        self._grid_host: QtWidgets.QWidget | None = None
+        self._grid_slot = QtWidgets.QVBoxLayout()
+        self._grid_slot.setContentsMargins(0, 0, 0, 0)
+        v.addLayout(self._grid_slot)
+        self._build_channels()
+
+        self.intent_box = QtWidgets.QGroupBox("Laser intents — set the sliders, then capture")
+        il = QtWidgets.QGridLayout(self.intent_box)
+        self.intent_buttons: dict[str, QtWidgets.QPushButton] = {}
+        self.intent_labels: dict[str, QtWidgets.QLabel] = {}
+        for r, k in enumerate(LASER_INTENTS):
+            b = QtWidgets.QPushButton(f"Capture: {_INTENT_LABELS[k]}")
+            b.clicked.connect(lambda _=False, k=k: self.capture_intent(k))
+            lbl = QtWidgets.QLabel("")
+            il.addWidget(b, r, 0)
+            il.addWidget(lbl, r, 1)
+            self.intent_buttons[k] = b
+            self.intent_labels[k] = lbl
+        self.intent_box.setVisible(self.is_laser)
+        v.addWidget(self.intent_box)
+
+        row = QtWidgets.QHBoxLayout()
+        self.b_all_off = QtWidgets.QPushButton("All off")
+        self.b_all_off.clicked.connect(self.all_off)
+        self.b_confirm = QtWidgets.QPushButton("Confirm")
+        self.b_confirm.clicked.connect(self.confirm)
+        row.addWidget(self.b_all_off)
+        row.addStretch(1)
+        row.addWidget(self.b_confirm)
+        v.addLayout(row)
+        self.status = QtWidgets.QLabel(BUILT_IN if builtin else "")
+        self.status.setWordWrap(True)
+        v.addWidget(self.status)
+        self._refresh_intents()
+        self._update_confirm()
+        self._show_arm()
+        self._publish()
+
+    def _build_channels(self) -> None:
+        """(Re)build one row per channel of ``self.mode``."""
+        if self._grid_host is not None:
+            self._grid_host.setParent(None)
+            self._grid_host.deleteLater()
+        self.values = [0] * len(self.mode.channels)
+        self.sliders, self.pickers, self.marks, self.flagged = [], [], [], []
+        self._grid_host = QtWidgets.QWidget()
+        grid = QtWidgets.QGridLayout(self._grid_host)
+        grid.setContentsMargins(0, 0, 0, 0)
         for row, ch in enumerate(sorted(self.mode.channels, key=lambda c: c.offset)):
             name = QtWidgets.QLabel(f"CH{ch.offset + 1} · {ch.function.replace('_', ' ')}")
             doubt = [c for c in ch.capabilities if c.confidence is not None and c.confidence < LOW_CONFIDENCE]
@@ -146,38 +207,23 @@ class ChannelTestPanel(QtWidgets.QWidget):
             self.sliders.append(s)
             self.pickers.append(picker)
             self.marks.append(mark)
-        v.addLayout(grid)
+        self._grid_slot.addWidget(self._grid_host)
+        for mark, saved in zip(self.marks, self._marks_by_mode.get(self.mode.name, [])):
+            mark.setCurrentText(saved)
+        src = self.definition.source
+        n = len(self.mode.channels)
+        dmx = f"DMX {self.address}-{self.address + n - 1} — " if self.connected else ""
+        self.head.setText(f"{self.definition.manufacturer} {self.definition.model} — {self.mode.name} — {dmx}"
+                          + ("confirmed" if src.confirmed else "not confirmed yet"))
 
-        self.intent_box = QtWidgets.QGroupBox("Laser intents — set the sliders, then capture")
-        il = QtWidgets.QGridLayout(self.intent_box)
-        self.intent_buttons: dict[str, QtWidgets.QPushButton] = {}
-        self.intent_labels: dict[str, QtWidgets.QLabel] = {}
-        for r, k in enumerate(LASER_INTENTS):
-            b = QtWidgets.QPushButton(f"Capture: {_INTENT_LABELS[k]}")
-            b.clicked.connect(lambda _=False, k=k: self.capture_intent(k))
-            lbl = QtWidgets.QLabel("")
-            il.addWidget(b, r, 0)
-            il.addWidget(lbl, r, 1)
-            self.intent_buttons[k] = b
-            self.intent_labels[k] = lbl
-        self.intent_box.setVisible(self.is_laser)
-        v.addWidget(self.intent_box)
-
-        row = QtWidgets.QHBoxLayout()
-        self.b_all_off = QtWidgets.QPushButton("All off")
-        self.b_all_off.clicked.connect(self.all_off)
-        self.b_confirm = QtWidgets.QPushButton("Confirm")
-        self.b_confirm.clicked.connect(self.confirm)
-        row.addWidget(self.b_all_off)
-        row.addStretch(1)
-        row.addWidget(self.b_confirm)
-        v.addLayout(row)
-        self.status = QtWidgets.QLabel(BUILT_IN if builtin else "")
-        self.status.setWordWrap(True)
-        v.addWidget(self.status)
-        self._refresh_intents()
+    def set_mode(self, name: str) -> None:
+        """Show ``name``'s channels. The old mode's marks are kept; every channel goes to 0 first."""
+        if name is None or name == self.mode.name:
+            return
+        self._marks_by_mode[self.mode.name] = [m.currentText() for m in self.marks]
+        self.mode = self.definition.mode(name)
+        self._build_channels()
         self._update_confirm()
-        self._show_arm()
         self._publish()
 
     # --- output ---
@@ -255,6 +301,10 @@ class ChannelTestPanel(QtWidgets.QWidget):
         untested = [i + 1 for i, m in enumerate(self.marks) if m.currentText() != PASS]
         if untested:
             out.append("mark every channel pass (not yet: CH" + ", CH".join(map(str, untested)) + ")")
+        others = [m.name for m in self.definition.modes if m.name != self.mode.name
+                  and self._marks_by_mode.get(m.name, []).count(PASS) < len(m.channels)]
+        if others:
+            out.append("test mode " + ", ".join(f"'{n}'" for n in others) + " too (pick it under Mode)")
         if self.is_laser:
             unset = [_INTENT_LABELS[k] for k in LASER_INTENTS if not self.intents.get(k)]
             if unset:
