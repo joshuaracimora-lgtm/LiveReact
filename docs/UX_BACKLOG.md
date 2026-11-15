@@ -98,6 +98,9 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
    watched. Proposal: until the screen reaches the rig, a confirmed laser definition stays visibly "not verified".
 9. **"Confirmed: no" on a built-in reads as a job to do,** but a built-in can never be confirmed. Proposal: "built-in"
    in that column, or an empty cell.
+10. **Fixture library: double-clicking a row does nothing.** A new user double-clicks a fixture to open it; the
+   channel test opens only from the button. Proposal: double-click = Test / confirm. Journey: double-clicking a
+   row opens the channel test for that fixture.
 
 ## Integration (proposals)
 
@@ -111,6 +114,9 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Fixture library: Duplicate, Export and Delete were greyed with no reason** (UX, found 2026-11-15). With nothing
+  selected only Test / confirm said "Select a fixture in the list first"; all four say it now (Delete keeps "Built-in
+  models cannot be deleted" for a built-in). `tests/test_ui_small_hints.py::test_every_disabled_fixture_library_button_says_why`.
 - **Demo mode showed the lasers ARMED in red as if a laser were live** (UX 0b, 2026-11-15). The arm really is on in
   demo mode (it simulates the operator), so the switch keeps saying ARMED; a line under it in the Lasers box now says
   "Demo mode: the arm is simulated — no laser is connected." Hidden outside demo mode.

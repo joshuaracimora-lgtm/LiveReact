@@ -147,12 +147,12 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
     def _update_buttons(self) -> None:
         e = self._selected_entry()
         self.details.setPlainText(definition_summary(e.definition) if e is not None else "")
-        self.b_test.setEnabled(e is not None)
-        self.b_test.setToolTip("" if e is not None else "Select a fixture in the list first")
-        self.b_duplicate.setEnabled(e is not None)
-        self.b_export.setEnabled(e is not None)
+        pick = "" if e is not None else "Select a fixture in the list first"
+        for b in (self.b_test, self.b_duplicate, self.b_export):
+            b.setEnabled(e is not None)
+            b.setToolTip(pick)
         self.b_delete.setEnabled(e is not None and e.origin != "builtin")
-        self.b_delete.setToolTip("Built-in models cannot be deleted" if e is not None and e.origin == "builtin" else "")
+        self.b_delete.setToolTip(pick or ("Built-in models cannot be deleted" if e.origin == "builtin" else ""))
 
     def _ask(self, title: str, text: str) -> bool:
         box = QtWidgets.QMessageBox

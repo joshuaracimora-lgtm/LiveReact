@@ -40,3 +40,12 @@ def test_outside_demo_mode_there_is_no_simulated_caption(qapp):
     p = OverridePanel(app)
     assert p.l_laser_sim.isHidden()
 
+
+def test_every_disabled_fixture_library_button_says_why(qapp):
+    """UX 10: with nothing selected, Test / confirm said why it was grey; Duplicate and Export said nothing."""
+    from livereact.ui.fixture_library import FixtureLibraryBrowser
+    b = FixtureLibraryBrowser()
+    b.table.clearSelection()
+    for btn in (b.b_test, b.b_duplicate, b.b_export, b.b_delete):
+        assert not btn.isEnabled()
+        assert btn.toolTip(), f"{btn.text()} is disabled with no reason"
