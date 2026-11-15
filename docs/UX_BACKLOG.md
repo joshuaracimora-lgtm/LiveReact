@@ -69,9 +69,6 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## UX (open)
 
-0b. **Demo mode still shows the lasers ARMED in red.** The dots and the words are fixed (see Fixed); the big red
-   "DISARM LASERS / ARMED" stays because `app.py` really arms in demo mode to simulate the operator, and the arm
-   switch must never lie. Proposal: a "simulated" caption beside it in demo mode. (Walk-through.)
 1. **No operator-facing status for the inputs.** The Show tab shows PDL / MIDI / audio as dots in a log
    line; a new user cannot tell "no XDJ audio" from "quiet". Proposal: a status strip naming each input and
    its source ("Audio: XDJ-XZ ch 5-6" / "Audio: none"), red when a required one is missing.
@@ -114,6 +111,11 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Demo mode showed the lasers ARMED in red as if a laser were live** (UX 0b, 2026-11-15). The arm really is on in
+  demo mode (it simulates the operator), so the switch keeps saying ARMED; a line under it in the Lasers box now says
+  "Demo mode: the arm is simulated — no laser is connected." Hidden outside demo mode.
+  `tests/test_ui_small_hints.py::test_demo_mode_says_the_laser_arm_is_simulated_and_the_switch_still_reads_armed`,
+  `::test_outside_demo_mode_there_is_no_simulated_caption`.
 - **The channel test only tested a definition's first mode** (Open 7, 2026-11-15). A multi-mode definition (common
   from Open Fixture Library) was confirmed whole after the user had seen one mode. A "Mode:" picker now shows when a
   definition has more than one; switching zeroes every channel and shows that mode's sliders, each mode keeps its

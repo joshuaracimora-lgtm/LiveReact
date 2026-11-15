@@ -74,6 +74,11 @@ class OverridePanel(QtWidgets.QWidget):
         h.addWidget(self.b_laser_arm, 1)
         h.addWidget(self.l_laser_status)
         outer.addLayout(h)
+        # demo mode really arms (it simulates the operator); the switch stays truthful, this says nothing is attached
+        self.l_laser_sim = QtWidgets.QLabel("Demo mode: the arm is simulated — no laser is connected.")
+        self.l_laser_sim.setWordWrap(True)
+        self.l_laser_sim.setVisible(bool(getattr(self.app.config, "demo", False)))
+        outer.addWidget(self.l_laser_sim)
         self.b_laser_arm.toggled.connect(self._arm_toggled)
         self._override_host = QtWidgets.QVBoxLayout()
         outer.addLayout(self._override_host)
