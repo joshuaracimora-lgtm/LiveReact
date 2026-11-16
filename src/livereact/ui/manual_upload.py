@@ -113,7 +113,7 @@ class UploadManualPage(QtWidgets.QWidget):
             s.extra[CONSENT_KEY] = True
         else:
             s.extra.pop(CONSENT_KEY, None)
-        s.save()
+        s.save_or_error()   # an unwritable settings file must not break the checkbox
         self.refresh()
 
     # --- actions ---

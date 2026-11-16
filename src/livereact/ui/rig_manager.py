@@ -228,9 +228,9 @@ class RigManagerDialog(QtWidgets.QDialog):
             return
         # the renamed rig keeps its place in the recent list
         self.settings.recent_rigs = [str(new_path) if r == path else r for r in self.settings.recent_rigs]
-        self.settings.save()
+        unsaved = self.settings.save_or_error()
         self.reload_recent()
-        self.l_msg.setText(f"Renamed to {name}")
+        self.l_msg.setText(f"Renamed to {name}" + (f"\n{unsaved}" if unsaved else ""))
 
     def delete_selected(self) -> None:
         path = self._selected_path()
@@ -245,9 +245,9 @@ class RigManagerDialog(QtWidgets.QDialog):
             self.l_msg.setText(f"Cannot delete: {exc}")
             return
         self.settings.recent_rigs = [r for r in self.settings.recent_rigs if r != path]
-        self.settings.save()
+        unsaved = self.settings.save_or_error()
         self.reload_recent()
-        self.l_msg.setText(f"Deleted {stem}")
+        self.l_msg.setText(f"Deleted {stem}" + (f"\n{unsaved}" if unsaved else ""))
 
     def choose(self, path: str | Path) -> None:
         """Validate, remember and announce ``path``."""
@@ -259,8 +259,9 @@ class RigManagerDialog(QtWidgets.QDialog):
             self.l_msg.setText(f"Cannot use {Path(path).name}: {exc}")
             return
         self.settings.add_recent_rig(path)
-        self.settings.save()
+        unsaved = self.settings.save_or_error()
         self.reload_recent()
         self.l_msg.setText(f"{Path(path).stem}" + (" — demo rig, read-only: use “Save demo rig as…” to edit it"
-                                                   if is_read_only(path) else ""))
+                                                   if is_read_only(path) else "")
+                           + (f"\n{unsaved}" if unsaved else ""))
         self.rig_chosen.emit(path)

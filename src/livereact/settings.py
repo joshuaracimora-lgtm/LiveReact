@@ -2,11 +2,14 @@
 whether first-run setup is done. Separate from ``config.json`` (the show's operator knobs).
 
 A missing or corrupt file reads as defaults; keys this version does not know survive a save.
+A file that cannot be written (disk full, a locked or read-only folder) never stops what the user
+was doing: UI actions call ``save_or_error`` and say in words that the change is not remembered.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,7 +17,16 @@ from typing import Any
 
 from . import userdata
 
+log = logging.getLogger(__name__)
+
 MAX_RECENT_RIGS = 10
+
+_last_save_error: str | None = None   # the newest failed save in this process, for the health banner
+
+
+def last_save_error() -> str | None:
+    """The plain-language reason the last settings save failed, or None after a good save."""
+    return _last_save_error
 
 
 @dataclass
@@ -56,5 +68,28 @@ class Settings:
                 "onboarding_done": self.onboarding_done}
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_name(self.path.name + ".tmp")
-        tmp.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
-        os.replace(tmp, self.path)
+        try:
+            tmp.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+            os.replace(tmp, self.path)
+        except OSError:
+            try:
+                tmp.unlink()   # a half-written temp file must not pile up
+            except OSError:
+                pass
+            raise
+
+    def save_or_error(self) -> str | None:
+        """``save()`` for UI actions: a failed write comes back as a sentence instead of an
+        exception, so the action it belongs to (switching rig, finishing setup) still happens."""
+        global _last_save_error
+        try:
+            self.save()
+        except OSError as exc:
+            reason = exc.strerror or str(exc)
+            _last_save_error = (f"Could not save settings to {self.path} ({reason}): this change "
+                                "will not be remembered at the next launch. Free some disk space "
+                                "or check that the folder is writable.")
+            log.warning("%s", _last_save_error)
+            return _last_save_error
+        _last_save_error = None
+        return None

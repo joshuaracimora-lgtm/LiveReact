@@ -57,4 +57,9 @@ def health_warnings(app, snap, now: float) -> list[str]:
     elif settled and not snap.audio_fresh:
         out.append("NO AUDIO — LiveReact cannot hear the XDJ. Reconnecting by itself; if this stays, "
                    "check the XDJ's USB cable.")
+
+    from ..settings import last_save_error   # 2026-11-15: disk full / locked user folder
+    if last_save_error() is not None:
+        out.append("SETTINGS NOT SAVED — the show keeps running, but rig changes and setup are not "
+                   "remembered at the next launch. Free some disk space or check the LiveReact user folder.")
     return out

@@ -53,6 +53,7 @@ class FirstRunDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("Welcome to LiveReact")
         self.settings = settings if settings is not None else Settings.load()
+        self.save_error: str | None = None   # set by finish() when settings.json cannot be written
         prev = self.settings.extra.get(SETUP_KEY) or {}
         v = QtWidgets.QVBoxLayout(self)
         self.stack = QtWidgets.QStackedWidget()
@@ -155,7 +156,9 @@ class FirstRunDialog(QtWidgets.QDialog):
         c = self.choices()
         self.settings.extra[SETUP_KEY] = c
         self.settings.onboarding_done = True
-        self.settings.save()
+        # an unwritable settings file must not trap a new user in setup: finish anyway
+        # (setup opens again next launch; settings.last_save_error() feeds the health banner)
+        self.save_error = self.settings.save_or_error()
         self.completed.emit(c)
         self.accept()
         return c

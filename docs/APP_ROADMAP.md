@@ -339,3 +339,11 @@ Hard rules for every item, whoever does it:
   manufacturer or model jump to the definition, picking a completion selects that item, junk text
   leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
   searchable at once. Tests: `tests/test_app_type_picker.py`.
+- **62. P0 resilience: an unwritable settings file never blocks the user** (2026-11-15). Disk full, a
+  read-only or synced folder, or a Windows lock on `settings.json` made `Settings.save()` raise inside
+  the Rig manager's Use, the Rig menu's recent rigs, Rig Config's "Save and use now", rename/delete and
+  first-run Finish: the rig switch (which came after the save) never happened and setup never closed.
+  `Settings.save_or_error()` returns a sentence instead; every UI call site uses it, so the action
+  still happens and the dialog / status line says it will not be remembered. `save()` removes its temp
+  file on failure. In a hardware session the health banner says SETTINGS NOT SAVED. Tests:
+  `tests/test_app_settings_unwritable.py` (the 3 UI tests failed before with `PermissionError`).

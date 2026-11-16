@@ -613,16 +613,20 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             return
         s = Settings.load()
         s.add_recent_rig(path)
-        s.save()
+        unsaved = s.save_or_error()
         self._rig_chosen(path)
+        if unsaved:   # after the switch, so its own status line does not hide this one
+            self.statusBar().showMessage(unsaved)
 
     def _use_saved_rig(self, path: str) -> None:
         """Rig Config's "Save and use now…": the file it just wrote and validated becomes the
         running rig (the Rig manager's switch path) and joins the recent rigs."""
         s = Settings.load()
         s.add_recent_rig(path)
-        s.save()
+        unsaved = s.save_or_error()
         self._rig_chosen(path)
+        if unsaved:   # after the switch, so its own status line does not hide this one
+            self.statusBar().showMessage(unsaved)
 
     def open_rig_manager(self):
         from .rig_manager import RigManagerDialog
