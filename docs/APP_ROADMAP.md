@@ -83,11 +83,6 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
-49. **P3 library filter box.** A search field above `ui/fixture_library.py`'s table that filters rows as
-    the user types, matching manufacturer, model, id or category case-insensitively; clearing it shows
-    everything, and the details pane / buttons keep following the (filtered) selection. Matters once a
-    library holds more than a screenful of imported fixtures. Tests first.
-
 55. **P2 the patch view marks duplicate slot IDs.** `ui/rig_config.py`: two rows with the same
     Slot ID silently collide in `_collect()` (the later row wins the saved slot's geometry overlay)
     — mark them inline like address overlaps and refuse to save, with the duplicated id on the
@@ -347,3 +342,8 @@ Hard rules for every item, whoever does it:
   still happens and the dialog / status line says it will not be remembered. `save()` removes its temp
   file on failure. In a hardware session the health banner says SETTINGS NOT SAVED. Tests:
   `tests/test_app_settings_unwritable.py` (the 3 UI tests failed before with `PermissionError`).
+- **49. P3 library filter box** (2026-11-15). Fixtures -> Fixture library… has a filter field above the
+  table: typing hides every row whose manufacturer, model, id or category does not contain the text
+  (case-insensitive), clearing shows all, the filter survives Refresh, "No fixture matches …" when
+  nothing does, and a selection that gets filtered away is dropped so the details pane and buttons
+  never act on a hidden row. Tests: `tests/test_app_library_filter.py`.

@@ -82,6 +82,15 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         self.wizard: FixtureWizard | None = None
         self.test_panel: ChannelTestPanel | None = None
         v = QtWidgets.QVBoxLayout(self)
+        # item 49: once a library holds more than a screenful of imported fixtures
+        frow = QtWidgets.QHBoxLayout()
+        self.filter = QtWidgets.QLineEdit()
+        self.filter.setPlaceholderText("Filter by manufacturer, model, id or category…")
+        self.filter.setClearButtonEnabled(True)
+        self.l_filter = QtWidgets.QLabel("")
+        frow.addWidget(self.filter, 1)
+        frow.addWidget(self.l_filter)
+        v.addLayout(frow)
         self.table = QtWidgets.QTableWidget(0, len(_COLUMNS))
         self.table.setHorizontalHeaderLabels(_COLUMNS)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
@@ -120,6 +129,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         self.b_export.clicked.connect(self.export_selected)
         self.b_delete.clicked.connect(self.delete_selected)
         self.b_reload.clicked.connect(self.reload)
+        self.filter.textChanged.connect(self._apply_filter)
         self.table.itemSelectionChanged.connect(self._update_buttons)
         self.entries = []
         self.reload()
@@ -138,7 +148,26 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
                 item = QtWidgets.QTableWidgetItem(text)
                 item.setData(QtCore.Qt.ItemDataRole.UserRole, d.id)
                 self.table.setItem(r, c, item)
+        self._apply_filter()
         self._update_buttons()
+
+    def _apply_filter(self) -> None:
+        """Hide the rows the filter box does not match; a selection that gets hidden is dropped,
+        so the details pane and the buttons never act on a row the user cannot see."""
+        needle = self.filter.text().strip().lower()
+        shown = 0
+        for r, e in enumerate(self.entries):
+            d = e.definition
+            hay = " ".join(x or "" for x in (d.manufacturer, d.model, d.id, d.category)).lower()
+            hide = bool(needle) and needle not in hay
+            self.table.setRowHidden(r, hide)
+            shown += not hide
+        # the view's selectedIndexes() leaves hidden rows out; the selection model does not
+        if any(self.table.isRowHidden(i.row()) for i in self.table.selectionModel().selectedIndexes()):
+            self.table.clearSelection()
+            self._update_buttons()
+        self.l_filter.setText(f"No fixture matches “{self.filter.text().strip()}”"
+                              if needle and not shown else "")
 
     def _selected_entry(self):
         rows = {i.row() for i in self.table.selectedIndexes()}
