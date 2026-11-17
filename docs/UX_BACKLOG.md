@@ -121,6 +121,12 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Re-running first-time setup with the mixer unplugged erased the saved audio / DJ-network choice** (Bug,
+  2026-11-17). Help -> Run first-time setup again… lists only the devices present now; a saved "XDJ-XZ Audio" or USB
+  Ethernet adapter that was unplugged was missing, the box showed Auto-detect and Finish saved Auto-detect over it,
+  so the next launch at the show stopped picking the mixer. The saved device is now listed as "<name> (not
+  connected now)" and kept. Tests: `tests/test_ui_first_run_unplugged.py` (both). Journey that would catch it:
+  re-open setup with an empty device list and Finish; `setup.audio_device` is unchanged.
 - **Renaming the rig that is playing kept the show on the old file** (Bug, 2026-11-17). Rig manager -> Rename… on
   the playing rig moved the file, but `app.config.rig_path`, the Venue and Rig Config tabs and `app.rig.name` kept the
   old ones: the next "Save rig…" offered the deleted file name and wrote it back (the old rig reappeared beside the

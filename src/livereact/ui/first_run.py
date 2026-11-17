@@ -128,6 +128,10 @@ class FirstRunDialog(QtWidgets.QDialog):
     @staticmethod
     def _select(combo: QtWidgets.QComboBox, value) -> None:
         i = combo.findData(value) if value is not None else -1
+        if i < 0 and isinstance(value, str) and value:
+            # a saved mixer / adapter unplugged right now (2026-11-17): keep it, or Finish writes Auto-detect over it
+            combo.addItem(f"{value} (not connected now)", value)
+            i = combo.count() - 1
         if i >= 0:
             combo.setCurrentIndex(i)
 
