@@ -116,6 +116,10 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Fixture library: double-clicking a row did nothing** (UX 10, found 2026-11-15, fixed 2026-11-16). A new user
+  double-clicks a fixture to open it; only the Test / confirm button opened the channel test. Double-click on a row
+  now selects it and opens the same channel test for that fixture.
+  `tests/test_ui_fixture_library_double_click.py::test_double_clicking_a_row_opens_the_channel_test_for_that_fixture`.
 - **Rig Config edits could not reach the running show** (walk-through UNREACHABLE, 2026-11-03): the tab
   said every edit needs a restart — written before `App.switch_rig` (D-38) existed, while the Rig manager
   already switched live. "Save and use now…" saves with the same validation, then the console switches the

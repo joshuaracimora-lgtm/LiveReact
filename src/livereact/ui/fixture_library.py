@@ -121,6 +121,7 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         self.b_delete.clicked.connect(self.delete_selected)
         self.b_reload.clicked.connect(self.reload)
         self.table.itemSelectionChanged.connect(self._update_buttons)
+        self.table.cellDoubleClicked.connect(self._open_row)
         self.entries = []
         self.reload()
 
@@ -253,6 +254,13 @@ class FixtureLibraryBrowser(QtWidgets.QWidget):
         delete_user_definition(d.id)
         self.reload()
         return True
+
+    def _open_row(self, row: int, _column: int = 0) -> ChannelTestPanel | None:
+        """Double-click on a row: the same channel test as Test / confirm, for that row."""
+        if not 0 <= row < len(self.entries):
+            return None
+        self.table.selectRow(row)
+        return self.test_selected()
 
     def test_selected(self) -> ChannelTestPanel | None:
         rows = {i.row() for i in self.table.selectedIndexes()}
