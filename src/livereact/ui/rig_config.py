@@ -26,7 +26,7 @@ import json
 import logging
 import os
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..fixtures.definition import FixtureDefinition
 from ..fixtures.profiles import FIXTURE_TYPES
@@ -38,6 +38,7 @@ _COLUMNS = ["Slot ID", "Label", "Fixture Type", "Mode", "DMX Address", "Role", "
 C_SLOT, C_LABEL, C_TYPE, C_MODE, C_ADDR, C_ROLE, C_SIDE, C_SET = range(len(_COLUMNS))
 _NATIVE, _DEF = "native:", "def:"
 _OVERLAP_STYLE = "background:#7a2020;"
+_DUPLICATE_COLOR = "#7a2020"
 
 
 def _user_definitions() -> list[FixtureDefinition]:
@@ -82,7 +83,10 @@ class RigConfigTab(QtWidgets.QWidget):
         self.table.setHorizontalHeaderLabels(_COLUMNS)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.itemSelectionChanged.connect(self._update_reference)
+        self.table.itemChanged.connect(
+            lambda item: self.check_duplicate_slots() if item.column() == C_SLOT else None)
         v.addWidget(self.table)
+        self._problems = {"overlap": "", "dupes": ""}  # what the ⚠ status line currently says
 
         for fx in rig.fixtures:
             self._add_row(fx.slot_id, fx.label, fx.type_name, fx.address, fx.role, fx.side,
@@ -116,6 +120,7 @@ class RigConfigTab(QtWidgets.QWidget):
         v.addWidget(self.status)
         self.sync_sides()
         self.check_overlaps()
+        self.check_duplicate_slots()
 
     def sync_sides(self) -> None:
         """A placed fixture's side comes from its x (Rig.refresh_geometry), and
@@ -301,23 +306,65 @@ class RigConfigTab(QtWidgets.QWidget):
                 lo, hi = spans[r]
                 spin.setStyleSheet(_OVERLAP_STYLE if r in bad else "")
                 spin.setToolTip(f"channels {lo}-{hi}" + (" — overlaps another fixture" if r in bad else ""))
+        msg = ""
         if bad:
             try:
                 _rig_from_dict(self._collect())
                 msg = "Address overlap"
             except Exception as exc:  # noqa: BLE001 - the loader's own message
                 msg = str(exc)
-            self.status.setText(f"⚠ {msg}")
+        self._problems["overlap"] = msg
+        self._show_problems()
+        return sorted(bad)
+
+    def check_duplicate_slots(self) -> list[int]:
+        """Item 55: mark rows whose Slot ID another row also uses (Save refuses them, see
+        ``_validate``) the way overlaps are marked, so the user sees which rows collide
+        while typing; returns those rows."""
+        ids = []
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, C_SLOT)
+            ids.append(item.text().strip() if item else "")
+        bad = [r for r, i in enumerate(ids) if i and ids.count(i) > 1]
+        self.table.blockSignals(True)  # the marks below would re-enter itemChanged
+        try:
+            for r in range(self.table.rowCount()):
+                item = self.table.item(r, C_SLOT)
+                if item is None:
+                    continue
+                if r in bad:
+                    item.setBackground(QtGui.QBrush(QtGui.QColor(_DUPLICATE_COLOR)))
+                    item.setToolTip(f"Another fixture shares the slot ID '{ids[r]}' — give each its own")
+                else:
+                    item.setData(QtCore.Qt.ItemDataRole.BackgroundRole, None)
+                    item.setToolTip("")
+        finally:
+            self.table.blockSignals(False)
+        dupes = sorted({ids[r] for r in bad})
+        self._problems["dupes"] = (f"Two fixtures share the slot ID {', '.join(dupes)}: give each its own"
+                                   if dupes else "")
+        self._show_problems()
+        return bad
+
+    def _show_problems(self) -> None:
+        """One ⚠ status line for every open table problem; cleared when none is left (a
+        save message, which has no ⚠, is left alone)."""
+        if not hasattr(self, "status"):  # still building the rows in __init__
+            return
+        problems = self._problems
+        parts = [m for m in (problems.get("overlap"), problems.get("dupes")) if m]
+        if parts:
+            self.status.setText("⚠ " + " · ".join(parts))
             self.status.setStyleSheet("color:#c33;")
         elif self.status.text().startswith("⚠"):
             self.status.setText("")
-        return sorted(bad)
 
     def _remove_selected(self) -> None:
         rows = sorted({idx.row() for idx in self.table.selectedIndexes()}, reverse=True)
         for r in rows:
             self.table.removeRow(r)
         self.status.setText("")
+        self.check_duplicate_slots()
 
     # ------------------------------------------------------------------ reference panel
     def _update_reference(self) -> None:
