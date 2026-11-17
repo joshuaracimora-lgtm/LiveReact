@@ -419,3 +419,30 @@ def test_a_long_planned_build_still_shows_build():
     assert snap.bucket == "drop"
     snap = sim.run_to(156, level=0.1)                  # 4-bar build after the chorus: after a drop
     assert snap.bucket == "build" and snap.classifier_bucket == "build"
+
+
+def test_kick_level_auto_build_never_overrides_a_planned_break_or_outro():
+    """P-01 ("the track plan is the structure ... buckets follow section_kind") and Josh's answer on the
+    auto build cue ("never rely on DJ cues ... the full track analysis is known at load time. Applies
+    to every auto cue"): while the plan drives, core/build_rule.py's kick-level cue must not turn a
+    planned breakdown or outro into BUILD. The 2026-11-16 preference pass found it doing so on 14 of
+    75 replayed library tracks: the rule's request_manual_bucket(BUILD) was honoured before the plan,
+    and the plan only re-commits on the next boundary, so the build look held for the rest of the
+    section (up to a whole 64-beat outro)."""
+    sim = Sim()
+    sim.run_to(80, level=0.8)                 # the chorus at a full kick sets the rule's reference
+    sim.snaps.clear()
+    sim.run_to(112, level=0.4)                # breakdown, kick back at half the drop's level
+    assert all(s.section_kind == "breakdown" for s in sim.snaps[5:])
+    assert {s.bucket for s in sim.snaps[5:]} == {"break"}
+    assert {s.build_cue_source for s in sim.snaps[5:]} <= {""}
+    # the cue the breakdown's kick earned waits for the plan to leave the break: the planned build
+    # that follows gets it on its first beat, as it did before (planned builds are unchanged)
+    snap = sim.run_to(113, level=0.4)
+    assert snap.section_kind == "build" and snap.bucket == "build" and snap.build_cue_source == "auto"
+    sim.run_to(208, level=0.8)                # build, the big chorus
+    sim.snaps.clear()
+    sim.run_to(240, level=0.4)                # outro with the kick at half level
+    outro = [s for s in sim.snaps if s.section_kind == "outro"]
+    assert outro and "build" not in {s.bucket for s in outro}
+    assert outro[-1].bucket == "outro"

@@ -1600,7 +1600,15 @@ class Metronome(threading.Thread):
             fresh = self._is_audio_fresh(now)
             if rule.armed and self._build_cue_until is None and not self._auto_build_pending:
                 rule.released()  # the drop landed (or the hold ran out): the cue is over
-            if fresh and not manual_cue and rule.on_bar(low, energy, base == EnergyBucket.BREAK):
+            # P-01 (2026-11-16): while the track plan drives, the plan is the structure -- the kick-level
+            # cue never turns a planned break/outro into BUILD (Josh: "never rely on DJ cues ... the full
+            # track analysis is known at load time. Applies to every auto cue"). In a planned break the
+            # rule still counts, and a cue it raises waits for the plan to leave the break (below); in a
+            # planned outro nothing follows, so it is not counted at all. Planned builds are unchanged.
+            plan_outro = self._plan_holds_break(("outro",))
+            if plan_outro:
+                self._auto_build_pending = False
+            if fresh and not manual_cue and not plan_outro and rule.on_bar(low, energy, base == EnergyBucket.BREAK):
                 log.info("Auto build cue: kick at %.1f vs drop ref %.1f for %d bars", low, rule.ref, self._rule_bar)
                 # Kick bars that all sat inside the shown BREAK are a build's
                 # kick coming back: cue now. A streak that began in the drop's
@@ -1610,7 +1618,7 @@ class Metronome(threading.Thread):
                 floor_t = (self._look_since + self._dwell_s(EnergyBucket.BREAK)
                            if look == EnergyBucket.BREAK and not clean else now)
                 self._auto_build_rule_t = now
-                if now >= floor_t:
+                if now >= floor_t and not self._plan_holds_break():
                     self._fire_auto_build(now)
                 else:
                     self._auto_build_pending = True  # see _fire_auto_build
@@ -1636,7 +1644,8 @@ class Metronome(threading.Thread):
             if (self._base_committed == EnergyBucket.DROP or not rule.armed
                     or self._build_cue_source == "dj"):
                 self._auto_build_pending = False
-            elif now >= self._auto_build_floor_t and self._is_audio_fresh(now):
+            elif (now >= self._auto_build_floor_t and self._is_audio_fresh(now)
+                  and not self._plan_holds_break()):   # P-01: a planned break/outro holds
                 self._fire_auto_build(now)
         self._rule_low_sum += float(self._audio_band_low_abs)
         self._rule_energy_sum += float(self._energy)
@@ -2028,6 +2037,13 @@ class Metronome(threading.Thread):
         )
         if self.phrases_mode != "drive":
             self._shadow_compare(now)
+
+    def _plan_holds_break(self, buckets: tuple[str, ...] = ("break", "outro")) -> bool:
+        """True while the track plan decides the bucket (the guard _drive_from_plan uses) and the
+        planned section is one of `buckets` -- there no automatic build cue may fire (P-01)."""
+        sec = self._section
+        return (self.phrases_mode == "drive" and sec.plan_active and sec.section_index >= 0
+                and sec.planned_bucket in buckets and self._plans.get((sec.slot, sec.track_id)) is not None)
 
     def _drive_from_plan(self, now: float) -> bool:
         """Execute the track plan for this tick. Returns True when the plan decided the
