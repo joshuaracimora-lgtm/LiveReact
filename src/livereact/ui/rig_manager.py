@@ -95,6 +95,7 @@ def delete_rig_file(path: str | Path) -> None:
 
 class RigManagerDialog(QtWidgets.QDialog):
     rig_chosen = QtCore.Signal(str)
+    rig_renamed = QtCore.Signal(str, str)   # (old path, new path): the console follows it if it is playing
 
     def __init__(self, parent: QtWidgets.QWidget | None = None, settings: Settings | None = None,
                  open_file=None, ask_text=None, confirm=None) -> None:
@@ -231,6 +232,7 @@ class RigManagerDialog(QtWidgets.QDialog):
         self.settings.save()
         self.reload_recent()
         self.l_msg.setText(f"Renamed to {name}")
+        self.rig_renamed.emit(str(path), str(new_path))
 
     def delete_selected(self) -> None:
         path = self._selected_path()

@@ -628,6 +628,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         from .rig_manager import RigManagerDialog
         self.rig_manager = RigManagerDialog(self)
         self.rig_manager.rig_chosen.connect(self._rig_chosen)
+        self.rig_manager.rig_renamed.connect(self._rig_renamed)
         self.rig_manager.show()
         return self.rig_manager
 
@@ -708,6 +709,21 @@ class ConsoleWindow(QtWidgets.QMainWindow):
             return
         self._rebuild_rig_views()
         self.statusBar().showMessage(f"Now playing rig: {self.app.rig.name or path} — lasers disarmed (press L to arm)", 15000)
+
+    def _rig_renamed(self, old: str, new: str) -> None:
+        """Rig manager -> Rename… on the rig the show is playing (2026-11-17): the show keeps playing it,
+        under its new file and name. Before, Venue / Rig Config "Save rig…" offered the old, deleted
+        file and wrote the old name back into it."""
+        from pathlib import Path
+        current = getattr(self.app.config, "rig_path", None)
+        if not current or Path(current).resolve() != Path(old).resolve():
+            return
+        self.app.config.rig_path = new
+        self.app.rig.name = Path(new).stem          # rename_rig_file writes the file stem as the rig name
+        for tab in (self.venue_tab, self.rig_config):
+            if tab is not None:
+                tab.rig_path = new
+        self.statusBar().showMessage(f"Now playing rig: {self.app.rig.name} (renamed; nothing else changed)", 15000)
 
     def _rebuild_rig_views(self) -> None:
         """Replace every widget built from the old rig: the Show tab's floor plan, the Venue tab, the

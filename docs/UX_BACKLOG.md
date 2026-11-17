@@ -69,6 +69,11 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 9. **`--fixture-test` "Save as Home Position" to an unwritable path raises.** `_save_home_position` catches only
    `RigError`, as Rig Config and Venue did until 2026-11-06. One-line fix: `except (RigError, OSError)`.
 
+10. **Deleting the rig that is playing says nothing about it.** Rig manager -> Delete… on the playing rig removes the
+   file; the show keeps playing it from memory and the next Venue / Rig Config "Save rig…" offers the deleted name and
+   writes it back. Proposal: the confirm text says "This is the rig playing now: it keeps playing until you pick
+   another, and Save rig… would write it again." Journey: delete the playing rig, the confirm box says so.
+
 ## UX (open)
 
 0b. **Demo mode still shows the lasers ARMED in red.** The dots and the words are fixed (see Fixed); the big red
@@ -116,6 +121,13 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Renaming the rig that is playing kept the show on the old file** (Bug, 2026-11-17). Rig manager -> Rename… on
+  the playing rig moved the file, but `app.config.rig_path`, the Venue and Rig Config tabs and `app.rig.name` kept the
+  old ones: the next "Save rig…" offered the deleted file name and wrote it back (the old rig reappeared beside the
+  renamed one, with the edits in the old one) and wrote the old name into it. `RigManagerDialog.rig_renamed(old, new)`
+  -> `ConsoleWindow._rig_renamed` moves the playing rig's path and name when it is the renamed one; the show itself
+  does not change. Tests: `tests/test_ui_rig_rename_playing.py` (both). Journey that would catch it: rename the
+  playing rig, then Venue "Save rig…" offers the new file.
 - **Rig Config edits could not reach the running show** (walk-through UNREACHABLE, 2026-11-03): the tab
   said every edit needs a restart — written before `App.switch_rig` (D-38) existed, while the Rig manager
   already switched live. "Save and use now…" saves with the same validation, then the console switches the
