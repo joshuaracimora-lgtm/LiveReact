@@ -128,6 +128,12 @@ ONSET_RATE_WINDOW_S = 1.0  # onsets/s = count over this trailing window
 # init, so a re-enumerated XDJ is invisible without this), find the device
 # again by name and reopen, retrying with a capped backoff until it is back.
 STALL_S = 2.0
+# Live but silent (2026-11-16): a stream can also keep delivering blocks of pure digital silence -- the
+# XDJ's USB send routed elsewhere, an interface whose channels 5-6 are unused, or macOS giving an app
+# without Microphone permission zeros instead of an error. The blocks stay fresh, so the stall check
+# above never fires; silent_for() lets the health banner say it instead. -80 dBFS: far below any music
+# a playing deck sends, far above the exact zeros of a dead route.
+SILENCE_PEAK = 1e-4
 REOPEN_BACKOFF_S = (1.0, 2.0, 5.0)   # waits between failed reopen attempts (last one repeats)
 
 
@@ -154,6 +160,9 @@ class AudioAnalyzer(InputSource):
         self._sd = None
         self._device_name: str | None = None   # the opened device's name: found again by it after a USB re-enumeration
         self.reopens = 0                       # successful dead-stream recoveries (telemetry / tests)
+        self.bad_blocks = 0                    # blocks with NaN/inf samples, read as silence
+        self._first_block_t: float | None = None   # monotonic time of the first analysed block
+        self._last_sound_t: float | None = None    # ... and of the last one with sound in it
 
         # analysis state (owned solely by the analysis thread)
         self._low_mask = None
@@ -183,6 +192,12 @@ class AudioAnalyzer(InputSource):
     @property
     def name(self) -> str:
         return "audio"
+
+    def silent_for(self, now: float) -> float:
+        """Seconds the stream has delivered only digital silence (0 with sound, or before any block).
+        Read by the console's health banner from the UI thread: two float reads, no lock needed."""
+        ref = self._last_sound_t if self._last_sound_t is not None else self._first_block_t
+        return 0.0 if ref is None else max(0.0, now - ref)
 
     # ------------------------------------------------------------------ lifecycle
     def start(self) -> None:
@@ -379,6 +394,18 @@ class AudioAnalyzer(InputSource):
         if len(block) != BLOCK:
             return  # a partial block at stream start/stop; skip rather than crash
         now = self.clock.monotonic()
+        if not np.isfinite(block).all():
+            # one garbled block used to turn _rms_smooth / _peak_hold / _flux_mean into NaN for the
+            # rest of the night (no exception, so nothing was logged); read it as silence instead
+            self.bad_blocks += 1
+            if self.bad_blocks == 1 or self.bad_blocks % 1000 == 0:
+                log.warning("Audio input delivered %d block(s) with NaN/inf samples; read as silence",
+                            self.bad_blocks)
+            block = np.nan_to_num(block, nan=0.0, posinf=0.0, neginf=0.0)
+        if self._first_block_t is None:
+            self._first_block_t = now
+        if float(np.abs(block).max()) >= SILENCE_PEAK:
+            self._last_sound_t = now
         rms_raw = float(np.sqrt(np.mean(block ** 2)))
         coeff = attack if rms_raw > self._rms_smooth else release
         self._rms_smooth += coeff * (rms_raw - self._rms_smooth)

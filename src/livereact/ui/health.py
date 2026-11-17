@@ -11,6 +11,7 @@ import errno
 
 GRACE_S = 5.0   # inputs get this long after start before a missing signal counts as a fault
 PDL_QUIET_S = 5.0   # no Pro DJ Link packet of ANY kind for this long = the XDJ is off the network
+AUDIO_SILENT_S = 15.0   # a deck plays (beats arrive) but the audio input has been digital silence this long
 
 
 def _port_in_use(exc: BaseException | None) -> bool:
@@ -23,6 +24,12 @@ def _pdl_quiet(app, now: float) -> bool:
         return False   # no Pro DJ Link input in this setup: nothing to warn about
     last = getattr(src, "last_packet_time", None)
     return last is None or now - last >= PDL_QUIET_S
+
+
+def _audio_silent_for(app, now: float) -> float:
+    src = next((s for s in getattr(app, "sources", ()) if getattr(s, "name", "") == "audio"), None)
+    silent_for = getattr(src, "silent_for", None)
+    return float(silent_for(now)) if callable(silent_for) else 0.0
 
 
 def health_warnings(app, snap, now: float) -> list[str]:
@@ -57,4 +64,9 @@ def health_warnings(app, snap, now: float) -> list[str]:
     elif settled and not snap.audio_fresh:
         out.append("NO AUDIO — LiveReact cannot hear the XDJ. Reconnecting by itself; if this stays, "
                    "check the XDJ's USB cable.")
+    elif settled and snap.pdl_fresh and _audio_silent_for(app, now) >= AUDIO_SILENT_S:
+        # 2026-11-16: blocks arrive but carry only zeros, so the lights sit in their dim look
+        out.append("AUDIO SILENT — a deck is playing but LiveReact's audio input carries no sound. Check the "
+                   "XDJ's USB cable and that its USB audio output is on; on a Mac, allow Microphone access "
+                   "for LiveReact (System Settings → Privacy & Security).")
     return out
