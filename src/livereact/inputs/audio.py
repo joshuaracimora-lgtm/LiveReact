@@ -244,6 +244,13 @@ class AudioAnalyzer(InputSource):
         sd = self._sd
         device = self._resolve_device(sd)
         info = sd.query_devices(device)
+        if int(info["max_input_channels"]) < 1:
+            # UX_BACKLOG 3: device indexes move when a phone mic or headset appears, so `--audio-device 1`
+            # can land on the speakers; this used to die on `max() of an empty iterable`
+            inputs = [str(d["name"]) for d in sd.query_devices() if int(d["max_input_channels"]) > 0]
+            raise AudioInputError(
+                f"audio device {device!r} ({info['name']}) has no input channels; "
+                f"available inputs: {', '.join(inputs) or 'none'}. Give --audio-device a name, not a number")
         self._sr = int(info["default_samplerate"])
         self._setup_bands(np)
 

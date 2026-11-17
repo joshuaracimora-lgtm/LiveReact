@@ -88,10 +88,12 @@ Hard rules for every item, whoever does it:
     everything, and the details pane / buttons keep following the (filtered) selection. Matters once a
     library holds more than a screenful of imported fixtures. Tests first.
 
-55. **P2 the patch view marks duplicate slot IDs.** `ui/rig_config.py`: two rows with the same
-    Slot ID silently collide in `_collect()` (the later row wins the saved slot's geometry overlay)
-    — mark them inline like address overlaps and refuse to save, with the duplicated id on the
-    status line. Tests first.
+65. **P2 audio input channels in the UI** [from UX_BACKLOG Integration 1]. `inputs/audio.py` always
+    captures device channels 5-6 when a device has 6 or more inputs (the XDJ's master/booth pair), so
+    another 8-input interface plays its unused channels 5-6 and reads as silence (the AUDIO SILENT
+    banner of item 63 then fires). A Settings entry naming the device and the channel pair, defaulting to
+    today's choice, read by `AudioAnalyzer`. Needs `app.py` to pass it through: check first, and tag
+    `[BLOCKED]` with a `[JOSH]` item if so. Tests first.
 
 ## Decisions only Josh can make (each blocks the items named)
 
@@ -333,6 +335,24 @@ Hard rules for every item, whoever does it:
   `make_console(app)` (which passes `Settings.load()`), so a bare `ConsoleWindow(app)` — every older
   test, the UI gate checks — never reads or writes the user's file.
   Tests: `tests/test_app_console_window.py`.
+- **55. P2 the patch view marks duplicate slot IDs** (2026-11-16). `ui/rig_config.py`
+  `check_duplicate_slots()` runs whenever a Slot ID cell changes (and after Remove): every row whose
+  stripped ID another row also uses gets a red slot cell and a tooltip, and the ⚠ status line names the
+  ID ("Two fixtures share the slot ID slot_1: give each its own"). An address overlap and a duplicate
+  are shown together on one status line; fixing either clears only its part. Save still refuses
+  duplicates (`_validate`, since 33e17c8). Tests: `tests/test_app_slot_id_duplicates.py`.
+- **63. Resilience: an audio input that is alive but silent** (2026-11-16). `inputs/audio.py`
+  `AudioAnalyzer.silent_for(now)`: seconds the stream has delivered only digital silence (peak below
+  `SILENCE_PEAK`, -80 dBFS). `ui/health.py`: when a deck is playing (beats arrive) and the input has been
+  silent for `AUDIO_SILENT_S` (15 s), the banner says AUDIO SILENT with the fixes (XDJ USB cable / USB
+  audio output, macOS Microphone permission). Also: a block with NaN/inf samples is read as silence and
+  counted (`bad_blocks`) instead of turning the smoothed level, AGC and onset mean into NaN for the rest
+  of the night. Healthy blocks analyse exactly as before. Tests: `tests/test_app_audio_silent.py`.
+- **64. An `--audio-device` index with no inputs says so** [from UX_BACKLOG 3] (2026-11-16).
+  `AudioAnalyzer._open_stream` raises `AudioInputError` naming the device, listing the devices that
+  can record by name, and recommending a name over a number, instead of `max() of an empty iterable`;
+  the app's failed-inputs path shows it in the NO AUDIO INPUT banner.
+  Tests: `tests/test_app_audio_device_no_inputs.py`.
 - **54. P2 the patch view's type picker is searchable** (2026-11-01). Every row's type combo in
   `ui/rig_config.py` is editable (insert policy NoInsert, so free text can never become a type) with
   a case-insensitive contains-match completer over the combo's own model: a few letters of the id,
