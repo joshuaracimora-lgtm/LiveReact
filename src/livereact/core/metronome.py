@@ -1995,6 +1995,14 @@ class Metronome(threading.Thread):
         cur, nxt = table.at_beat(track_beat)
         plan = self._plans.get(key)
         ps = plan.at_beat(track_beat)[0] if plan is not None else None
+        if (ps is None and plan is not None and plan.sections and plan.sections[-1].bucket == "outro"
+                and track_beat >= plan.sections[-1].end_beat):
+            # P-14 / P-01: rekordbox's last phrase ends on the grid's last beat, the audio runs on for a few
+            # seconds. A planned outro runs to the end of the track; letting go there handed the tail to the
+            # classifier, which went DROP with strobe flashes after the outro (2026-11-17 replays).
+            ps = plan.sections[-1]
+            if cur is None and table.phrases:
+                cur = table.phrases[-1]
         self._section = SectionState(
             deck=deck, fresh=fresh, track_id=msg.track_id, slot=msg.slot, title=title, track_beat=track_beat,
             source="rekordbox",

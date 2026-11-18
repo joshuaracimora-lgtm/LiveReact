@@ -419,3 +419,31 @@ def test_a_long_planned_build_still_shows_build():
     assert snap.bucket == "drop"
     snap = sim.run_to(156, level=0.1)                  # 4-bar build after the chorus: after a drop
     assert snap.bucket == "build" and snap.classifier_bucket == "build"
+
+
+def test_the_planned_outro_holds_past_the_last_phrase_to_the_end_of_the_track():
+    """P-14 / P-01: "No strobe in intros, outros or breaks, with or without a plan"; the track plan is the
+    structure. rekordbox's last phrase (the outro) ends on the grid's last beat, but the audio runs on for a few
+    seconds; there the plan used to let go and the classifier, warm from the last drop, went DROP with the drop
+    look, the wash near full and strobe flashes (2026-11-17 replays: 3 library tracks; more on 11-15 / 11-16).
+    A last section that is an outro now runs to the end of the track. A last section that is not an outro is
+    left alone (whether a drop may run on past rekordbox's last phrase is an open question for Josh)."""
+    sim = Sim()                                        # outro 209-241, the table ends at 241
+    sim.run_to(240, level=0.1)
+    assert sim.snaps[-1].bucket == "outro"
+    snap = sim.run_to(256, level=0.9)                  # the tail: loud audio past the last phrase
+    tail = sim.snaps[-5 * 15:]
+    assert all(s.plan_active and s.section_kind == "outro" for s in tail)
+    assert {s.bucket for s in tail} == {"outro"}
+    assert not any(s.planned_strobe_allowed or s.planned_laser_allowed for s in tail)
+    assert not snap.drop_armed and snap.planned_scene == sim.snaps[-5 * 17].planned_scene
+
+
+def test_a_last_section_that_is_not_an_outro_still_hands_back_after_the_last_phrase():
+    """P-01 scope guard for the test above: only a planned outro is held past the last phrase."""
+    spec = [(1, 1, "intro"), (17, 2, "up"), (49, 5, "chorus")]
+    sim = Sim(table=_table(spec, end=113))
+    sim.run_to(112, level=0.5)
+    assert sim.snaps[-1].plan_active
+    sim.run_to(120, level=0.5)
+    assert not sim.snaps[-1].plan_active
