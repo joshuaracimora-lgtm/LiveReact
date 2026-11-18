@@ -8,6 +8,11 @@ to it (``App.switch_rig``), so every way of choosing a rig here changes the ligh
 That is why no button here is a dialog default (2026-11-05): "New rig" was, so pressing Enter swapped
 the running show onto an empty rig. A rig only changes on a click, a double click or Space on a button.
 
+The rig playing now is marked "playing now" in the list (2026-11-17, walk-through ``rig_switch``): on a
+fresh install the box was empty and nothing said which rig the lights were on, so when no recent rig
+exists the playing one is listed alone. The console passes it in as ``playing``; the first-step hint
+stays until the user has rigs of their own.
+
 Rename and delete (item 50) work only on files inside the user's rigs folder: the demo rig
 ships read-only, and a rig opened from anywhere else (say a source checkout's ``rigs/``) is
 not ours to move or remove.
@@ -97,13 +102,14 @@ class RigManagerDialog(QtWidgets.QDialog):
     rig_chosen = QtCore.Signal(str)
 
     def __init__(self, parent: QtWidgets.QWidget | None = None, settings: Settings | None = None,
-                 open_file=None, ask_text=None, confirm=None) -> None:
-        """``open_file(start_dir) -> path or ""``: the file picker; ``ask_text(current) ->
+                 open_file=None, ask_text=None, confirm=None, playing: str | Path | None = None) -> None:
+        """``playing``: the rig the show plays now (marked; listed when nothing else is). ``open_file(start_dir) -> path or ""``: the file picker; ``ask_text(current) ->
         name or ""`` and ``confirm(text) -> bool`` back Rename / Delete (Qt dialogs by
         default; tests pass stubs)."""
         super().__init__(parent)
         self.setWindowTitle("Rigs")
         self.settings = settings if settings is not None else Settings.load()
+        self.playing = str(playing) if playing else None
         self._open_file = open_file or self._file_dialog
         self._ask_text = ask_text or self._text_dialog
         self._confirm = confirm or self._confirm_dialog
@@ -125,11 +131,14 @@ class RigManagerDialog(QtWidgets.QDialog):
         self.recent = QtWidgets.QListWidget()
         v.addWidget(self.recent, 1)
         # inside the empty box, where the eye goes (a real row would look like a rig you could pick)
-        self.l_empty = QtWidgets.QLabel("No rigs here yet.\n\nPress Demo rig to look around with the rig that "
+        self.l_empty = QtWidgets.QLabel("No rigs of your own yet.\n\nPress Demo rig to look around with the rig that "
                                         "ships with LiveReact, or New rig to build your own.")
         self.l_empty.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.l_empty.setWordWrap(True)
-        QtWidgets.QVBoxLayout(self.recent.viewport()).addWidget(self.l_empty)
+        self.l_empty.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        empty_box = QtWidgets.QVBoxLayout(self.recent.viewport())
+        empty_box.setContentsMargins(6, 36, 6, 6)    # below the "playing now" row, when there is one
+        empty_box.addWidget(self.l_empty)
         sel_row = QtWidgets.QHBoxLayout()
         self.b_use_recent = QtWidgets.QPushButton("Use selected")
         self.b_rename = QtWidgets.QPushButton("Rename…")
@@ -143,7 +152,7 @@ class RigManagerDialog(QtWidgets.QDialog):
         for b in self.findChildren(QtWidgets.QPushButton):
             b.setAutoDefault(False)     # see the module docstring: Enter must not change the running rig
         self.reload_recent()
-        (self.recent if self.recent.count() else self.b_demo).setFocus()
+        (self.recent if self._has_own_rigs() else self.b_demo).setFocus()
 
         self.b_new.clicked.connect(lambda: self.choose(new_rig_file()))
         self.b_open.clicked.connect(self.open_rig)
@@ -168,19 +177,36 @@ class RigManagerDialog(QtWidgets.QDialog):
         return QtWidgets.QMessageBox.question(self, "Delete rig", text,
                                               buttons.Yes | buttons.No) == buttons.Yes
 
+    def _same(self, a: str, b: str) -> bool:
+        try:
+            return Path(a).resolve() == Path(b).resolve()
+        except OSError:
+            return a == b
+
+    def _has_own_rigs(self) -> bool:
+        """Any row besides the playing rig listed only because the box was empty."""
+        return self.recent.count() > (1 if self._playing_only else 0)
+
     def reload_recent(self) -> None:
-        """Recent rigs that still exist, most recent first."""
+        """Recent rigs that still exist, most recent first, the playing one marked; with none, the
+        playing rig alone."""
         self.recent.clear()
-        for r in self.settings.recent_rigs:
-            if Path(r).is_file():
-                item = QtWidgets.QListWidgetItem(Path(r).stem + ("  (demo, read-only)" if is_read_only(r) else ""))
-                item.setData(QtCore.Qt.ItemDataRole.UserRole, r)
-                item.setToolTip(r)
-                self.recent.addItem(item)
+        playing = self.playing if self.playing and Path(self.playing).is_file() else None
+        rows = [(r, "playing now" if playing and self._same(r, playing) else "")
+                for r in self.settings.recent_rigs if Path(r).is_file()]
+        self._playing_only = not rows and playing is not None
+        if self._playing_only:
+            rows = [(playing, "playing now")]
+        for r, note in rows:
+            notes = [n for n in (note, "demo, read-only" if is_read_only(r) else "") if n]
+            item = QtWidgets.QListWidgetItem(Path(r).stem + (f"  ({', '.join(notes)})" if notes else ""))
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, r)
+            item.setToolTip(r)
+            self.recent.addItem(item)
         if self.recent.count():
             self.recent.setCurrentRow(0)
         self.b_use_recent.setEnabled(self.recent.count() > 0)
-        self.l_empty.setVisible(self.recent.count() == 0)
+        self.l_empty.setVisible(not self._has_own_rigs())
         self._update_buttons()
 
     def _selected_path(self) -> str | None:

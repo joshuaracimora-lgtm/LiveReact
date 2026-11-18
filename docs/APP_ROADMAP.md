@@ -339,3 +339,11 @@ Hard rules for every item, whoever does it:
   manufacturer or model jump to the definition, picking a completion selects that item, junk text
   leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
   searchable at once. Tests: `tests/test_app_type_picker.py`.
+- **66. P2 the Rig manager shows the rig playing now** (2026-11-17) [from walk-through `rig_switch`, UX].
+  On a fresh install Rig -> Rig manager opened on an empty "Recent rigs" box, so nothing said which rig
+  the lights were on. The console now passes the rig in use (`app.config.rig_path`, or the packaged demo
+  rig) as `RigManagerDialog(playing=...)`: it is marked "playing now" among the recent rigs, and listed
+  alone when there are none (so a fresh install shows "default_rig  (playing now, demo, read-only)").
+  The Demo rig / New rig hint stays until the user has rigs of their own; a dialog opened without
+  `playing` is unchanged. (Numbered 66: unmerged App branches use 56-65.)
+  Tests: `tests/test_app_rig_manager_playing.py`.

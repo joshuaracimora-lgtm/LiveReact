@@ -625,8 +625,9 @@ class ConsoleWindow(QtWidgets.QMainWindow):
         self._rig_chosen(path)
 
     def open_rig_manager(self):
-        from .rig_manager import RigManagerDialog
-        self.rig_manager = RigManagerDialog(self)
+        from .rig_manager import RigManagerDialog, demo_rig_path
+        # the rig in use heads the list, so a fresh install's box is not empty (walk-through rig_switch)
+        self.rig_manager = RigManagerDialog(self, playing=self.app.config.rig_path or demo_rig_path())
         self.rig_manager.rig_chosen.connect(self._rig_chosen)
         self.rig_manager.show()
         return self.rig_manager
