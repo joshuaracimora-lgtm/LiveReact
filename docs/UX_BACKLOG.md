@@ -116,6 +116,13 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **The API-key dialog on a computer with no usable keychain** (UX, 2026-11-18). Fixtures -> API key: it said only
+  "No key saved.", took a paste, and Save answered "Could not save the key (NoKeyringError)." A note now says the
+  keychain cannot be reached and names `ANTHROPIC_API_KEY` (which the manual reader already reads), or that the reader
+  is using the key found there; the entry box is off; save / remove errors are in words.
+  `tests/test_ui_api_key_no_keychain.py::test_no_keychain_is_said_before_the_user_pastes_a_key`,
+  `::test_a_failed_save_is_said_in_words_not_a_class_name`, `::test_a_key_in_the_environment_is_said`,
+  `::test_a_working_keychain_shows_no_such_note`.
 - **Deleting the rig that is playing said nothing about it** (Bug, 2026-11-18; Open 10 on agent/20261117-ui). Rig manager
   -> Delete… on the playing rig gave the same confirm as any rig; the show keeps playing it from memory and Venue / Rig
   Config "Save rig…" writes the file back. The confirm now says it is the rig playing now, that it keeps playing until

@@ -6,6 +6,8 @@ shows whether one is saved, never the key itself, and clears the entry box after
 
 from __future__ import annotations
 
+import os
+
 from PySide6 import QtWidgets
 
 from ..fixtures.manual_reader.client import KEYRING_SERVICE, KEYRING_USER, store_api_key
@@ -29,7 +31,14 @@ class ApiKeyDialog(QtWidgets.QDialog):
         info.setWordWrap(True)
         v.addWidget(info)
         self.l_status = QtWidgets.QLabel("")
+        self.l_status.setWordWrap(True)
         v.addWidget(self.l_status)
+        # 2026-11-18: with no usable keychain the dialog said only "No key saved." and Save failed
+        # with a class name; the manual reader also reads ANTHROPIC_API_KEY, so say that instead
+        self.l_keychain = QtWidgets.QLabel("")
+        self.l_keychain.setWordWrap(True)
+        self.l_keychain.setStyleSheet("color: #d9a400;")
+        v.addWidget(self.l_keychain)
         self.e_key = QtWidgets.QLineEdit()
         self.e_key.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.e_key.setPlaceholderText("Paste a new key to save or replace it")
@@ -51,15 +60,33 @@ class ApiKeyDialog(QtWidgets.QDialog):
         self.refresh()
 
     def has_key(self) -> bool:
+        return self._read_keychain() is True
+
+    def _read_keychain(self) -> bool | None:
+        """True / False = a key is / is not saved; None = the keychain cannot be reached."""
         try:
             return bool(_keyring(self._kr).get_password(KEYRING_SERVICE, KEYRING_USER))
-        except Exception:  # noqa: BLE001 - no keychain backend
-            return False
+        except Exception:  # noqa: BLE001 - no keychain backend, or keyring not installed
+            return None
 
     def refresh(self) -> None:
-        saved = self.has_key()
+        state = self._read_keychain()
+        saved = state is True
         self.l_status.setText("A key is saved." if saved else "No key saved.")
         self.b_remove.setEnabled(saved)
+        reachable = state is not None
+        self.e_key.setEnabled(reachable)
+        if reachable:
+            self.l_keychain.setText("")
+        elif os.environ.get("ANTHROPIC_API_KEY"):
+            self.l_keychain.setText("The system keychain cannot be reached on this computer, so no key can be "
+                                    "saved here. The manual reader is using the key in the ANTHROPIC_API_KEY "
+                                    "environment variable.")
+        else:
+            self.l_keychain.setText("The system keychain cannot be reached on this computer, so no key can be "
+                                    "saved here. Set the ANTHROPIC_API_KEY environment variable to your key "
+                                    "and restart LiveReact; the manual reader reads it from there.")
+        self.l_keychain.setVisible(not reachable)
 
     def save(self) -> None:
         key = self.e_key.text().strip()
@@ -68,7 +95,7 @@ class ApiKeyDialog(QtWidgets.QDialog):
         try:
             store_api_key(key, keyring_module=_keyring(self._kr))
         except Exception as exc:  # noqa: BLE001 - say why without echoing the key
-            self.l_status.setText(f"Could not save the key ({type(exc).__name__}).")
+            self.l_status.setText(f"Could not save the key: {self._why(exc)}")
             return
         self.e_key.clear()
         self.refresh()
@@ -77,6 +104,13 @@ class ApiKeyDialog(QtWidgets.QDialog):
         try:
             _keyring(self._kr).delete_password(KEYRING_SERVICE, KEYRING_USER)
         except Exception as exc:  # noqa: BLE001
-            self.l_status.setText(f"Could not remove the key ({type(exc).__name__}).")
+            self.l_status.setText(f"Could not remove the key: {self._why(exc)}")
             return
         self.refresh()
+
+    def _why(self, exc: Exception) -> str:
+        """Plain words for a keychain failure; never the exception text (it could hold the key)."""
+        if self._read_keychain() is None or isinstance(exc, ImportError) or type(exc).__name__ == "NoKeyringError":
+            return ("the system keychain cannot be reached on this computer. Set the ANTHROPIC_API_KEY "
+                    "environment variable instead.")
+        return f"the system keychain refused it ({type(exc).__name__}). Try again, or set ANTHROPIC_API_KEY."
