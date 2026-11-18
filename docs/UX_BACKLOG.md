@@ -116,6 +116,13 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Deleting the rig that is playing said nothing about it** (Bug, 2026-11-18; Open 10 on agent/20261117-ui). Rig manager
+  -> Delete… on the playing rig gave the same confirm as any rig; the show keeps playing it from memory and Venue / Rig
+  Config "Save rig…" writes the file back. The confirm now says it is the rig playing now, that it keeps playing until
+  another is picked, and that Save rig… would write it again (the console passes `playing=` to `RigManagerDialog`).
+  `tests/test_ui_rig_delete_playing.py::test_deleting_the_playing_rig_says_it_is_playing_before_it_deletes`,
+  `::test_deleting_the_playing_rig_keeps_the_show_running_on_it`, `::test_deleting_a_rig_that_is_not_playing_keeps_the_plain_text`,
+  `::test_a_rig_manager_opened_on_its_own_still_deletes`.
 - **Rig Config edits could not reach the running show** (walk-through UNREACHABLE, 2026-11-03): the tab
   said every edit needs a restart — written before `App.switch_rig` (D-38) existed, while the Rig manager
   already switched live. "Save and use now…" saves with the same validation, then the console switches the

@@ -626,7 +626,7 @@ class ConsoleWindow(QtWidgets.QMainWindow):
 
     def open_rig_manager(self):
         from .rig_manager import RigManagerDialog
-        self.rig_manager = RigManagerDialog(self)
+        self.rig_manager = RigManagerDialog(self, playing=lambda: getattr(self.app.config, "rig_path", None))
         self.rig_manager.rig_chosen.connect(self._rig_chosen)
         self.rig_manager.show()
         return self.rig_manager

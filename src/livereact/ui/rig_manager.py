@@ -97,16 +97,18 @@ class RigManagerDialog(QtWidgets.QDialog):
     rig_chosen = QtCore.Signal(str)
 
     def __init__(self, parent: QtWidgets.QWidget | None = None, settings: Settings | None = None,
-                 open_file=None, ask_text=None, confirm=None) -> None:
+                 open_file=None, ask_text=None, confirm=None, playing=None) -> None:
         """``open_file(start_dir) -> path or ""``: the file picker; ``ask_text(current) ->
         name or ""`` and ``confirm(text) -> bool`` back Rename / Delete (Qt dialogs by
-        default; tests pass stubs)."""
+        default; tests pass stubs). ``playing() -> path or None`` names the rig the show is
+        playing (the console passes it), so Delete… can say so."""
         super().__init__(parent)
         self.setWindowTitle("Rigs")
         self.settings = settings if settings is not None else Settings.load()
         self._open_file = open_file or self._file_dialog
         self._ask_text = ask_text or self._text_dialog
         self._confirm = confirm or self._confirm_dialog
+        self._playing = playing or (lambda: None)
         v = QtWidgets.QVBoxLayout(self)
         row = QtWidgets.QHBoxLayout()
         self.b_new = QtWidgets.QPushButton("New rig")
@@ -237,7 +239,12 @@ class RigManagerDialog(QtWidgets.QDialog):
         if path is None:
             return
         stem = Path(path).stem
-        if not self._confirm(f"Delete “{stem}”? The rig file is removed permanently."):
+        text = f"Delete “{stem}”? The rig file is removed permanently."
+        if self._is_playing(path):
+            # 2026-11-18: the show keeps this rig in memory and Save rig… would write the file back
+            text += ("\n\nThis is the rig playing now: it keeps playing until you pick another, "
+                     "and Save rig… on the Venue or Rig Config tab would write it again.")
+        if not self._confirm(text):
             return
         try:
             delete_rig_file(path)
@@ -248,6 +255,13 @@ class RigManagerDialog(QtWidgets.QDialog):
         self.settings.save()
         self.reload_recent()
         self.l_msg.setText(f"Deleted {stem}")
+
+    def _is_playing(self, path: str) -> bool:
+        playing = self._playing()
+        try:
+            return bool(playing) and Path(playing).resolve() == Path(path).resolve()
+        except OSError:
+            return False
 
     def choose(self, path: str | Path) -> None:
         """Validate, remember and announce ``path``."""
