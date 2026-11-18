@@ -51,6 +51,14 @@ def health_warnings(app, snap, now: float) -> list[str]:
         out.append("DJ LINK SILENT — no beat data from the XDJ. Check its Ethernet cable / the link-local "
                    "network. Automatic lasers stay dark until it is back.")
 
+    pdl_src = next((s for s in getattr(app, "sources", ()) if getattr(s, "name", "") == "prodj-link"), None)
+    stale = sorted(getattr(pdl_src, "stale_media", ()) or ())
+    if stale:
+        slots = ", ".join(slot.upper() for _ip, slot in stale)
+        out.append(f"USB STICK CHANGED ({slots}) — track plans for the new stick may be the old stick's "
+                   "(rekordbox reuses track numbers), so drops can land in the wrong place. "
+                   "Restart LiveReact between tracks to reload them.")
+
     audio = failed.get("audio")
     if audio is not None:
         out.append(f"NO AUDIO INPUT ({audio}). The lights cannot hear the music.")

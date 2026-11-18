@@ -83,6 +83,17 @@ Hard rules for every item, whoever does it:
 35. [JOSH] **P7 publish.** User guide, laser disclaimer / EULA and arm-checklist wording, privacy note for
     the manual reader, README screenshots, 1.0 tag and release notes.
 
+68. [JOSH] **P0 the phrase service forgets a removed USB stick** (resilience, 2026-11-17). Needs
+    `rekordbox/service.py` (outside the App agent's paths). `inputs/prodj.py` now calls
+    `phrase_service.forget(ip, slot)` when a deck reports its stick pulled (item 67), but `PhraseService` has no
+    `forget`, so the next stick's track ids are answered from the old stick's export.pdb and plans; the console
+    shows USB STICK CHANGED until then. Add `forget(ip, slot)`: under `self._lock`, pop `_pdb_loaded[(ip, slot)]`,
+    drop `_requested` keys starting `(ip, slot)`, replace `_libraries[(ip, slot)]` with a fresh
+    `RekordboxLibrary(cache_dir=self.cache_dir)` (if it was the default library its phrase cache is the old
+    stick's), and drop `_plans` / `_style_prev` keys for that slot (keyed `(slot, track_id)`, without the ip).
+    Test: `tests/test_app_usb_stick_swap.py::test_phrase_service_forget_drops_the_slot_so_the_next_request_refetches`
+    (xfail strict until then: remove the mark).
+
 49. **P3 library filter box.** A search field above `ui/fixture_library.py`'s table that filters rows as
     the user types, matching manufacturer, model, id or category case-insensitively; clearing it shows
     everything, and the details pane / buttons keep following the (filtered) selection. Matters once a
@@ -347,3 +358,12 @@ Hard rules for every item, whoever does it:
   The Demo rig / New rig hint stays until the user has rigs of their own; a dialog opened without
   `playing` is unchanged. (Numbered 66: unmerged App branches use 56-65.)
   Tests: `tests/test_app_rig_manager_playing.py`.
+- **67. P0 resilience: a USB stick swapped in the XDJ is noticed** (2026-11-17). rekordbox track ids are per
+  export and start at 1, so after a B2B stick swap the new stick's "track 4" was answered from the old stick's
+  export.pdb and plan (wrong drops, no warning): the listener prefetched export.pdb once per (ip, slot) per session.
+  `inputs/prodj.py` now reads each deck's `usb_state` / `sd_state` from the CDJ status packets (per player, so two
+  decks behind one address cannot flap; a slot never seen loaded never counts) and, when a slot goes from loaded
+  to anything else, forgets its prefetch and last track key and calls `phrase_service.forget(ip, slot)` when the
+  service has it. Until it does (item 68), `ui/health.py` shows "USB STICK CHANGED … Restart LiveReact between
+  tracks". UNVERIFIED ON HARDWARE: which slot states the XDJ-XZ sends; if it never reports `loaded`, nothing
+  changes. Tests: `tests/test_app_usb_stick_swap.py` (5, 4 failed before; +1 xfail for item 68).

@@ -110,6 +110,12 @@ class ProDjLinkListener(InputSource):
         self._prefetched: set[tuple[str, str]] = set()   # (ip, slot) whose export.pdb we asked for
         self.status_parse_errors = 0
         self._last_parse_error = ""
+        # USB / SD media in each deck's slot, as the status packets report it (2026-11-17): a stick pulled
+        # and another put in (B2B handover) reuses the same small track ids, so what was fetched for the old
+        # stick must be forgotten. Per player: two decks behind one address may report different slots.
+        self._media_state: dict[tuple[str, int, str], str] = {}
+        # (ip, slot) swapped while the phrase service could not forget it: its plans may be the old stick's
+        self.stale_media: set[tuple[str, str]] = set()
 
     @property
     def name(self) -> str:
@@ -264,6 +270,41 @@ class ProDjLinkListener(InputSource):
         self.queue.put(StatusMessage(now, on_air=(player,), master_deck=player,
                                      playing=True, loop_active=False))
 
+    # ------------------------------------------------------------------ media slots (USB stick swaps)
+    def _note_media(self, ip: str, player: int, content) -> None:
+        """Watch each deck's USB / SD slot state; a slot that goes from loaded to anything else had its
+        stick pulled. UNVERIFIED ON HARDWARE: which states the XDJ-XZ reports (python-prodj-link's
+        ``usb_state`` / ``sd_state``). A slot never seen as loaded never counts as removed."""
+        for slot in ("usb", "sd"):
+            state = str(getattr(content, f"{slot}_state", "") or "")
+            if not state:
+                continue
+            key = (ip, int(player), slot)
+            prev = self._media_state.get(key)
+            self._media_state[key] = state
+            if prev == "loaded" and state != "loaded":
+                self._media_removed(ip, slot)
+
+    def _media_removed(self, ip: str, slot: str) -> None:
+        """Forget everything fetched for (ip, slot) so the next stick there is read fresh."""
+        log.warning("Pro DJ Link: the %s media on %s was removed -- forgetting its export.pdb and track plans",
+                    slot, ip)
+        self._prefetched.discard((ip, slot))
+        for player, key in list(self._last_track_key.items()):
+            if key[:2] == (ip, slot):
+                del self._last_track_key[player]
+        if self.phrase_service is None:
+            return
+        forget = getattr(self.phrase_service, "forget", None)
+        if callable(forget):
+            try:
+                forget(ip, slot)
+                return
+            except Exception:  # noqa: BLE001
+                log.exception("phrase service forget failed")
+        # the service would answer the new stick's track ids from the old stick's export.pdb
+        self.stale_media.add((ip, slot))
+
     # ------------------------------------------------------------------ status (port 50002)
     def _handle_status(self, data: bytes, addr: tuple[str, int]) -> None:
         try:
@@ -310,6 +351,7 @@ class ProDjLinkListener(InputSource):
             source_ip=addr[0],
             looping=play_state == "looping",
         )
+        self._note_media(msg.source_ip, msg.player, c)
         self.status_count += 1
         if self.first_status_at is None:
             self.first_status_at = now
