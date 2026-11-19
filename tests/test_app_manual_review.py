@@ -205,6 +205,34 @@ def test_read_saves_a_draft_and_emits_it(qapp, manual):
     assert "no charge" in p.l_cost.text()
 
 
+def test_a_file_that_is_not_a_pdf_cannot_be_sent_and_says_why(qapp, tmp_path):
+    """UX_BACKLOG 2026-11-19: a damaged or mis-named file showed "Could not read this PDF", yet Read stayed
+    enabled; clicking it killed the reader thread on pypdf's PdfReadError (not caught there) and the status
+    stayed on "Finding the DMX chart pages…" with no error."""
+    bad = tmp_path / "not_really.pdf"
+    bad.write_bytes(b"this is not a pdf")
+    p, r = _page(bad)
+    p.cb_consent.setChecked(True)
+    p.b_pick.click()
+    assert "Could not read this PDF" in p.l_cost.text()
+    assert not p.b_read.isEnabled()
+    p.read()                                                          # must not raise
+    assert r.reads == [] and "Choose another file" in p.l_status.text()
+
+
+def test_choosing_another_pdf_clears_the_last_result(qapp, tmp_path, manual):
+    bad = tmp_path / "not_really.pdf"
+    bad.write_bytes(b"this is not a pdf")
+    files = [str(bad), str(manual)]
+    p, _ = _page(manual)
+    p._pick = lambda: files.pop(0)
+    p.cb_consent.setChecked(True)
+    p.b_pick.click()
+    p.read()
+    p.b_pick.click()                                                  # a good manual now
+    assert p.l_status.text() == "" and p.b_read.isEnabled()
+
+
 def test_reader_failure_is_shown(qapp, manual):
     class Broken(FakeReader):
         def read(self, pdf_bytes):

@@ -41,6 +41,7 @@ class UploadManualPage(QtWidgets.QWidget):
         self.threaded = threaded
         self.reader = None
         self.pdf_path: Path | None = None
+        self.pdf_unreadable = ""          # why the chosen file cannot be read ("" = fine)
         self.worker = None
         self.doubts = []
 
@@ -104,7 +105,8 @@ class UploadManualPage(QtWidgets.QWidget):
         busy = self.worker is not None and self.worker.isRunning()
         self.cb_consent.setEnabled(usable)
         self.b_pick.setEnabled(usable and not busy)
-        self.b_read.setEnabled(usable and not busy and self.pdf_path is not None and self.cb_consent.isChecked())
+        self.b_read.setEnabled(usable and not busy and self.pdf_path is not None and not self.pdf_unreadable
+                               and self.cb_consent.isChecked())
         self.b_cancel.setEnabled(busy)
 
     def _consent_changed(self, on: bool) -> None:
@@ -126,7 +128,9 @@ class UploadManualPage(QtWidgets.QWidget):
         if not path:
             return
         self.pdf_path = Path(path)
+        self.pdf_unreadable = ""
         self.l_file.setText(self.pdf_path.name)
+        self.l_status.setText("")             # the last file's result is not this file's
         self.estimate()
         self.refresh()
 
@@ -142,7 +146,10 @@ class UploadManualPage(QtWidgets.QWidget):
         try:
             pages = find_dmx_pages(self.pdf_path, manuals)
         except Exception as exc:  # noqa: BLE001 - an unreadable PDF
-            self.l_cost.setText(f"Could not read this PDF: {exc}")
+            # the reader thread would die on the same error (pypdf's errors are not ValueError), so it is
+            # never started for this file
+            self.pdf_unreadable = str(exc) or type(exc).__name__
+            self.l_cost.setText(f"Could not read this PDF: {self.pdf_unreadable}")
             return
         if cached_answer(manuals, pages.sha256) is not None:
             self.l_cost.setText("This manual was read before: no charge, the saved answer is reused.")
@@ -160,6 +167,11 @@ class UploadManualPage(QtWidgets.QWidget):
         self.l_cost.setText(f"Pages {pages.best}{scanned}. {est.text()}")
 
     def read(self) -> None:
+        if self.pdf_unreadable:
+            self.l_status.setText("This file could not be opened as a PDF, so nothing was sent. "
+                                  "Choose another file, or enter the channels by hand.")
+            self.refresh()
+            return
         if self.availability() or self.pdf_path is None or not self.cb_consent.isChecked():
             self.refresh()
             return

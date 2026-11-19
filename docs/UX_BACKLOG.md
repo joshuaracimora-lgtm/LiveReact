@@ -116,6 +116,16 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **Manual reader: a file that is not a PDF froze the page** (Bug, 2026-11-19). Fixture wizard -> Upload manual ->
+  Choose PDF… on a damaged or mis-named file: the page said "Could not read this PDF", yet "Read the manual" stayed
+  enabled; clicking it killed the reader thread on pypdf's `PdfReadError` (the worker catches only
+  ManualReaderError / ValueError / OSError) and the status stayed on "Finding the DMX chart pages…" with no error.
+  Now the page remembers that the file cannot be read, keeps Read off, says so in words if Read is reached anyway,
+  and clears the last file's result when another file is chosen. `tests/test_app_manual_review.py::
+  test_a_file_that_is_not_a_pdf_cannot_be_sent_and_says_why`, `::test_choosing_another_pdf_clears_the_last_result`.
+  Journey that would catch it: in the wizard's manual route, choosing a non-PDF leaves Read disabled and a reason
+  on screen. (The worker's own except list, `fixtures/manual_reader/worker.py`, is outside the agent's files:
+  catching `Exception` there would also cover a PDF that opens but breaks mid-read. [JOSH])
 - **Rig Config edits could not reach the running show** (walk-through UNREACHABLE, 2026-11-03): the tab
   said every edit needs a restart — written before `App.switch_rig` (D-38) existed, while the Rig manager
   already switched live. "Save and use now…" saves with the same validation, then the console switches the
