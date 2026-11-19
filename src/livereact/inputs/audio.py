@@ -214,6 +214,14 @@ class AudioAnalyzer(InputSource):
             for i, info in enumerate(sd.query_devices()):
                 if info["name"] == self._device_name and info["max_input_channels"] > 0:
                     return i
+            # 2026-11-18: Windows renames a re-enumerated USB device ("XDJ-XZ" -> "2- XDJ-XZ"), so the
+            # exact name alone never matched again. Resolve the launch choice afresh -- unless it was an
+            # index, which names a position, not a device.
+            if self.device is None:
+                try:
+                    return self._find_device(sd)
+                except AudioInputError:
+                    pass
             raise AudioInputError(f"audio device {self._device_name!r} is not on the bus")
         device = self.device if self.device is not None else self._find_device(sd)
         if isinstance(device, str) and device.strip().isdigit():

@@ -339,3 +339,9 @@ Hard rules for every item, whoever does it:
   manufacturer or model jump to the definition, picking a completion selects that item, junk text
   leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
   searchable at once. Tests: `tests/test_app_type_picker.py`.
+- **69. P0 resilience: an audio device that comes back under another name** (2026-11-18). After a USB
+  re-enumeration `inputs/audio.py` found the device again only by its exact old name; Windows renames a
+  re-enumerated USB audio device ("XDJ-XZ" -> "2- XDJ-XZ"), so every reopen failed and LiveReact stayed
+  deaf until a restart. Now, when the exact name is gone and the device was auto-detected, the reopen looks
+  for the XDJ afresh (never another input). An explicit `--audio-device` index is not re-resolved; an
+  explicit name is still matched exactly (left for later). Tests: `tests/test_app_audio_renamed_device.py`.
