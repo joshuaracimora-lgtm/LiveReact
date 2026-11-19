@@ -103,6 +103,20 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
    watched. Proposal: until the screen reaches the rig, a confirmed laser definition stays visibly "not verified".
 9. **"Confirmed: no" on a built-in reads as a job to do,** but a built-in can never be confirmed. Proposal: "built-in"
    in that column, or an empty cell.
+10. **Help has no pre-show check or how-to.** Help offers About, first-time setup, shortcuts and the data folder; a
+   new operator has no way to learn that `--preflight` exists or what to check before doors. Proposal: Help ->
+   "Pre-show check…" that runs the same checks as `python -m livereact --preflight` for the current rig and shows
+   the result in words. [UX-structural, for Josh] Journey: Help -> Pre-show check on a demo rig lists each check.
+11. **About does not say LiveReact's own licence.** It lists third-party licences only; a user reading About cannot
+   tell the app is MIT or where its source is. Proposal: one line under the version ("Free software, MIT licence")
+   and the project URL once Josh picks the public one. Journey: About names the app's licence.
+12. **The health banner assumes Josh's rig.** "NO AUDIO ... check the XDJ's USB cable" and "no beat data from the
+   XDJ" name one player model; on another setup the advice is wrong. Proposal: name the configured audio device /
+   the CDJ or mixer seen on DJ Link (the app knows both), falling back to "the DJ player". Journey: the NO AUDIO
+   banner with a non-XDJ audio device names that device.
+13. **`--preflight` also says "Quit rekordbox on this Mac"** (`preflight.py`, outside the agent's files) on
+   Windows and Linux. Same one-word fix as the health banner got tonight ("this computer"). [JOSH]
+
 
 ## Integration (proposals)
 
@@ -116,6 +130,9 @@ Line numbers drift; the screen and function names do not. Never name Josh's trac
 
 ## Fixed
 
+- **The DJ LINK BLOCKED banner said "Quit it on this Mac" on every OS** (UX, 2026-11-19). LiveReact runs on
+  Windows and Linux too (the port conflict is detected there: WinError 10048 equals `errno.EADDRINUSE`). Now
+  "on this computer". `tests/test_health_banner.py::test_the_dj_link_fix_does_not_assume_a_mac`.
 - **Manual reader: a file that is not a PDF froze the page** (Bug, 2026-11-19). Fixture wizard -> Upload manual ->
   Choose PDF… on a damaged or mis-named file: the page said "Could not read this PDF", yet "Read the manual" stayed
   enabled; clicking it killed the reader thread on pypdf's `PdfReadError` (the worker catches only

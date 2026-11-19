@@ -49,3 +49,10 @@ def test_no_dj_link_input_means_no_dj_link_warning():
     app = _app()
     app.sources = []
     assert health_warnings(app, _snap(pdl=False), 60.0) == []
+
+
+def test_the_dj_link_fix_does_not_assume_a_mac():
+    """2026-11-19: the banner said "Quit it on this Mac" on Windows and Linux too; LiveReact runs on all three."""
+    w = health_warnings(_app(failed={"prodj-link": OSError(errno.EADDRINUSE, "Address already in use")}),
+                        _snap(pdl=False), 60.0)
+    assert "Mac" not in w[0] and "this computer" in w[0]

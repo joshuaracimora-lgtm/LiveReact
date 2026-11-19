@@ -42,7 +42,7 @@ def health_warnings(app, snap, now: float) -> list[str]:
     pdl = failed.get("prodj-link")
     if _port_in_use(pdl):
         out.append("DJ LINK BLOCKED — another program (rekordbox?) holds the Pro DJ Link ports. "
-                   "Quit it on this Mac, then restart LiveReact. Until then: no tempo lock, no track plans, "
+                   "Quit it on this computer, then restart LiveReact. Until then: no tempo lock, no track plans, "
                    "no automatic lasers.")
     elif pdl is not None:
         out.append(f"DJ LINK FAILED TO START ({pdl}). No tempo lock, track plans or automatic lasers.")
