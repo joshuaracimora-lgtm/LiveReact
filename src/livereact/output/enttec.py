@@ -43,14 +43,48 @@ def select_enttec_port(ports) -> str | None:
     ``tty.*`` (the tty node blocks on open — docs/04 §5.3). ``ports`` items need
     ``device``/``vid``/``pid`` attributes.
     """
+    return enttec_port_choice(ports)[0]
+
+
+def _says_enttec(p) -> bool:
+    """True when a port identifies itself as an Enttec (serial "EN......" or product "DMX USB PRO")."""
+    serial_no = str(getattr(p, "serial_number", None) or "").upper()
+    text = " ".join(str(getattr(p, a, None) or "") for a in ("description", "product", "manufacturer")).lower()
+    return serial_no.startswith("EN") or "dmx usb pro" in text or "enttec" in text
+
+
+def _node_key(dev: str) -> str:
+    """The same device seen as macOS tty.* and cu.* nodes has one key."""
+    return dev.replace("/dev/tty.", "/dev/cu.")
+
+
+def enttec_port_choice(ports) -> tuple[str | None, list[str]]:
+    """The port to open, and the other FTDI devices it was guessed among (2026-11-19).
+
+    Another FTDI device (a second DMX dongle, an Arduino clone, a programming cable) used to be taken
+    when it came first, leaving the lights dark with no error. A port that says it is an Enttec now wins;
+    with none saying so, the first FTDI device is used as before and the rivals are listed so the
+    operator can be told. One FTDI device -> the same choice as always, and no rivals.
+    """
     matches = [p for p in ports if getattr(p, "vid", None) == FTDI_VID]
-    if not matches:
-        return None
-    for p in matches:  # prefer cu.* on macOS
+    named = [p for p in matches if _says_enttec(p)]
+    pool = named or matches
+    if not pool:
+        return None, []
+    chosen = getattr(pool[0], "device", None)
+    for p in pool:  # prefer cu.* on macOS
         dev = getattr(p, "device", "") or ""
         if "cu." in dev:
-            return dev
-    return getattr(matches[0], "device", None)
+            chosen = dev
+            break
+    if named or not chosen:
+        return chosen, []
+    rivals: list[str] = []
+    for p in matches:
+        dev = getattr(p, "device", "") or ""
+        if dev and _node_key(dev) != _node_key(chosen) and _node_key(dev) not in map(_node_key, rivals):
+            rivals.append(dev)
+    return chosen, rivals
 
 
 class EnttecSerialBackend(OutputBackend):
@@ -59,6 +93,8 @@ class EnttecSerialBackend(OutputBackend):
         self._baud = baud
         self._serial = None
         self._port: str | None = None
+        # other FTDI devices the auto-pick chose among, none saying it is an Enttec (health banner, preflight)
+        self.ambiguous_with: list[str] = []
 
     @property
     def name(self) -> str:
@@ -68,7 +104,11 @@ class EnttecSerialBackend(OutputBackend):
         import serial  # lazy: only needed in hardware mode
         from serial.tools import list_ports
 
-        self._port = self._port_hint or select_enttec_port(list_ports.comports())
+        self.ambiguous_with = []
+        if self._port_hint:
+            self._port = self._port_hint
+        else:
+            self._port, self.ambiguous_with = enttec_port_choice(list_ports.comports())
         if not self._port:
             raise RuntimeError("No Enttec DMX USB Pro found (no FTDI device on the bus)")
         # timeout=0 -> non-blocking writes; the chip clocks DMX itself.

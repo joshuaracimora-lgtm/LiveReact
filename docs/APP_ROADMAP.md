@@ -339,3 +339,11 @@ Hard rules for every item, whoever does it:
   manufacturer or model jump to the definition, picking a completion selects that item, junk text
   leaves the row's saved type untouched, and definitions added later (`reload_definitions`) are
   searchable at once. Tests: `tests/test_app_type_picker.py`.
+- **70. P0 resilience: the Enttec is told apart from other USB-serial devices** (2026-11-19).
+  `output/enttec.py` matched any FTDI chip and opened the first, so a second FTDI device (another DMX
+  dongle, an Arduino clone, a programming cable) listed first got the DMX: the lights stayed dark and
+  nothing said why. A port that identifies itself as an Enttec (serial "EN......", product "DMX USB PRO")
+  now wins; with one FTDI device, or a port named by the user, the choice is unchanged. When several
+  unnamed FTDI devices are present the old first pick stands and the operator is told: `--preflight` WARNs
+  and the health banner shows "DMX: NOT SURE WHICH USB DEVICE IS THE ENTTEC" with the ports and the fix.
+  Tests: `tests/test_app_enttec_port_choice.py`.

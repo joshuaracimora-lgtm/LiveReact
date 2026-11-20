@@ -94,14 +94,14 @@ def probe_audio(seconds: float = AUDIO_SECONDS) -> tuple[str, int, float]:
     return str(info["name"]), len(got), rms
 
 
-def probe_dmx() -> str:
-    """Open and close the Enttec; returns its port, raises if absent or busy."""
+def probe_dmx() -> tuple[str, list[str]]:
+    """Open and close the Enttec; returns its port and any FTDI rivals, raises if absent or busy."""
     from .output.enttec import EnttecSerialBackend
     b = EnttecSerialBackend()
     b.open()
-    port = b._port
+    port, rivals = b._port, list(b.ambiguous_with)
     b.close()
-    return str(port)
+    return str(port), rivals
 
 
 # ---------------------------------------------------------------- checks
@@ -162,9 +162,14 @@ def check_midi(names: list[str]) -> Check:
 
 def check_dmx(probe=probe_dmx) -> Check:
     try:
-        port = probe()
+        found = probe()
     except Exception as exc:  # noqa: BLE001
         return Check("DMX adapter", FAIL, f"{exc} — check the Enttec's USB (and the hub's power)")
+    port, rivals = (found, []) if isinstance(found, str) else found
+    if rivals:
+        return Check("DMX adapter", WARN,
+                     f"opened {port}, but {', '.join(rivals)} is also a USB-serial (FTDI) device and none says it "
+                     "is an Enttec — LiveReact will use the first. Unplug the other device before the show.")
     return Check("DMX adapter", PASS, f"Enttec opened on {port}")
 
 

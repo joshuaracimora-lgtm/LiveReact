@@ -38,6 +38,14 @@ def health_warnings(app, snap, now: float) -> list[str]:
     if not writer.is_open or getattr(getattr(writer, "backend", None), "name", "") == "null-log":
         out.append("DMX ADAPTER LOST — lights are not getting signal. Check the Enttec's USB; "
                    "LiveReact reconnects by itself when it is back.")
+    else:
+        backend = getattr(writer, "backend", None)
+        rivals = list(getattr(backend, "ambiguous_with", None) or [])
+        if rivals:
+            port = str(getattr(backend, "_port", "") or "") or getattr(backend, "name", "the first one")
+            out.append(f"DMX: NOT SURE WHICH USB DEVICE IS THE ENTTEC — sending to {port}, but "
+                       f"{', '.join(rivals)} could be it too. If the lights stay dark, unplug the other "
+                       "USB-serial device, then unplug and replug the Enttec.")
 
     pdl = failed.get("prodj-link")
     if _port_in_use(pdl):
